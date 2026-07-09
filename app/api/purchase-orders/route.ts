@@ -1,0 +1,128 @@
+import { NextRequest, NextResponse } from 'next/server'
+import db, { sqlPagination } from '@/lib/db'
+import { requirePermission } from '@/lib/api-auth'
+import { appendOrgFilter } from '@/lib/tenant'
+import { purchaseOrderSchema } from '@/lib/validations'
+import { ensureDocumentTermsColumns } from '@/lib/ensure-purchase-schema'
+import { normalizePurchaseDocumentItem } from '@/lib/purchase-include-pricing'
+import { buildDocumentNumberPrefix, documentSerialSubstringStart, nextDocumentNumber } from '@/lib/document-number'
+import { randomUUID } from 'crypto'
+
+function computeItemTotals(item: any, gstType = 'CGST_SGST') {
+  const taxable = item.quantity * item.rate * (1 - (item.discount || 0) / 100)
+  let cgst = 0, sgst = 0, igst = 0
+  if (gstType === 'CGST_SGST') { cgst = taxable * item.gstRate / 200; sgst = cgst }
+  else if (gstType === 'IGST') { igst = taxable * item.gstRate / 100 }
+  const total = taxable + cgst + sgst + igst
+  const discAmt = item.quantity * item.rate - taxable
+  return { taxable, cgst, sgst, igst, total, discAmt }
+}
+
+export async function GET(req: NextRequest) {
+  const { error, organizationId } = await requirePermission('purchase-orders', 'view')
+  if (error) return error
+
+  const { searchParams } = new URL(req.url)
+  const search = searchParams.get('search') || ''
+  const status = searchParams.get('status')
+  const fromDate = searchParams.get('fromDate')
+  const toDate = searchParams.get('toDate')
+  const page = parseInt(searchParams.get('page') || '1')
+  const limit = parseInt(searchParams.get('limit') || '20')
+  const offset = (page - 1) * limit
+
+  const conditions: string[] = []
+  const params: any[] = []
+  if (search) { conditions.push('(po.po_no LIKE ? OR v.name LIKE ?)'); const s = `%${search}%`; params.push(s, s) }
+  if (status) { conditions.push('po.status = ?'); params.push(status) }
+  if (fromDate) { conditions.push('po.date >= ?'); params.push(fromDate) }
+  if (toDate) { conditions.push('po.date <= ?'); params.push(toDate) }
+  appendOrgFilter(conditions, params, organizationId!, 'po')
+
+  const where = conditions.length ? 'WHERE ' + conditions.join(' AND ') : ''
+  const [rows] = await db.execute(
+    `SELECT po.*, v.name as vendor_name FROM purchase_orders po LEFT JOIN vendors v ON po.vendor_id = v.id
+     ${where} ORDER BY po.date DESC ${sqlPagination(limit, offset)}`,
+    params
+  ) as any[]
+  const [countRows] = await db.execute(
+    `SELECT COUNT(*) as total FROM purchase_orders po LEFT JOIN vendors v ON po.vendor_id = v.id ${where}`, params
+  ) as any[]
+
+  return NextResponse.json({ purchaseOrders: rows, total: countRows[0].total, page, limit })
+}
+
+export async function POST(req: NextRequest) {
+  const { error, organizationId } = await requirePermission('purchase-orders', 'create')
+  if (error) return error
+
+  const conn = await db.getConnection()
+  try {
+    await ensureDocumentTermsColumns()
+    const body = await req.json()
+    const data = purchaseOrderSchema.parse(body)
+    const includePricing = data.includePricing
+    const gstType = data.gstType
+    await conn.beginTransaction()
+
+    const [settings] = await conn.execute(
+      'SELECT purchase_order_prefix FROM business_settings WHERE organization_id = ? LIMIT 1',
+      [organizationId]
+    ) as any[]
+    const prefix = settings[0]?.purchase_order_prefix || 'PO'
+    const numberPrefix = buildDocumentNumberPrefix(prefix, data.date)
+    const [last] = await conn.execute(
+      `SELECT po_no FROM purchase_orders WHERE organization_id = ? AND po_no LIKE ? ORDER BY CAST(SUBSTRING(po_no, ?) AS UNSIGNED) DESC LIMIT 1`,
+      [organizationId, `${numberPrefix}%`, documentSerialSubstringStart(numberPrefix)]
+    ) as any[]
+    const poNo = nextDocumentNumber(prefix, data.date, last[0]?.po_no)
+
+    let subtotal = 0, totalDiscount = 0, totalTaxable = 0, totalCgst = 0, totalSgst = 0, totalIgst = 0, grandTotal = 0
+    const itemsWithTotals = data.items.map((item: any) => {
+      const normalized = normalizePurchaseDocumentItem(item, includePricing)
+      const t = computeItemTotals(normalized, gstType)
+      subtotal += normalized.quantity * normalized.rate
+      totalDiscount += t.discAmt
+      totalTaxable += t.taxable
+      totalCgst += t.cgst
+      totalSgst += t.sgst
+      totalIgst += t.igst
+      grandTotal += t.total
+      return { ...normalized, ...t }
+    })
+
+    const id = randomUUID()
+    await conn.execute(
+      `INSERT INTO purchase_orders (id, organization_id, po_no, vendor_id, date, expected_date, subtotal,
+        discount_amount, tax_amount, total_amount, notes, terms, include_pricing, status)
+       VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+      [id, organizationId, poNo, data.vendorId, data.date, data.expectedDate || null,
+       subtotal, totalDiscount, totalCgst + totalSgst + totalIgst, grandTotal,
+       data.notes || null, data.terms || null, includePricing ? 1 : 0, 'PENDING']
+    )
+
+    for (const item of itemsWithTotals) {
+      await conn.execute(
+        `INSERT INTO purchase_order_items (id, purchase_order_id, product_id, description, quantity, received_qty,
+          rate, discount, gst_rate, gst_amount, amount)
+         VALUES (?,?,?,?,?,?,?,?,?,?,?)`,
+        [randomUUID(), id, item.productId || null, item.description || null,
+         item.quantity, 0, item.rate, item.discount || 0, item.gstRate,
+         item.cgst + item.sgst + item.igst, item.total]
+      )
+    }
+
+    await conn.commit()
+    const [rows] = await db.execute(
+      'SELECT po.*, v.name as vendor_name FROM purchase_orders po LEFT JOIN vendors v ON po.vendor_id = v.id WHERE po.id = ? AND po.organization_id = ?',
+      [id, organizationId]
+    ) as any[]
+    return NextResponse.json(rows[0], { status: 201 })
+  } catch (err: any) {
+    await conn.rollback()
+    if (err.name === 'ZodError') return NextResponse.json({ error: err.errors }, { status: 400 })
+    return NextResponse.json({ error: 'Internal server error' }, { status: 500 })
+  } finally {
+    conn.release()
+  }
+}
