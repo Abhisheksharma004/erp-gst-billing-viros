@@ -4,11 +4,22 @@ import { authOptions } from '@/lib/auth'
 import db from '@/lib/db'
 import { ensureOrganizationSchema } from '@/lib/ensure-organization-schema'
 import { ensureSuperAdminSchema } from '@/lib/ensure-superadmin-schema'
+import { loadOrgPermissions } from '@/lib/tenant'
 
 type AuthResult = {
   error: NextResponse | null
   session: Session | null
   organizationId: string | null
+}
+
+async function assertUserActive(userId: string): Promise<NextResponse | null> {
+  const [rows] = (await db.execute('SELECT status FROM users WHERE id = ? LIMIT 1', [
+    userId,
+  ])) as [{ status: string }[], unknown]
+  if (!rows[0] || rows[0].status === 'INACTIVE') {
+    return NextResponse.json({ error: 'Account deactivated' }, { status: 403 })
+  }
+  return null
 }
 
 export async function requireOrganization(): Promise<AuthResult> {
@@ -61,6 +72,12 @@ export async function requireAuth() {
   if (!session?.user) {
     return { error: NextResponse.json({ error: 'Unauthorized' }, { status: 401 }), session: null }
   }
+
+  const inactive = await assertUserActive(session.user.id)
+  if (inactive) {
+    return { error: inactive, session: null }
+  }
+
   return { error: null, session }
 }
 
@@ -89,10 +106,20 @@ export async function requirePermission(module: string, action: string): Promise
   if (result.error) return result
 
   const session = result.session!
-  const perms = session.user.permissions || []
+  const organizationId = result.organizationId!
+  const orgRole = session.user.orgRole || ''
+
+  // Re-load permissions from DB so revocations apply without waiting for JWT expiry
+  let perms: string[] = []
+  try {
+    perms = await loadOrgPermissions(db, session.user.id, organizationId, orgRole)
+  } catch {
+    perms = session.user.permissions || []
+  }
+
   const hasPermission =
-    session.user.orgRole === 'OWNER' ||
-    session.user.orgRole === 'ADMIN' ||
+    orgRole === 'OWNER' ||
+    orgRole === 'ADMIN' ||
     perms.includes('*') ||
     perms.includes(`${module}:${action}`)
 

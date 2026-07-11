@@ -10,6 +10,7 @@ import { AuthCard } from '@/components/auth/auth-card'
 import { Loader2 } from 'lucide-react'
 import { useToast } from '@/hooks/use-toast'
 import Link from 'next/link'
+import { setPasswordResetEmail } from '@/lib/password-reset-session'
 
 export default function ForgotPasswordPage() {
   const [email, setEmail] = useState('')
@@ -31,12 +32,13 @@ export default function ForgotPasswordPage() {
       const data = await response.json()
 
       if (response.ok) {
+        setPasswordResetEmail(email)
         toast({
           title: 'OTP Sent',
           description: 'OTP sent to your email. Please check your inbox.',
         })
         setTimeout(() => {
-          router.push(`/verify-otp?email=${encodeURIComponent(email)}`)
+          router.push('/verify-otp')
         }, 2000)
       } else {
         toast({
@@ -58,13 +60,15 @@ export default function ForgotPasswordPage() {
 
   return (
     <AuthCard title="Forgot Password">
-      <form onSubmit={handleSubmit}>
+      <form method="post" action="/forgot-password" onSubmit={handleSubmit}>
         <CardContent className="space-y-4">
           <div className="space-y-2">
             <Label htmlFor="email">Email</Label>
             <Input
               id="email"
               type="email"
+              name="email"
+              autoComplete="username"
               placeholder="Enter your email"
               value={email}
               onChange={(e) => setEmail(e.target.value)}

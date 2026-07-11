@@ -637,6 +637,16 @@ export function QuotationForm({ mode, quotationId }: QuotationFormProps) {
   }, [roundOffAmount, setValue])
 
   const validateBeforeSubmit = (data: QuotationInput): string | null => {
+    if (!data.date || !/^\d{4}-\d{2}-\d{2}$/.test(data.date)) {
+      return 'Please select a valid quotation date'
+    }
+    if (!data.validUntil || !/^\d{4}-\d{2}-\d{2}$/.test(data.validUntil)) {
+      return 'Please select a Valid Till date'
+    }
+    if (data.validUntil < data.date) {
+      return 'Valid till must be on or after the quotation date'
+    }
+
     const ids = data.items.map((i) => i.productId).filter(Boolean)
     if (new Set(ids).size !== ids.length) return 'Duplicate products are not allowed'
     if (ids.length !== data.items.length) return 'Please enter and select a product for every line item'
@@ -728,12 +738,21 @@ export function QuotationForm({ mode, quotationId }: QuotationFormProps) {
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
               <div className="space-y-2">
                 <Label>Date *</Label>
-                <Input type="date" className="h-9" {...register('date')} />
+                <Input type="date" className="h-9" required {...register('date')} />
                 {errors.date && <p className="text-destructive text-xs">{String(errors.date.message)}</p>}
               </div>
               <div className="space-y-2">
-                <Label>Valid Till</Label>
-                <Input type="date" className="h-9" min={today} {...register('validUntil')} />
+                <Label>Valid Till *</Label>
+                <Input
+                  type="date"
+                  className="h-9"
+                  required
+                  min={watch('date') || today}
+                  {...register('validUntil')}
+                />
+                {errors.validUntil && (
+                  <p className="text-destructive text-xs">{String(errors.validUntil.message)}</p>
+                )}
               </div>
               <div className="space-y-2">
                 <Label>GST Type</Label>

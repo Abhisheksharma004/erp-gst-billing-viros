@@ -11,7 +11,7 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { CardContent, CardFooter } from '@/components/ui/card'
 import { AuthCard } from '@/components/auth/auth-card'
-import { ConsoleMessage, CONSOLE_MESSAGE_DURATION_MS } from '@/components/shared/console-message'
+import { ConsoleMessage } from '@/components/shared/console-message'
 import { useConsoleMessage } from '@/hooks/use-console-message'
 import { Loader2, Eye, EyeOff } from 'lucide-react'
 import Link from 'next/link'
@@ -31,6 +31,16 @@ function LoginForm() {
   const [showPassword, setShowPassword] = useState(false)
   const [loading, setLoading] = useState(false)
   const { message, showSuccess, showError, clearMessage } = useConsoleMessage()
+
+  useEffect(() => {
+    // Never keep credentials in the address bar (e.g. after a native GET form submit)
+    if (typeof window === 'undefined') return
+    const params = new URLSearchParams(window.location.search)
+    if (params.has('password') || params.has('email')) {
+      const pending = params.get('pending')
+      router.replace(pending === '1' ? '/login?pending=1' : '/login')
+    }
+  }, [router])
 
   useEffect(() => {
     if (searchParams.get('pending') === '1') {
@@ -69,7 +79,7 @@ function LoginForm() {
         const session = await getSession()
         showSuccess('Login successful! Redirecting...')
         const destination = session?.user?.isSuperAdmin ? '/superadmin' : '/dashboard'
-        setTimeout(() => router.replace(destination), CONSOLE_MESSAGE_DURATION_MS)
+        router.replace(destination)
       }
     } finally {
       setLoading(false)
@@ -78,7 +88,15 @@ function LoginForm() {
 
   return (
     <AuthCard title="Welcome">
-      <form onSubmit={form.handleSubmit(onSubmit)}>
+      <form
+        method="post"
+        action="/login"
+        autoComplete="on"
+        onSubmit={(e) => {
+          e.preventDefault()
+          void form.handleSubmit(onSubmit)(e)
+        }}
+      >
         <CardContent className="space-y-4">
           {message && <ConsoleMessage type={message.type} text={message.text} />}
 
@@ -86,7 +104,8 @@ function LoginForm() {
             <Label htmlFor="email">Email</Label>
             <Input
               id="email"
-              type="text"
+              type="email"
+              autoComplete="username"
               placeholder="Enter your email"
               {...form.register('email', {
                 onChange: () => clearMessage(),
@@ -103,6 +122,7 @@ function LoginForm() {
               <Input
                 id="password"
                 type={showPassword ? 'text' : 'password'}
+                autoComplete="current-password"
                 placeholder="••••••••"
                 className="pr-10"
                 {...form.register('password', {

@@ -7,7 +7,16 @@ import { ensureBusinessSettingsBankingColumns } from '@/lib/ensure-business-sett
 import { normalizeSidebarColor } from '@/lib/theme'
 import { randomUUID } from 'crypto'
 
+const MAX_LOGO_BYTES = 500 * 1024
+const ALLOWED_LOGO_TYPES = new Set(['image/png', 'image/jpeg', 'image/jpg', 'image/webp', 'image/gif'])
+
 async function fileToDataUrl(file: File) {
+  if (!ALLOWED_LOGO_TYPES.has(file.type)) {
+    throw new Error('Logo must be a PNG, JPEG, WEBP, or GIF image')
+  }
+  if (file.size > MAX_LOGO_BYTES) {
+    throw new Error('Logo must be 500KB or smaller')
+  }
   const buffer = Buffer.from(await file.arrayBuffer())
   return `data:${file.type};base64,${buffer.toString('base64')}`
 }
@@ -76,7 +85,12 @@ export async function PUT(req: NextRequest) {
       body = {}
       for (const [key, value] of Array.from(formData.entries())) {
         if (key === 'logo' && value instanceof File && value.size > 0) {
-          body.logo = await fileToDataUrl(value)
+          try {
+            body.logo = await fileToDataUrl(value)
+          } catch (e: unknown) {
+            const message = e instanceof Error ? e.message : 'Invalid logo'
+            return NextResponse.json({ error: message }, { status: 400 })
+          }
         } else if (typeof value === 'string') {
           body[key] = value
         }

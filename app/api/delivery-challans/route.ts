@@ -7,6 +7,7 @@ import { randomUUID } from 'crypto'
 import { buildDocumentNumberPrefix, documentSerialSubstringStart, nextDocumentNumber } from '@/lib/document-number'
 import { ensureDeliveryChallanSchema } from '@/lib/ensure-delivery-challan-schema'
 import { computeSalesDocumentItemTotals } from '@/lib/sales-document-totals'
+import { assertCustomerInOrg } from '@/lib/org-entity'
 
 export async function GET(req: NextRequest) {
   const { error, organizationId } = await requirePermission('delivery-challans', 'view')
@@ -47,6 +48,9 @@ export async function POST(req: NextRequest) {
     await ensureDeliveryChallanSchema()
     const body = await req.json()
     const data = challanSchema.parse(body)
+    if (!(await assertCustomerInOrg(data.customerId, organizationId!))) {
+      return NextResponse.json({ error: 'Invalid customer' }, { status: 400 })
+    }
     await conn.beginTransaction()
 
     const [settings] = await conn.execute(

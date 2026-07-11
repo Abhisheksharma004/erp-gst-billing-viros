@@ -9,6 +9,7 @@ import { computeSalesDocumentItemTotals } from '@/lib/sales-document-totals'
 import { randomUUID } from 'crypto'
 import { apiErrorResponse } from '@/lib/api-error'
 import { buildDocumentNumberPrefix, documentSerialSubstringStart, nextDocumentNumber } from '@/lib/document-number'
+import { assertCustomerInOrg } from '@/lib/org-entity'
 
 function computeItemTotals(item: any, gstType: string) {
   return computeSalesDocumentItemTotals(
@@ -73,6 +74,9 @@ export async function POST(req: NextRequest) {
     await ensureInvoiceSchema()
     const body = await req.json()
     const data = invoiceSchema.parse(body)
+    if (!(await assertCustomerInOrg(data.customerId, organizationId!))) {
+      return NextResponse.json({ error: 'Invalid customer' }, { status: 400 })
+    }
     const gstType = data.gstType
     await conn.beginTransaction()
 

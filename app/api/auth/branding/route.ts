@@ -31,18 +31,11 @@ export async function GET() {
       }
     }
 
-    const [rows] = await db.execute(`
-      SELECT company_name as companyName, logo, sidebar_color as sidebarColor
-      FROM business_settings
-      LIMIT 1
-    `) as [{ companyName?: string; logo?: string | null; sidebarColor?: string | null }[], unknown]
-
-    const row = rows[0]
-
+    // Unauthenticated / no-org: never leak another tenant's branding
     return NextResponse.json({
-      companyName: row?.companyName || 'Viros GST Billing',
-      logo: row?.logo || null,
-      sidebarColor: normalizeSidebarColor(row?.sidebarColor),
+      companyName: 'Viros GST Billing',
+      logo: null,
+      sidebarColor: DEFAULT_SIDEBAR_COLOR,
     })
   } catch (error) {
     if (isDbConnectionError(error)) {

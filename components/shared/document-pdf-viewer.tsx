@@ -156,7 +156,8 @@ export function DocumentPdfViewer({
             </div>
             {activeCopies.length > 1 && (
               <p className="text-xs text-muted-foreground mt-2">
-                PDF will have {activeCopies.length} pages — Page 1 of {activeCopies.length}, etc.
+                PDF will include {activeCopies.length} copies. Each copy is numbered on its own
+                (Page 1 of 1, or 1 of 2 / 2 of 2 if that copy spans multiple pages).
               </p>
             )}
           </div>

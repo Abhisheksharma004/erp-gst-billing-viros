@@ -44,7 +44,12 @@ export async function PUT(req: NextRequest, { params }: { params: { id: string }
     const data = staffSchema.partial().parse(body)
 
     if (data.roleIds !== undefined) {
-      await db.execute('DELETE FROM staff_roles WHERE user_id = ?', [params.id])
+      await db.execute(
+        `DELETE sr FROM staff_roles sr
+         INNER JOIN roles r ON r.id = sr.role_id
+         WHERE sr.user_id = ? AND r.organization_id = ?`,
+        [params.id, organizationId]
+      )
       for (const roleId of data.roleIds) {
         const [roleRow] = await db.execute(
           'SELECT id FROM roles WHERE id = ? AND organization_id = ?',

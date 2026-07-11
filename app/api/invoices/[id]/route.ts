@@ -6,6 +6,7 @@ import { ensureInvoiceSchema } from '@/lib/ensure-invoice-schema'
 import { roundToNearestRupee, roundToTwo } from '@/lib/utils'
 import { computeSalesDocumentItemTotals } from '@/lib/sales-document-totals'
 import { randomUUID } from 'crypto'
+import { assertCustomerInOrg } from '@/lib/org-entity'
 
 function computeItemTotals(item: any, gstType: string) {
   return computeSalesDocumentItemTotals(
@@ -128,6 +129,9 @@ export async function PUT(req: NextRequest, { params }: { params: { id: string }
     }
 
     const data = invoiceSchema.parse(body)
+    if (!(await assertCustomerInOrg(data.customerId, organizationId!))) {
+      return NextResponse.json({ error: 'Invalid customer' }, { status: 400 })
+    }
     const gstType = data.gstType
 
     const [existingRows] = await conn.execute(

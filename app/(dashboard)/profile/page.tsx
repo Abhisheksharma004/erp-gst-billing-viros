@@ -273,6 +273,9 @@ export default function ProfilePage() {
                   {passwordForm.formState.errors.newPassword.message}
                 </p>
               )}
+              <p className="text-xs text-muted-foreground">
+                Use letters, numbers, and a special character (min. 8).
+              </p>
             </div>
 
             <div className="space-y-2">

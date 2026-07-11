@@ -12,8 +12,11 @@ async function addOTPColumns() {
     const connection = await pool.getConnection();
     await connection.execute(`
       ALTER TABLE users
-      ADD COLUMN IF NOT EXISTS otp VARCHAR(10) NULL,
+      ADD COLUMN IF NOT EXISTS otp VARCHAR(72) NULL,
       ADD COLUMN IF NOT EXISTS otp_expiry DATETIME NULL
+    `);
+    await connection.execute(`
+      ALTER TABLE users MODIFY COLUMN otp VARCHAR(72) NULL
     `);
     connection.release();
     console.log('OTP columns added successfully');

@@ -1,10 +1,43 @@
 import { z } from 'zod'
 import { GSTIN_REGEX, MOBILE_REGEX, validateGstinWithState } from '@/lib/field-validation'
+import { strongPasswordSchema } from '@/lib/password-policy'
 
 const trimString = (v: unknown) => (typeof v === 'string' ? v.trim() : v)
 const emptyToUndefined = (v: unknown) =>
   v === '' || v === null || v === undefined ? undefined : v
 const trimUpper = (v: unknown) => (typeof v === 'string' ? v.trim().toUpperCase() : v)
+
+function isValidDateInput(value: string): boolean {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) return false
+  const [y, m, d] = value.split('-').map(Number)
+  const dt = new Date(y, m - 1, d)
+  return dt.getFullYear() === y && dt.getMonth() === m - 1 && dt.getDate() === d
+}
+
+function toDateInputString(value: string | Date): string {
+  if (value instanceof Date) {
+    if (Number.isNaN(value.getTime())) return ''
+    const y = value.getFullYear()
+    const m = String(value.getMonth() + 1).padStart(2, '0')
+    const d = String(value.getDate()).padStart(2, '0')
+    return `${y}-${m}-${d}`
+  }
+  return value.trim()
+}
+
+/** Required YYYY-MM-DD date from `<input type="date">` or Date object. */
+const requiredDateInput = (message = 'Please select a valid date') =>
+  z.preprocess(
+    (v) => {
+      if (v instanceof Date) return toDateInputString(v)
+      if (typeof v === 'string') return v.trim()
+      return v
+    },
+    z
+      .string({ required_error: message })
+      .min(1, message)
+      .refine(isValidDateInput, message)
+  )
 
 const requiredMobileField = z.preprocess(
   trimString,
@@ -65,7 +98,7 @@ export const registerSchema = z
     ),
     name: z.string().min(2, 'Name must be at least 2 characters').max(100),
     email: z.string().email('Invalid email address'),
-    password: z.string().min(8, 'Password must be at least 8 characters'),
+    password: strongPasswordSchema,
     confirmPassword: z.string(),
   })
   .refine((data) => data.password === data.confirmPassword, {
@@ -85,7 +118,7 @@ export const forgotPasswordSchema = z.object({
 
 export const resetPasswordSchema = z.object({
   token: z.string().min(1),
-  password: z.string().min(8, 'Password must be at least 8 characters'),
+  password: strongPasswordSchema,
   confirmPassword: z.string(),
 }).refine((data) => data.password === data.confirmPassword, {
   message: 'Passwords do not match',
@@ -94,7 +127,7 @@ export const resetPasswordSchema = z.object({
 
 export const changePasswordSchema = z.object({
   currentPassword: z.string().min(1, 'Current password is required'),
-  newPassword: z.string().min(8, 'Password must be at least 8 characters'),
+  newPassword: strongPasswordSchema,
   confirmPassword: z.string(),
 }).refine((data) => data.newPassword === data.confirmPassword, {
   message: 'Passwords do not match',
@@ -108,10 +141,7 @@ export const staffSchema = z.object({
   role: z.enum(['ADMIN', 'STAFF']),
   branch: z.string().optional(),
   status: z.enum(['ACTIVE', 'INACTIVE']).default('ACTIVE'),
-  password: z.preprocess(
-    (val) => (typeof val === 'string' && val.trim() === '' ? undefined : val),
-    z.string().min(8, 'Password must be at least 8 characters').optional()
-  ),
+  password: strongPasswordSchema,
   roleIds: z.array(z.string()).optional(),
 })
 
@@ -323,20 +353,30 @@ export const quotationItemSchema = z.object({
   gstRate: z.number().min(0).max(100).default(0),
 })
 
-export const quotationSchema = z.object({
-  customerId: z.string().min(1, 'Customer required'),
-  date: z.string().or(z.date()),
-  validUntil: z.string().or(z.date()).optional(),
-  gstType: z.enum(['CGST_SGST', 'IGST', 'EXEMPT']).default('CGST_SGST'),
-  notes: z.string().optional(),
-  terms: z.string().optional(),
-  roundOff: z.number().default(0),
-  partyDetails: z.object({
-    buyer: partySnapshotSchema.optional(),
-    consignee: partySnapshotSchema.optional(),
-  }).optional(),
-  items: z.array(quotationItemSchema).min(1, 'At least one item required'),
-})
+export const quotationSchema = z
+  .object({
+    customerId: z.string().min(1, 'Customer required'),
+    date: requiredDateInput('Please select a valid quotation date'),
+    validUntil: requiredDateInput('Please select a Valid Till date'),
+    gstType: z.enum(['CGST_SGST', 'IGST', 'EXEMPT']).default('CGST_SGST'),
+    notes: z.string().optional(),
+    terms: z.string().optional(),
+    roundOff: z.number().default(0),
+    partyDetails: z.object({
+      buyer: partySnapshotSchema.optional(),
+      consignee: partySnapshotSchema.optional(),
+    }).optional(),
+    items: z.array(quotationItemSchema).min(1, 'At least one item required'),
+  })
+  .superRefine((data, ctx) => {
+    if (data.validUntil && data.date && data.validUntil < data.date) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: 'Valid till must be on or after the quotation date',
+        path: ['validUntil'],
+      })
+    }
+  })
 
 export const challanSchema = z.object({
   customerId: z.string().min(1, 'Customer required'),
@@ -377,7 +417,14 @@ export const businessSettingsSchema = z.object({
   phone: optionalMobileField,
   email: z.string().email().optional().or(z.literal('')),
   website: z.string().url().optional().or(z.literal('')),
-  logo: z.string().optional(),
+  logo: z
+    .string()
+    .max(700_000, 'Logo is too large (max ~500KB)')
+    .refine(
+      (v) => !v || v.startsWith('data:image/') || v.startsWith('http'),
+      'Logo must be an image'
+    )
+    .optional(),
   bankName: z.string().optional(),
   bankAccount: z.string().optional(),
   bankIfsc: z.string().optional(),

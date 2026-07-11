@@ -1,10 +1,6 @@
 import db from '@/lib/db'
+import bcrypt from 'bcryptjs'
 import { randomUUID } from 'crypto'
-
-const SUPERADMIN_EMAIL = 'nk1428896@gmail.com'
-const SUPERADMIN_PASSWORD_HASH =
-  '$2a$12$HQFWa9IxeK0wVfxl3dYW1uEca3kdYl2.codDd43lanIBzKhLNPlfm'
-const SUPERADMIN_ID = 'superadmin-user-id-000000000001'
 
 let schemaReady = false
 
@@ -25,6 +21,11 @@ async function runAlter(sql: string): Promise<void> {
   }
 }
 
+/**
+ * Ensures `is_super_admin` column exists.
+ * Optional one-time seed: only when SUPERADMIN_EMAIL + SUPERADMIN_PASSWORD are set
+ * AND no superadmin user exists yet. Never overwrites an existing password.
+ */
 export async function ensureSuperAdminSchema(): Promise<void> {
   if (schemaReady) return
 
@@ -32,21 +33,33 @@ export async function ensureSuperAdminSchema(): Promise<void> {
     'ALTER TABLE users ADD COLUMN is_super_admin TINYINT(1) NOT NULL DEFAULT 0 AFTER role'
   )
 
-  const [existing] = (await db.execute('SELECT id FROM users WHERE email = ? LIMIT 1', [
-    SUPERADMIN_EMAIL,
-  ])) as [{ id: string }[], unknown]
+  const seedEmail = process.env.SUPERADMIN_EMAIL?.trim().toLowerCase()
+  const seedPassword = process.env.SUPERADMIN_PASSWORD
 
-  if (existing[0]) {
-    await db.execute(
-      'UPDATE users SET is_super_admin = 1, password = ?, status = ? WHERE email = ?',
-      [SUPERADMIN_PASSWORD_HASH, 'ACTIVE', SUPERADMIN_EMAIL]
-    )
-  } else {
-    await db.execute(
-      `INSERT INTO users (id, name, email, password, role, is_super_admin, status)
-       VALUES (?, ?, ?, ?, 'ADMIN', 1, 'ACTIVE')`,
-      [SUPERADMIN_ID, 'Super Admin', SUPERADMIN_EMAIL, SUPERADMIN_PASSWORD_HASH]
-    )
+  if (seedEmail && seedPassword && seedPassword.length >= 8) {
+    const [existingSa] = (await db.execute(
+      'SELECT id FROM users WHERE is_super_admin = 1 LIMIT 1'
+    )) as [{ id: string }[], unknown]
+
+    if (!existingSa[0]) {
+      const [byEmail] = (await db.execute('SELECT id FROM users WHERE email = ? LIMIT 1', [
+        seedEmail,
+      ])) as [{ id: string }[], unknown]
+
+      if (byEmail[0]) {
+        await db.execute('UPDATE users SET is_super_admin = 1, status = ? WHERE id = ?', [
+          'ACTIVE',
+          byEmail[0].id,
+        ])
+      } else {
+        const hash = await bcrypt.hash(seedPassword, 12)
+        await db.execute(
+          `INSERT INTO users (id, name, email, password, role, is_super_admin, status)
+           VALUES (?, ?, ?, ?, 'ADMIN', 1, 'ACTIVE')`,
+          [randomUUID(), 'Super Admin', seedEmail, hash]
+        )
+      }
+    }
   }
 
   schemaReady = true
@@ -54,10 +67,11 @@ export async function ensureSuperAdminSchema(): Promise<void> {
 
 export async function isUserSuperAdmin(userId: string): Promise<boolean> {
   await ensureSuperAdminSchema()
-  const [rows] = (await db.execute('SELECT is_super_admin FROM users WHERE id = ? LIMIT 1', [
-    userId,
-  ])) as [{ is_super_admin: number }[], unknown]
-  return Boolean(Number(rows[0]?.is_super_admin))
+  const [rows] = (await db.execute(
+    'SELECT is_super_admin, status FROM users WHERE id = ? LIMIT 1',
+    [userId]
+  )) as [{ is_super_admin: number; status: string }[], unknown]
+  const row = rows[0]
+  if (!row || row.status === 'INACTIVE') return false
+  return Boolean(Number(row.is_super_admin))
 }
-
-export { SUPERADMIN_EMAIL }

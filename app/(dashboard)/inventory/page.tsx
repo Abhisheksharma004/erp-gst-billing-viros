@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useMemo, useState, useCallback } from 'react'
+import { useEffect, useState, useCallback } from 'react'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { productSchema, ProductInput } from '@/lib/validations'
@@ -23,6 +23,10 @@ import { CategorySlidePanel } from '@/components/inventory/category-slide-panel'
 function formatHsnSac(hsn: string | null, sac: string | null): string {
   if (hsn && sac) return `${hsn} / ${sac}`
   return hsn || sac || '-'
+}
+
+function isProductActive(value: unknown): boolean {
+  return value === 1 || value === true || value === '1'
 }
 
 interface Product {
@@ -71,7 +75,6 @@ export default function InventoryPage() {
   const [viewing, setViewing] = useState<Product | null>(null)
   const [viewLoading, setViewLoading] = useState(false)
   const [editing, setEditing] = useState<Product | null>(null)
-  const [selectedIds, setSelectedIds] = useState<Record<string, boolean>>({})
   const [viewMode, setViewMode] = useState<'table' | 'card'>('table')
   const [isMobile, setIsMobile] = useState(false)
   const [saving, setSaving] = useState(false)
@@ -123,31 +126,6 @@ export default function InventoryPage() {
 
   const showTable = viewMode === 'table' && !isMobile
   const showCards = viewMode === 'card' || isMobile
-
-  useEffect(() => {
-    // clear selection when list changes (pagination/filter/search)
-    setSelectedIds({})
-  }, [search, page, categoryFilter, statusFilter])
-
-  const selectedCount = useMemo(() => Object.values(selectedIds).filter(Boolean).length, [selectedIds])
-  const allVisibleSelected = useMemo(() => {
-    if (products.length === 0) return false
-    return products.every((p) => selectedIds[p.id])
-  }, [products, selectedIds])
-  const someVisibleSelected = useMemo(() => {
-    if (products.length === 0) return false
-    return products.some((p) => selectedIds[p.id])
-  }, [products, selectedIds])
-
-  const toggleSelectAllVisible = (checked: boolean) => {
-    const next: Record<string, boolean> = { ...selectedIds }
-    for (const p of products) next[p.id] = checked
-    setSelectedIds(next)
-  }
-
-  const toggleSelectOne = (id: string, checked: boolean) => {
-    setSelectedIds((prev) => ({ ...prev, [id]: checked }))
-  }
 
   useEffect(() => {
     async function fetchOptions(url: string): Promise<SelectOption[]> {
@@ -209,7 +187,7 @@ export default function InventoryPage() {
         product.discount === null || product.discount === undefined || product.discount === ''
           ? null
           : Number(product.discount),
-      isActive: product.is_active === 1,
+      isActive: isProductActive(product.is_active),
       categoryId: product.category_id || '',
       unitId: product.unit_id || '',
     })
@@ -250,28 +228,15 @@ export default function InventoryPage() {
     if (!confirm('Delete this product?')) return
     const res = await fetch(`/api/products/${id}`, { method: 'DELETE' })
     if (res.ok) {
-      toast({ title: 'Product deleted' })
+      const data = await res.json().catch(() => ({}))
+      toast({
+        title: data.softDeleted ? 'Product marked inactive' : 'Product deleted',
+        description: typeof data.message === 'string' ? data.message : undefined,
+      })
       fetchProducts()
     } else {
-      const err = await res.json()
+      const err = await res.json().catch(() => ({}))
       toast({ title: 'Error', description: err.error || 'Cannot delete', variant: 'destructive' })
-    }
-  }
-
-  const handleDeleteSelected = async () => {
-    const ids = Object.entries(selectedIds).filter(([, v]) => v).map(([k]) => k)
-    if (ids.length === 0) return
-    if (!confirm(`Delete ${ids.length} selected product(s)?`)) return
-    try {
-      const results = await Promise.allSettled(ids.map((id) => fetch(`/api/products/${id}`, { method: 'DELETE' })))
-      const okCount = results.filter((r) => r.status === 'fulfilled' && r.value.ok).length
-      const failCount = ids.length - okCount
-      if (okCount > 0) toast({ title: `Deleted ${okCount} product(s)` })
-      if (failCount > 0) toast({ title: 'Some deletes failed', description: `${failCount} item(s) could not be deleted`, variant: 'destructive' })
-      setSelectedIds({})
-      fetchProducts()
-    } catch (e: any) {
-      toast({ title: 'Error', description: e?.message || 'Bulk delete failed', variant: 'destructive' })
     }
   }
 
@@ -328,18 +293,6 @@ export default function InventoryPage() {
     <div className="space-y-4 md:space-y-6 min-w-0">
       <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-end">
         <div className="grid grid-cols-2 gap-2 w-full sm:flex sm:flex-wrap sm:w-auto sm:items-center">
-          {selectedCount > 0 && (
-            <Button
-              variant="destructive"
-              onClick={handleDeleteSelected}
-              size="icon"
-              title={`Delete ${selectedCount} selected`}
-              aria-label={`Delete ${selectedCount} selected`}
-              className="col-span-2 sm:col-span-1 sm:w-9"
-            >
-              <Trash2 className="w-4 h-4" />
-            </Button>
-          )}
           <Button
             variant="outline"
             onClick={() => setCatDialogOpen(true)}
@@ -429,18 +382,6 @@ export default function InventoryPage() {
           <Table className="min-w-[800px]">
           <TableHeader>
             <TableRow>
-              <TableHead className="w-10">
-                <input
-                  type="checkbox"
-                  aria-label="Select all"
-                  checked={allVisibleSelected}
-                  ref={(el) => {
-                    if (el) el.indeterminate = !allVisibleSelected && someVisibleSelected
-                  }}
-                  onChange={(e) => toggleSelectAllVisible(e.target.checked)}
-                  className="h-4 w-4"
-                />
-              </TableHead>
               <TableHead>Product</TableHead>
               <TableHead>HSN / SAC</TableHead>
               <TableHead className="text-right">Sale Price</TableHead>
@@ -452,21 +393,12 @@ export default function InventoryPage() {
           </TableHeader>
           <TableBody>
             {loading ? (
-              <TableRow><TableCell colSpan={8} className="text-center py-12 text-muted-foreground">Loading...</TableCell></TableRow>
+              <TableRow><TableCell colSpan={7} className="text-center py-12 text-muted-foreground">Loading...</TableCell></TableRow>
             ) : products.length === 0 ? (
-              <TableRow><TableCell colSpan={8} className="text-center py-12 text-muted-foreground">No products found</TableCell></TableRow>
+              <TableRow><TableCell colSpan={7} className="text-center py-12 text-muted-foreground">No products found</TableCell></TableRow>
             ) : (
               products.map((p) => (
                 <TableRow key={p.id}>
-                  <TableCell>
-                    <input
-                      type="checkbox"
-                      aria-label={`Select ${p.name}`}
-                      checked={!!selectedIds[p.id]}
-                      onChange={(e) => toggleSelectOne(p.id, e.target.checked)}
-                      className="h-4 w-4"
-                    />
-                  </TableCell>
                   <TableCell>
                     <div className="flex items-center gap-2">
                       <Package className="w-4 h-4 text-muted-foreground shrink-0" />
@@ -496,8 +428,8 @@ export default function InventoryPage() {
                   </TableCell>
                   <TableCell>{p.category_name || '-'}</TableCell>
                   <TableCell>
-                    <Badge variant={p.is_active === 1 ? 'default' : 'secondary'}>
-                      {p.is_active === 1 ? 'Active' : 'Inactive'}
+                    <Badge variant={isProductActive(p.is_active) ? 'default' : 'secondary'}>
+                      {isProductActive(p.is_active) ? 'Active' : 'Inactive'}
                     </Badge>
                   </TableCell>
                   <TableCell className="text-right">
@@ -539,27 +471,6 @@ export default function InventoryPage() {
 
       {showCards && (
         <div className="space-y-3">
-          {products.length > 0 && (
-            <div className="flex items-center justify-between rounded-lg border bg-card px-3 py-2">
-              <label className="flex items-center gap-2 text-sm text-muted-foreground">
-                <input
-                  type="checkbox"
-                  aria-label="Select all"
-                  checked={allVisibleSelected}
-                  ref={(el) => {
-                    if (el) el.indeterminate = !allVisibleSelected && someVisibleSelected
-                  }}
-                  onChange={(e) => toggleSelectAllVisible(e.target.checked)}
-                  className="h-4 w-4"
-                />
-                Select all
-              </label>
-              {selectedCount > 0 && (
-                <span className="text-xs text-muted-foreground">{selectedCount} selected</span>
-              )}
-            </div>
-          )}
-
           {loading ? (
             <Card>
               <CardContent className="py-12 text-center text-muted-foreground">Loading...</CardContent>
@@ -574,16 +485,7 @@ export default function InventoryPage() {
                 <Card key={p.id} className="overflow-hidden rounded-xl border shadow-sm">
                   <CardContent className="p-0">
                     <div className="p-3">
-                      <div className="flex items-center justify-between gap-1">
-                        <label className="flex items-center shrink-0">
-                          <input
-                            type="checkbox"
-                            aria-label={`Select ${p.name}`}
-                            checked={!!selectedIds[p.id]}
-                            onChange={(e) => toggleSelectOne(p.id, e.target.checked)}
-                            className="h-4 w-4"
-                          />
-                        </label>
+                      <div className="flex items-center justify-end gap-1">
                         <div className="flex items-center shrink-0">
                           <Button variant="ghost" size="icon" title="View" className="h-7 w-7" onClick={() => openView(p)}>
                             <Eye className="h-3.5 w-3.5" />
@@ -608,8 +510,8 @@ export default function InventoryPage() {
                         <div className="min-w-0 flex-1">
                           <div className="flex items-start justify-between gap-2">
                             <p className="font-medium text-sm leading-snug break-words">{p.name}</p>
-                            <Badge variant={p.is_active === 1 ? 'default' : 'secondary'} className="shrink-0 text-[10px] px-1.5 py-0">
-                              {p.is_active === 1 ? 'Active' : 'Inactive'}
+                            <Badge variant={isProductActive(p.is_active) ? 'default' : 'secondary'} className="shrink-0 text-[10px] px-1.5 py-0">
+                              {isProductActive(p.is_active) ? 'Active' : 'Inactive'}
                             </Badge>
                           </div>
                           <p className="text-xs text-muted-foreground mt-0.5">
@@ -719,8 +621,8 @@ export default function InventoryPage() {
                 </div>
                 <div>
                   <p className="text-muted-foreground">Status</p>
-                  <Badge variant={viewing.is_active === 1 ? 'default' : 'secondary'}>
-                    {viewing.is_active === 1 ? 'Active' : 'Inactive'}
+                  <Badge variant={isProductActive(viewing.is_active) ? 'default' : 'secondary'}>
+                    {isProductActive(viewing.is_active) ? 'Active' : 'Inactive'}
                   </Badge>
                 </div>
                 {viewing.discount != null && viewing.discount !== '' && (

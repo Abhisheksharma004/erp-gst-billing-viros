@@ -5,6 +5,7 @@ import { returnableChallanSchema } from '@/lib/validations'
 import { ensureReturnableChallanSchema } from '@/lib/ensure-returnable-challan-schema'
 import { computeSalesDocumentItemTotals } from '@/lib/sales-document-totals'
 import { randomUUID } from 'crypto'
+import { assertCustomerInOrg } from '@/lib/org-entity'
 
 export async function GET(req: NextRequest, { params }: { params: { id: string } }) {
   const { error, organizationId } = await requirePermission('returnable-challans', 'view')
@@ -34,6 +35,9 @@ export async function PUT(req: NextRequest, { params }: { params: { id: string }
     await ensureReturnableChallanSchema()
     const body = await req.json()
     const data = returnableChallanSchema.parse(body)
+    if (!(await assertCustomerInOrg(data.customerId, organizationId!))) {
+      return NextResponse.json({ error: 'Invalid customer' }, { status: 400 })
+    }
 
     const [existingRows] = await conn.execute(
       'SELECT id FROM returnable_challans WHERE id = ? AND organization_id = ?',

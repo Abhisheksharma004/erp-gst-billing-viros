@@ -7,6 +7,7 @@ import { ensureQuotationSchema } from '@/lib/ensure-quotation-schema'
 import { buildQuotationTotals, insertQuotationItems } from '@/lib/quotation-save'
 import { buildDocumentNumberPrefix, documentSerialSubstringStart, nextDocumentNumber } from '@/lib/document-number'
 import { randomUUID } from 'crypto'
+import { assertCustomerInOrg } from '@/lib/org-entity'
 
 export async function GET(req: NextRequest) {
   const { error, organizationId } = await requirePermission('quotations', 'view')
@@ -61,6 +62,9 @@ export async function POST(req: NextRequest) {
     await ensureQuotationSchema()
     const body = await req.json()
     const data = quotationSchema.parse(body)
+    if (!(await assertCustomerInOrg(data.customerId, organizationId!))) {
+      return NextResponse.json({ error: 'Invalid customer' }, { status: 400 })
+    }
     await conn.beginTransaction()
 
     const [settings] = await conn.execute(

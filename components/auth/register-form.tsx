@@ -10,13 +10,7 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
 import { CardContent, CardFooter } from '@/components/ui/card'
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/components/ui/select'
+import { Select,SelectContent,SelectItem,SelectTrigger,SelectValue } from '@/components/ui/select'
 import { ConsoleMessage, CONSOLE_MESSAGE_DURATION_MS } from '@/components/shared/console-message'
 import { useConsoleMessage } from '@/hooks/use-console-message'
 import { useToast } from '@/hooks/use-toast'
@@ -158,7 +152,16 @@ export function RegisterForm({ onSuccess, onSignInClick }: RegisterFormProps) {
   }
 
   return (
-    <form onSubmit={form.handleSubmit(onSubmit)} noValidate className="flex min-h-full flex-col">
+    <form
+      method="post"
+      action="/register"
+      noValidate
+      className="flex min-h-full flex-col"
+      onSubmit={(e) => {
+        e.preventDefault()
+        void form.handleSubmit(onSubmit)(e)
+      }}
+    >
       <CardContent className="flex-1 space-y-5 px-4 py-5 sm:px-6 sm:py-6">
         {message && <ConsoleMessage type={message.type} text={message.text} />}
 
@@ -206,7 +209,7 @@ export function RegisterForm({ onSuccess, onSignInClick }: RegisterFormProps) {
             </div>
 
             <div className="space-y-2">
-              <Label htmlFor="gstin">GSTIN (Optional)</Label>
+              <Label htmlFor="gstin">GSTIN <span className="text-destructive">*</span></Label>
               <Controller
                 name="gstin"
                 control={form.control}
@@ -344,7 +347,7 @@ export function RegisterForm({ onSuccess, onSignInClick }: RegisterFormProps) {
                 <Input
                   id="password"
                   type={showPassword ? 'text' : 'password'}
-                  placeholder="Min. 8 characters"
+                  placeholder="Letter, number & special char"
                   className="pr-10"
                   {...form.register('password', { onChange: clearOnChange })}
                 />
@@ -357,6 +360,9 @@ export function RegisterForm({ onSuccess, onSignInClick }: RegisterFormProps) {
                 </button>
               </div>
               <FieldError message={form.formState.errors.password?.message} />
+              <p className="text-xs text-muted-foreground">
+                Use letters, numbers, and a special character (min. 8).
+              </p>
             </div>
 
             <div className="space-y-2">

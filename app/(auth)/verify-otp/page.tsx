@@ -1,7 +1,7 @@
 'use client'
 
-import { Suspense, useState, useEffect, useCallback } from 'react'
-import { useRouter, useSearchParams } from 'next/navigation'
+import { useState, useEffect, useCallback } from 'react'
+import { useRouter } from 'next/navigation'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
@@ -10,15 +10,11 @@ import { AuthCard } from '@/components/auth/auth-card'
 import { Loader2 } from 'lucide-react'
 import { useToast } from '@/hooks/use-toast'
 import Link from 'next/link'
-import { OTP_EXPIRY_SECONDS } from '@/lib/auth-otp'
-
-export default function VerifyOTPPage() {
-  return (
-    <Suspense fallback={null}>
-      <VerifyOTPForm />
-    </Suspense>
-  )
-}
+import { PASSWORD_REQUIREMENTS_MESSAGE, OTP_EXPIRY_SECONDS, OTP_LENGTH, isStrongEnoughPassword } from '@/lib/auth-otp'
+import {
+  clearPasswordResetSession,
+  getPasswordResetEmail,
+} from '@/lib/password-reset-session'
 
 function formatTimer(seconds: number): string {
   const m = Math.floor(seconds / 60)
@@ -26,7 +22,16 @@ function formatTimer(seconds: number): string {
   return `${m}:${String(s).padStart(2, '0')}`
 }
 
-function VerifyOTPForm() {
+function maskEmail(email: string): string {
+  const [local, domain] = email.split('@')
+  if (!local || !domain) return 'your email'
+  const visible = local.slice(0, Math.min(2, local.length))
+  return `${visible}***@${domain}`
+}
+
+export default function VerifyOTPPage() {
+  const [email, setEmail] = useState('')
+  const [ready, setReady] = useState(false)
   const [otp, setOtp] = useState('')
   const [newPassword, setNewPassword] = useState('')
   const [confirmPassword, setConfirmPassword] = useState('')
@@ -36,8 +41,6 @@ function VerifyOTPForm() {
   const [secondsLeft, setSecondsLeft] = useState(OTP_EXPIRY_SECONDS)
   const [canResend, setCanResend] = useState(false)
   const router = useRouter()
-  const searchParams = useSearchParams()
-  const email = searchParams.get('email') || ''
   const { toast } = useToast()
 
   const resetTimer = useCallback(() => {
@@ -46,13 +49,17 @@ function VerifyOTPForm() {
   }, [])
 
   useEffect(() => {
-    if (!email) {
-      router.push('/forgot-password')
+    const stored = getPasswordResetEmail()
+    if (!stored) {
+      router.replace('/forgot-password')
+      return
     }
-  }, [email, router])
+    setEmail(stored)
+    setReady(true)
+  }, [router])
 
   useEffect(() => {
-    if (verified || canResend) return
+    if (!ready || verified || canResend) return
     if (secondsLeft <= 0) {
       setCanResend(true)
       return
@@ -61,7 +68,7 @@ function VerifyOTPForm() {
       setSecondsLeft((prev) => prev - 1)
     }, 1000)
     return () => window.clearTimeout(timer)
-  }, [secondsLeft, verified, canResend])
+  }, [ready, secondsLeft, verified, canResend])
 
   const handleVerifyOtp = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -153,10 +160,10 @@ function VerifyOTPForm() {
       return
     }
 
-    if (newPassword.length < 6) {
+    if (!isStrongEnoughPassword(newPassword)) {
       toast({
         title: 'Error',
-        description: 'Password must be at least 6 characters long',
+        description: PASSWORD_REQUIREMENTS_MESSAGE,
         variant: 'destructive',
       })
       return
@@ -173,6 +180,7 @@ function VerifyOTPForm() {
       const data = await response.json()
 
       if (response.ok) {
+        clearPasswordResetSession()
         toast({
           title: 'Success',
           description: 'Password reset successfully. Redirecting to login...',
@@ -198,18 +206,28 @@ function VerifyOTPForm() {
     }
   }
 
-  if (!email) {
+  if (!ready || !email) {
     return null
   }
 
+  const displayEmail = maskEmail(email)
+
   return (
     <AuthCard title={verified ? 'Reset Password' : 'Verify OTP'}>
-      <form onSubmit={verified ? handleResetPassword : handleVerifyOtp}>
+      <form
+        method="post"
+        action="/verify-otp"
+        onSubmit={(e) => {
+          e.preventDefault()
+          if (verified) void handleResetPassword(e)
+          else void handleVerifyOtp(e)
+        }}
+      >
         <CardContent className="space-y-4">
           <p className="text-sm text-muted-foreground text-center">
             {verified
-              ? `OTP verified for ${email}. Enter your new password.`
-              : `Enter the 5-digit OTP sent to ${email}`}
+              ? `OTP verified for ${displayEmail}. Enter your new password.`
+              : `Enter the ${OTP_LENGTH}-digit OTP sent to ${displayEmail}`}
           </p>
 
           {!verified && (
@@ -219,11 +237,11 @@ function VerifyOTPForm() {
                 id="otp"
                 type="text"
                 inputMode="numeric"
-                placeholder="Enter 5-digit OTP"
+                placeholder={`Enter ${OTP_LENGTH}-digit OTP`}
                 className="text-center text-2xl tracking-widest"
                 value={otp}
-                onChange={(e) => setOtp(e.target.value.replace(/\D/g, '').slice(0, 5))}
-                maxLength={5}
+                onChange={(e) => setOtp(e.target.value.replace(/\D/g, '').slice(0, OTP_LENGTH))}
+                maxLength={OTP_LENGTH}
                 required
                 disabled={canResend}
               />
@@ -237,12 +255,13 @@ function VerifyOTPForm() {
                 <Input
                   id="newPassword"
                   type="password"
-                  placeholder="Enter new password"
+                  placeholder="Letter, number & special char"
                   value={newPassword}
                   onChange={(e) => setNewPassword(e.target.value)}
                   required
                   autoFocus
                 />
+                <p className="text-xs text-muted-foreground">{PASSWORD_REQUIREMENTS_MESSAGE}</p>
               </div>
               <div className="space-y-2">
                 <Label htmlFor="confirmPassword">Confirm Password</Label>
@@ -270,7 +289,7 @@ function VerifyOTPForm() {
               <Button
                 type="submit"
                 className="w-full"
-                disabled={loading || otp.length !== 5 || canResend}
+                disabled={loading || otp.length !== OTP_LENGTH || canResend}
               >
                 {loading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
                 Verify OTP
@@ -296,7 +315,11 @@ function VerifyOTPForm() {
               </Button>
             </>
           )}
-          <Link href="/forgot-password" className="text-sm text-primary hover:underline">
+          <Link
+            href="/forgot-password"
+            className="text-sm text-primary hover:underline"
+            onClick={() => clearPasswordResetSession()}
+          >
             Back to Forgot Password
           </Link>
         </CardFooter>

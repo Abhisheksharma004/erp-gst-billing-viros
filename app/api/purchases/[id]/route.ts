@@ -6,6 +6,7 @@ import { ensurePurchaseSchema, ensureDocumentTermsColumns } from '@/lib/ensure-p
 import { computePurchaseItemTotals } from '@/lib/purchase-totals'
 import { roundToTwo } from '@/lib/utils'
 import { randomUUID } from 'crypto'
+import { assertVendorInOrg } from '@/lib/org-entity'
 
 export async function GET(req: NextRequest, { params }: { params: { id: string } }) {
   const { error, organizationId } = await requirePermission('purchases', 'view')
@@ -101,6 +102,9 @@ export async function PUT(req: NextRequest, { params }: { params: { id: string }
     }
 
     const data = purchaseSchema.parse(body)
+    if (!(await assertVendorInOrg(data.vendorId, organizationId!))) {
+      return NextResponse.json({ error: 'Invalid vendor' }, { status: 400 })
+    }
     const gstType = data.gstType
 
     const [existingRows] = await conn.execute(

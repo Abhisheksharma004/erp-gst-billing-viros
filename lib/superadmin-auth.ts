@@ -16,8 +16,8 @@ export async function requireSuperAdmin(): Promise<SuperAdminResult> {
     return { error: NextResponse.json({ error: 'Unauthorized' }, { status: 401 }), session: null }
   }
 
-  const isSuperAdmin =
-    session.user.isSuperAdmin || (await isUserSuperAdmin(session.user.id))
+  // Always verify from DB — do not trust JWT isSuperAdmin alone
+  const isSuperAdmin = await isUserSuperAdmin(session.user.id)
 
   if (!isSuperAdmin) {
     return { error: NextResponse.json({ error: 'Forbidden' }, { status: 403 }), session: null }

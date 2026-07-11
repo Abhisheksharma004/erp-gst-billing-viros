@@ -5,6 +5,7 @@ import { challanSchema } from '@/lib/validations'
 import { ensureDeliveryChallanSchema } from '@/lib/ensure-delivery-challan-schema'
 import { computeSalesDocumentItemTotals } from '@/lib/sales-document-totals'
 import { randomUUID } from 'crypto'
+import { assertCustomerInOrg } from '@/lib/org-entity'
 
 export async function GET(req: NextRequest, { params }: { params: { id: string } }) {
   const { error, organizationId } = await requirePermission('delivery-challans', 'view')
@@ -29,6 +30,9 @@ export async function PUT(req: NextRequest, { params }: { params: { id: string }
     await ensureDeliveryChallanSchema()
     const body = await req.json()
     const data = challanSchema.parse(body)
+    if (!(await assertCustomerInOrg(data.customerId, organizationId!))) {
+      return NextResponse.json({ error: 'Invalid customer' }, { status: 400 })
+    }
 
     const [existingRows] = await conn.execute(
       'SELECT id FROM delivery_challans WHERE id = ? AND organization_id = ?',

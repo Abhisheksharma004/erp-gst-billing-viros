@@ -40,14 +40,15 @@ export async function POST(req: NextRequest) {
     const [existing] = await db.execute('SELECT id FROM users WHERE email = ?', [data.email]) as any[]
     if (existing[0]) return NextResponse.json({ error: 'Email already in use' }, { status: 400 })
 
-    const password = data.password || 'Password@123'
+    const password = data.password
     const hashedPassword = await bcrypt.hash(password, 12)
     const id = randomUUID()
     const memberId = randomUUID()
 
+    // users.role stays STAFF for org employees — org admin rights come from organization_members
     await db.execute(
       'INSERT INTO users (id, name, email, mobile, role, branch, status, password) VALUES (?,?,?,?,?,?,?,?)',
-      [id, data.name, data.email, data.mobile||null, data.role, data.branch||null, data.status, hashedPassword]
+      [id, data.name, data.email, data.mobile||null, 'STAFF', data.branch||null, data.status, hashedPassword]
     )
 
     await db.execute(

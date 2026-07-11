@@ -7,6 +7,7 @@ import { ensureDocumentTermsColumns } from '@/lib/ensure-purchase-schema'
 import { normalizePurchaseDocumentItem } from '@/lib/purchase-include-pricing'
 import { buildDocumentNumberPrefix, documentSerialSubstringStart, nextDocumentNumber } from '@/lib/document-number'
 import { randomUUID } from 'crypto'
+import { assertVendorInOrg } from '@/lib/org-entity'
 
 function computeItemTotals(item: any, gstType = 'CGST_SGST') {
   const taxable = item.quantity * item.rate * (1 - (item.discount || 0) / 100)
@@ -61,6 +62,9 @@ export async function POST(req: NextRequest) {
     await ensureDocumentTermsColumns()
     const body = await req.json()
     const data = purchaseOrderSchema.parse(body)
+    if (!(await assertVendorInOrg(data.vendorId, organizationId!))) {
+      return NextResponse.json({ error: 'Invalid vendor' }, { status: 400 })
+    }
     const includePricing = data.includePricing
     const gstType = data.gstType
     await conn.beginTransaction()

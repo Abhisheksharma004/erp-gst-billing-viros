@@ -21,7 +21,8 @@ export async function DELETE(req: NextRequest, { params }: { params: { id: strin
       [params.id, organizationId]
     )
     return NextResponse.json({ success: true })
-  } catch (err: any) {
-    return NextResponse.json({ error: err.message }, { status: 500 })
+  } catch (err: unknown) {
+    console.error('DELETE /api/categories/[id]:', err)
+    return NextResponse.json({ error: 'Cannot delete category' }, { status: 500 })
   }
 }

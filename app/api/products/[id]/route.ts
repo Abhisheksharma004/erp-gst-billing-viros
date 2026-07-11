@@ -100,6 +100,32 @@ export async function DELETE(req: NextRequest, { params }: { params: { id: strin
     [params.id, organizationId]
   ) as any[]
   if (!existing[0]) return NextResponse.json({ error: 'Not found' }, { status: 404 })
-  await db.execute('UPDATE products SET is_active = 0 WHERE id = ? AND organization_id = ?', [params.id, organizationId])
-  return NextResponse.json({ success: true })
+
+  try {
+    await db.execute('DELETE FROM stock_movements WHERE product_id = ?', [params.id])
+  } catch (err: unknown) {
+    // Ignore if stock_movements table/column layout differs on older DBs.
+    console.warn('DELETE stock_movements for product:', err)
+  }
+
+  try {
+    await db.execute('DELETE FROM products WHERE id = ? AND organization_id = ?', [params.id, organizationId])
+    return NextResponse.json({ success: true })
+  } catch (err: unknown) {
+    const e = err as { code?: string; errno?: number }
+    // Product is referenced by invoices/orders/etc. — keep row, mark inactive instead.
+    if (e?.code === 'ER_ROW_IS_REFERENCED_2' || e?.code === 'ER_ROW_IS_REFERENCED' || e?.errno === 1451) {
+      await db.execute(
+        'UPDATE products SET is_active = 0 WHERE id = ? AND organization_id = ?',
+        [params.id, organizationId]
+      )
+      return NextResponse.json({
+        success: true,
+        softDeleted: true,
+        message: 'Product is used in documents, so it was marked Inactive instead of deleted.',
+      })
+    }
+    console.error('DELETE /api/products/[id]:', e?.code, err)
+    return NextResponse.json({ error: 'Cannot delete product' }, { status: 500 })
+  }
 }

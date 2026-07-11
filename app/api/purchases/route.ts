@@ -9,6 +9,7 @@ import { roundToTwo } from '@/lib/utils'
 import { randomUUID } from 'crypto'
 import { apiErrorResponse } from '@/lib/api-error'
 import { buildDocumentNumberPrefix, documentSerialSubstringStart, nextDocumentNumber } from '@/lib/document-number'
+import { assertVendorInOrg } from '@/lib/org-entity'
 
 export async function GET(req: NextRequest) {
   const { error, organizationId } = await requirePermission('purchases', 'view')
@@ -60,6 +61,9 @@ export async function POST(req: NextRequest) {
     await ensureDocumentTermsColumns()
     const body = await req.json()
     const data = purchaseSchema.parse(body)
+    if (!(await assertVendorInOrg(data.vendorId, organizationId!))) {
+      return NextResponse.json({ error: 'Invalid vendor' }, { status: 400 })
+    }
     const gstType = data.gstType
     await conn.beginTransaction()
 

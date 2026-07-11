@@ -14,6 +14,7 @@ import { useToast } from '@/hooks/use-toast'
 import { usePageCount } from '@/hooks/use-page-count'
 import { Plus, Search, Edit, Trash2, User } from 'lucide-react'
 import { getInitials } from '@/lib/utils'
+import { isStrongPassword, PASSWORD_REQUIREMENTS_MESSAGE } from '@/lib/password-policy'
 
 interface StaffMember {
   id: string; name: string; email: string; status: string; role: string
@@ -77,13 +78,20 @@ export default function StaffPage() {
     try {
       const url = editing ? `/api/staff/${editing.id}` : '/api/staff'
       const method = editing ? 'PUT' : 'POST'
+      const password = data.password?.trim() || ''
+      if (!editing && !isStrongPassword(password)) {
+        throw new Error(PASSWORD_REQUIREMENTS_MESSAGE)
+      }
+      if (editing && password && !isStrongPassword(password)) {
+        throw new Error(PASSWORD_REQUIREMENTS_MESSAGE)
+      }
       const payload: Record<string, unknown> = {
         name: data.name,
         email: data.email,
         role: data.role,
         status: data.status,
       }
-      if (data.password?.trim()) payload.password = data.password
+      if (!editing || password) payload.password = password
       const res = await fetch(url, {
         method,
         headers: { 'Content-Type': 'application/json' },
@@ -193,7 +201,8 @@ export default function StaffPage() {
               <div className="space-y-2"><Label>Email *</Label><Input type="email" {...form.register('email')} /></div>
               <div className="space-y-2">
                 <Label>{editing ? 'New Password (leave blank to keep)' : 'Password *'}</Label>
-                <Input type="password" {...form.register('password')} />
+                <Input type="password" placeholder="e.g. Welcome@123" {...form.register('password')} />
+                <p className="text-xs text-muted-foreground">{PASSWORD_REQUIREMENTS_MESSAGE}</p>
               </div>
               <div className="space-y-2">
                 <Label>Role</Label>

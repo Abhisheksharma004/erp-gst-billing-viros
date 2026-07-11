@@ -580,7 +580,8 @@ function inferGstType(companyState?: string | null, customerState?: string | nul
 const FOOTER_TOTAL_ROW_H = 7
 const FOOTER_LEFT_RATIO = 0.58
 const FOOTER_WORDS_H = 11
-const FOOTER_BANK_BODY_H = 36
+/** Bank-details block height inside quotation left column (above terms). */
+const FOOTER_BANK_ONLY_H = 26
 const FOOTER_SIGN_IN_RIGHT_H = 28
 const FOOTER_LIGHT_BLUE: [number, number, number] = [232, 240, 250]
 const FOOTER_SUMMARY_ROW_H = 5.5
@@ -629,10 +630,9 @@ function getFooterMainH(
   termsText: string,
   leftW: number
 ): number {
-  const leftBodyH =
-    usesInvoiceStyleFooter(kind)
-      ? estimateInvoiceTermsBodyH(doc, termsText, leftW)
-      : FOOTER_BANK_BODY_H
+  const leftBodyH = usesInvoiceStyleFooter(kind)
+    ? estimateInvoiceTermsBodyH(doc, termsText, leftW)
+    : FOOTER_BANK_ONLY_H + estimateInvoiceTermsBodyH(doc, termsText, leftW)
   const leftH = FOOTER_WORDS_H + leftBodyH
   const rightH = getSummaryTableH(isIgst) + FOOTER_SIGN_IN_RIGHT_H
   return Math.max(leftH, rightH)
@@ -660,22 +660,13 @@ function computeFooterLayout(
   const leftW = contentW * FOOTER_LEFT_RATIO
   const termsText = terms?.trim() || ''
   const mainFooterH = getFooterMainH(isIgst, kind, doc, termsText, leftW)
+  const termLines = formatTermLinesForPdf(termsText).slice(0, 10)
 
-  let termLines: string[] = []
-  let termsBlockH = 0
-
-  if (usesInvoiceStyleFooter(kind)) {
-    termLines = formatTermLinesForPdf(termsText)
-  } else {
-    termLines = termsText
-      ? doc.splitTextToSize(termsText.replace(/\r\n/g, '\n'), contentW - 8).slice(0, 12)
-      : []
-    termsBlockH = termsText ? 7 + termLines.length * 3.2 + 3 : 0
-  }
-
+  // Terms live inside the left column for all docs (quotation: below bank details).
+  const termsBlockH = 0
   const footerBottom = bottom
-  const termsTop = footerBottom - termsBlockH
-  const mainFooterTop = termsTop - mainFooterH
+  const termsTop = footerBottom
+  const mainFooterTop = footerBottom - mainFooterH
   const totalRowTop = mainFooterTop - FOOTER_TOTAL_ROW_H
 
   return { totalRowTop, mainFooterTop, mainFooterH, termsTop, footerBottom, termsBlockH, termLines }
@@ -888,17 +879,13 @@ function drawQuotationFooter(
   const splitX = bodyLeft + leftW
   const bankTop = top + FOOTER_WORDS_H
   const bankH = mainH - FOOTER_WORDS_H
-  const bankQrW = leftW * 0.3
-  const bankTextW = leftW - bankQrW
-  const bankTextX = bodyLeft
-  const qrColX = bodyLeft + bankTextW
 
   doc.setDrawColor(...BORDER)
   doc.setLineWidth(0.25)
   doc.setFillColor(255, 255, 255)
 
-  // Main 2-column footer box
-  doc.rect(bodyLeft, top, contentW, mainH, 'FD')
+  // Main 2-column footer box (top edge shared with items Total row — no double line)
+  doc.rect(bodyLeft, top, contentW, mainH, 'S')
   doc.line(splitX, top, splitX, top + mainH)
 
   // Left — Total in words
@@ -917,13 +904,17 @@ function drawQuotationFooter(
   if (usesInvoiceStyleFooter(kind)) {
     drawInvoiceTermsBlock(doc, bodyLeft, splitX, leftW, bankTop, bankH, layout.termLines, pad)
   } else {
-    // Left — Bank details + QR (quotations only)
+    // Left — Bank details, then Terms & Condition (same column width, not full page)
+    const bankSectionH = Math.min(FOOTER_BANK_ONLY_H, Math.max(18, bankH * 0.45))
+    const termsSectionTop = bankTop + bankSectionH
+    const termsSectionH = bankH - bankSectionH
+
     doc.setFont('helvetica', 'bold')
     doc.setFontSize(6.5)
-    doc.text('Bank Details', bodyLeft + bankTextW / 2, bankTop + 4, { align: 'center' })
-    doc.line(qrColX, bankTop, qrColX, top + mainH)
+    doc.text('Bank Details', bodyLeft + leftW / 2, bankTop + 4, { align: 'center' })
+    doc.line(bodyLeft, bankTop + 5.5, splitX, bankTop + 5.5)
 
-    let bankY = bankTop + 7
+    let bankY = bankTop + 8
     const bankLines = [
       ['Name', settings.bankName || '-'],
       ['Branch', settings.bankBranch || '-'],
@@ -932,23 +923,23 @@ function drawQuotationFooter(
       ['MICR Code', settings.bankMicr || '-'],
       ['UPI ID', settings.upiId || '-'],
     ]
-    bankLines.forEach(([label, value]) => {
+    const bankMaxY = termsSectionTop - 1.5
+    for (const [label, value] of bankLines) {
+      if (bankY > bankMaxY) break
       doc.setFont('helvetica', 'bold')
-      doc.setFontSize(5.8)
-      doc.text(`${label} :`, bankTextX + pad, bankY)
+      doc.setFontSize(5.5)
+      const labelText = `${label} :`
+      doc.text(labelText, bodyLeft + pad, bankY)
       doc.setFont('helvetica', 'normal')
-      const labelW = doc.getTextWidth(`${label} :`) + 0.5
-      const wrapped = doc.splitTextToSize(value, bankTextW - pad * 2 - labelW)
-      doc.text(wrapped[0] || '-', bankTextX + pad + labelW, bankY)
-      bankY += 3
-    })
+      const labelW = doc.getTextWidth(labelText) + 0.5
+      const wrapped = doc.splitTextToSize(value, leftW - pad * 2 - labelW)
+      const linesFit = wrapped.slice(0, Math.max(1, Math.floor((bankMaxY - bankY) / 2.8) + 1))
+      doc.text(linesFit, bodyLeft + pad + labelW, bankY)
+      bankY += Math.max(2.8, linesFit.length * 2.8)
+    }
 
-    const qrSize = 16
-    const qrBoxX = qrColX + (bankQrW - qrSize) / 2
-    const qrBoxY = bankTop + (bankH - qrSize - 5) / 2
-    doc.rect(qrBoxX, qrBoxY, qrSize, qrSize)
-    doc.setFontSize(5)
-    doc.text('Pay using UPI', qrColX + bankQrW / 2, qrBoxY + qrSize + 3, { align: 'center' })
+    doc.line(bodyLeft, termsSectionTop, splitX, termsSectionTop)
+    drawInvoiceTermsBlock(doc, bodyLeft, splitX, leftW, termsSectionTop, termsSectionH, layout.termLines, pad)
   }
 
   // Right — Tax summary + signatory (merged stamp area below summary)
@@ -990,23 +981,6 @@ function drawQuotationFooter(
   doc.setFont('helvetica', 'normal')
   doc.setFontSize(5.8)
   doc.text('Authorised Signatory', bodyRight - pad, signTop + signH - 3, { align: 'right' })
-
-  // Terms & Condition (full width below main footer — quotations only)
-  const termsText = (document.terms || settings.termsCondition)?.trim()
-  if (!usesInvoiceStyleFooter(kind) && termsText && layout.termsBlockH > 0) {
-    doc.rect(bodyLeft, layout.termsTop, contentW, layout.termsBlockH, 'FD')
-    doc.setFont('helvetica', 'bold')
-    doc.setFontSize(7)
-    doc.text('Terms & Condition', bodyLeft + contentW / 2, layout.termsTop + 4.5, { align: 'center' })
-    doc.line(bodyLeft, layout.termsTop + 6, bodyRight, layout.termsTop + 6)
-    doc.setFont('helvetica', 'normal')
-    doc.setFontSize(6.5)
-    let termY = layout.termsTop + 9
-    layout.termLines.forEach((line) => {
-      doc.text(line, bodyLeft + pad, termY)
-      termY += 3.2
-    })
-  }
 }
 
 function drawPageNumber(doc: jsPDF, pageNumber: number, totalPages: number): void {
@@ -1301,10 +1275,11 @@ function renderSalesDocumentPage(
           bottom: 1,
           left: ITEM_TABLE_CELL_PADDING,
         }
+        // No bottom border — merges flush into "Total in words" footer below
         data.cell.styles.lineWidth = {
           ...TABLE_VERTICAL_BORDER,
           top: TABLE_BORDER_WIDTH,
-          bottom: TABLE_BORDER_WIDTH,
+          bottom: 0,
         }
         return
       }
@@ -1380,16 +1355,16 @@ function renderSalesDocumentPage(
   const tableEndY = (doc as jsPDF & { lastAutoTable?: { finalY: number } }).lastAutoTable?.finalY ?? y
   const taxAmt = Number(document.tax_amount) || 0
 
-  const layout = useCompactLayout
-    ? footerLayout
-    : {
-        ...footerLayout,
-        totalRowTop: tableEndY - FOOTER_TOTAL_ROW_H,
-        mainFooterTop: tableEndY,
-        mainFooterH,
-        termsTop: tableEndY + mainFooterH,
-        footerBottom: tableEndY + mainFooterH + footerLayout.termsBlockH,
-      }
+  // Always attach footer flush under the Total row (no empty gap / floating horizontal line)
+  const mainFooterTop = tableEndY
+  const layout: FooterLayout = {
+    ...footerLayout,
+    totalRowTop: mainFooterTop - FOOTER_TOTAL_ROW_H,
+    mainFooterTop,
+    mainFooterH,
+    termsTop: mainFooterTop + mainFooterH,
+    footerBottom: mainFooterTop + mainFooterH + footerLayout.termsBlockH,
+  }
 
   drawQuotationFooter(
     doc,
@@ -1442,10 +1417,11 @@ export function generateInvoicePdfBuffer(
 
   pages.forEach((copy, index) => {
     if (index > 0) doc.addPage()
+    // Page numbers are per copy (not across Original/Duplicate/Triplicate sheets)
     renderSalesDocumentPage(doc, 'invoice', invoice, settings, invoice.gst_type, {
       copyLabel: INVOICE_COPY_LABELS[copy],
-      pageNumber: index + 1,
-      totalPages: pages.length,
+      pageNumber: 1,
+      totalPages: 1,
     })
   })
 
@@ -1465,8 +1441,8 @@ export function generateDeliveryChallanPdfBuffer(
     if (index > 0) doc.addPage()
     renderSalesDocumentPage(doc, 'delivery-challan', challan, settings, challan.gst_type, {
       copyLabel: INVOICE_COPY_LABELS[copy],
-      pageNumber: index + 1,
-      totalPages: pages.length,
+      pageNumber: 1,
+      totalPages: 1,
     })
   })
 
@@ -1486,8 +1462,8 @@ export function generateReturnableChallanPdfBuffer(
     if (index > 0) doc.addPage()
     renderSalesDocumentPage(doc, 'returnable-challan', challan, settings, challan.gst_type, {
       copyLabel: INVOICE_COPY_LABELS[copy],
-      pageNumber: index + 1,
-      totalPages: pages.length,
+      pageNumber: 1,
+      totalPages: 1,
     })
   })
 
@@ -1511,8 +1487,8 @@ export function generatePurchasePdfBuffer(
     if (index > 0) doc.addPage()
     renderSalesDocumentPage(doc, 'purchase', payload, settings, purchase.gst_type, {
       copyLabel: INVOICE_COPY_LABELS[copy],
-      pageNumber: index + 1,
-      totalPages: pages.length,
+      pageNumber: 1,
+      totalPages: 1,
     })
   })
 
@@ -1536,8 +1512,8 @@ export function generatePurchaseOrderPdfBuffer(
     if (index > 0) doc.addPage()
     renderSalesDocumentPage(doc, 'purchase-order', payload, settings, po.gst_type, {
       copyLabel: INVOICE_COPY_LABELS[copy],
-      pageNumber: index + 1,
-      totalPages: pages.length,
+      pageNumber: 1,
+      totalPages: 1,
     })
   })
 

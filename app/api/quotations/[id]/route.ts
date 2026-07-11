@@ -4,6 +4,7 @@ import { requirePermission } from '@/lib/api-auth'
 import { quotationSchema } from '@/lib/validations'
 import { ensureQuotationSchema } from '@/lib/ensure-quotation-schema'
 import { buildQuotationTotals, insertQuotationItems } from '@/lib/quotation-save'
+import { assertCustomerInOrg } from '@/lib/org-entity'
 
 export async function GET(req: NextRequest, { params }: { params: { id: string } }) {
   const { error, organizationId } = await requirePermission('quotations', 'view')
@@ -66,6 +67,9 @@ export async function PUT(req: NextRequest, { params }: { params: { id: string }
     }
 
     const data = quotationSchema.parse(body)
+    if (!(await assertCustomerInOrg(data.customerId, organizationId!))) {
+      return NextResponse.json({ error: 'Invalid customer' }, { status: 400 })
+    }
     const gstType = data.gstType || 'CGST_SGST'
 
     const [existingRows] = await conn.execute(

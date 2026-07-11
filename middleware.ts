@@ -1,8 +1,49 @@
 import { withAuth } from 'next-auth/middleware'
-import { NextResponse } from 'next/server'
+import { NextRequest, NextResponse } from 'next/server'
 import { moduleFromPath } from '@/lib/permissions'
 
-export default withAuth(
+const AUTH_PAGES = [
+  '/login',
+  '/register',
+  '/forgot-password',
+  '/verify-otp',
+  '/reset-password',
+]
+
+const SENSITIVE_QUERY_KEYS = [
+  'password',
+  'otp',
+  'newPassword',
+  'confirmPassword',
+  'new_password',
+  'confirm_password',
+]
+
+/** Redirect away from URLs that accidentally contain credentials (native GET form submit). */
+function stripSensitiveAuthQuery(req: NextRequest): NextResponse | null {
+  const path = req.nextUrl.pathname
+  if (!AUTH_PAGES.includes(path)) return null
+
+  const url = req.nextUrl.clone()
+  let dirty = false
+
+  for (const key of SENSITIVE_QUERY_KEYS) {
+    if (url.searchParams.has(key)) {
+      url.searchParams.delete(key)
+      dirty = true
+    }
+  }
+
+  // If a password (or other secret) was present, also drop email from the URL
+  if (dirty && url.searchParams.has('email')) {
+    url.searchParams.delete('email')
+  }
+
+  if (!dirty) return null
+  return NextResponse.redirect(url)
+}
+
+const protectedMiddleware = withAuth(
   function middleware(req) {
     const token = req.nextauth.token
     const path = req.nextUrl.pathname
@@ -73,8 +114,26 @@ export default withAuth(
   }
 )
 
+export default function middleware(req: NextRequest) {
+  const stripped = stripSensitiveAuthQuery(req)
+  if (stripped) return stripped
+
+  const path = req.nextUrl.pathname
+  if (AUTH_PAGES.includes(path)) {
+    return NextResponse.next()
+  }
+
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  return (protectedMiddleware as any)(req)
+}
+
 export const config = {
   matcher: [
+    '/login',
+    '/register',
+    '/forgot-password',
+    '/verify-otp',
+    '/reset-password',
     '/superadmin/:path*',
     '/dashboard/:path*',
     '/inventory/:path*',

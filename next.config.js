@@ -1,13 +1,17 @@
 /** @type {import('next').NextConfig} */
 const nextConfig = {
-  serverExternalPackages: ['@prisma/client', 'bcryptjs'],
-  images: {
-    remotePatterns: [{ hostname: 'localhost' }],
+  experimental: {
+    serverComponentsExternalPackages: ['@prisma/client', 'bcryptjs'],
   },
-  turbopack: {
-    resolveAlias: {
-      '@': __dirname,
-    },
+  images: {
+    domains: ['localhost'],
+  },
+  webpack: (config, { dev }) => {
+    // Avoid corrupted filesystem webpack cache on Windows (causes CSS/JS 404).
+    if (dev) {
+      config.cache = { type: 'memory' }
+    }
+    return config
   },
 }
 
