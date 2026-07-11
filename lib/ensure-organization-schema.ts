@@ -6,7 +6,7 @@ import {
 } from '@/lib/org-id'
 import { ensureOrganizationDetailsSchema } from '@/lib/ensure-organization-details-schema'
 import { ensureOrganizationIdSequencesSchema } from '@/lib/ensure-organization-id-sequences'
-import { ensureBusinessSettingsUniquePerOrg } from '@/lib/ensure-business-settings-schema'
+import { ensureBusinessSettingsUniquePerOrg, ensureBusinessSettingsBankingColumns } from '@/lib/ensure-business-settings-schema'
 import { generateUniqueOrgSlug } from '@/lib/tenant'
 
 let schemaReady = false
@@ -25,11 +25,16 @@ async function bootstrapLegacyOrganizationIfNeeded(): Promise<string | null> {
   )) as [{ cnt: number }[], unknown]
   if (Number(countRows[0]?.cnt) > 0) return getAnyOrganizationId()
 
-  const [settingsRows] = (await db.execute(
-    'SELECT company_name FROM business_settings WHERE company_name IS NOT NULL AND company_name != "" LIMIT 1'
-  )) as [{ company_name: string }[], unknown]
+  let companyName = 'My Organization'
+  try {
+    const [settingsRows] = (await db.execute(
+      'SELECT company_name FROM business_settings WHERE company_name IS NOT NULL AND company_name != "" LIMIT 1'
+    )) as [{ company_name: string }[], unknown]
+    companyName = settingsRows[0]?.company_name?.trim() || companyName
+  } catch {
+    // business_settings may not exist yet on a fresh DB
+  }
 
-  const companyName = settingsRows[0]?.company_name?.trim() || 'My Organization'
   const orgId = await generateOrganizationId(db)
   const slug = await generateUniqueOrgSlug(db, companyName)
 
@@ -104,6 +109,8 @@ const TENANT_TABLES = [
 
 export async function ensureOrganizationSchema(): Promise<void> {
   if (schemaReady) return
+
+  await ensureBusinessSettingsBankingColumns()
 
   await runAlter(`
     CREATE TABLE IF NOT EXISTS organizations (

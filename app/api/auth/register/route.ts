@@ -1,7 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server'
-import db from '@/lib/db'
+import db, { isDbConnectionError } from '@/lib/db'
 import bcrypt from 'bcryptjs'
 import { randomUUID } from 'crypto'
+import { ZodError } from 'zod'
 import { registerSchema } from '@/lib/validations'
 import { ensureOrganizationSchema } from '@/lib/ensure-organization-schema'
 import { ensureOrganizationIdSequencesSchema } from '@/lib/ensure-organization-id-sequences'
@@ -12,8 +13,10 @@ import { ORG_APPROVAL_SUCCESS } from '@/lib/registration-messages'
 import { sendOrganizationRegistrationEmail } from '@/lib/organization-emails'
 
 export async function POST(req: NextRequest) {
-  const conn = await db.getConnection()
+  let conn: Awaited<ReturnType<typeof db.getConnection>> | null = null
+  let startedTransaction = false
   try {
+    conn = await db.getConnection()
     await ensureOrganizationSchema()
     await ensureOrganizationIdSequencesSchema()
     await ensureBusinessSettingsBankingColumns()
@@ -50,6 +53,7 @@ export async function POST(req: NextRequest) {
     }
 
     await conn.beginTransaction()
+    startedTransaction = true
 
     const orgId = await generateOrganizationId(conn)
     const userId = randomUUID()
@@ -125,14 +129,31 @@ export async function POST(req: NextRequest) {
       { status: 201 }
     )
   } catch (err: unknown) {
-    await conn.rollback()
-    const e = err as { name?: string; errors?: unknown }
-    if (e.name === 'ZodError') {
-      return NextResponse.json({ error: e.errors }, { status: 400 })
+    if (conn && startedTransaction) {
+      await conn.rollback().catch(() => {})
+    }
+    if (err instanceof ZodError) {
+      return NextResponse.json({ error: err.errors }, { status: 400 })
     }
     console.error('POST /api/auth/register:', err)
-    return NextResponse.json({ error: 'Registration failed' }, { status: 500 })
+
+    if (isDbConnectionError(err)) {
+      return NextResponse.json(
+        { error: 'Database connection failed. Check DB_HOST, DB_USER, DB_PASSWORD, DB_NAME, and DB_PORT in .env.local.' },
+        { status: 500 }
+      )
+    }
+
+    const mysqlErr = err as { code?: string; sqlMessage?: string; message?: string }
+    const detail = mysqlErr.sqlMessage || mysqlErr.message || 'Registration failed'
+    return NextResponse.json(
+      {
+        error: detail,
+        code: mysqlErr.code,
+      },
+      { status: 500 }
+    )
   } finally {
-    conn.release()
+    conn?.release()
   }
 }

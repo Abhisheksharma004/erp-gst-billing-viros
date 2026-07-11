@@ -23,6 +23,35 @@ async function runAlter(sql: string): Promise<void> {
 export async function ensureBusinessSettingsBankingColumns(): Promise<void> {
   if (schemaReady) return
 
+  await runAlter(`
+    CREATE TABLE IF NOT EXISTS business_settings (
+      id VARCHAR(36) NOT NULL PRIMARY KEY,
+      organization_id VARCHAR(36) NULL,
+      company_name VARCHAR(255) NOT NULL,
+      gstin VARCHAR(15) NULL,
+      pan VARCHAR(10) NULL,
+      address TEXT NULL,
+      city VARCHAR(100) NULL,
+      state VARCHAR(100) NULL,
+      pincode VARCHAR(6) NULL,
+      phone VARCHAR(15) NULL,
+      email VARCHAR(255) NULL,
+      website VARCHAR(500) NULL,
+      logo LONGTEXT NULL,
+      bank_name VARCHAR(100) NULL,
+      bank_account VARCHAR(20) NULL,
+      bank_ifsc VARCHAR(11) NULL,
+      bank_branch VARCHAR(100) NULL,
+      invoice_prefix VARCHAR(10) NOT NULL DEFAULT 'INV',
+      quotation_prefix VARCHAR(10) NOT NULL DEFAULT 'QT',
+      purchase_order_prefix VARCHAR(10) NOT NULL DEFAULT 'PO',
+      challan_prefix VARCHAR(10) NOT NULL DEFAULT 'DC',
+      terms_condition TEXT NULL,
+      created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+      updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
+  `)
+
   // Legacy column names → current API names
   await runAlter(
     'ALTER TABLE business_settings CHANGE COLUMN quot_prefix quotation_prefix VARCHAR(10) NOT NULL DEFAULT \'QT\''
@@ -33,10 +62,16 @@ export async function ensureBusinessSettingsBankingColumns(): Promise<void> {
 
   // Add columns if missing (fresh or partial schemas)
   await runAlter(
+    'ALTER TABLE business_settings ADD COLUMN organization_id VARCHAR(36) NULL AFTER id'
+  )
+  await runAlter(
     'ALTER TABLE business_settings ADD COLUMN quotation_prefix VARCHAR(10) NOT NULL DEFAULT \'QT\' AFTER invoice_prefix'
   )
   await runAlter(
     'ALTER TABLE business_settings ADD COLUMN purchase_order_prefix VARCHAR(10) NOT NULL DEFAULT \'PO\' AFTER quotation_prefix'
+  )
+  await runAlter(
+    'ALTER TABLE business_settings ADD COLUMN challan_prefix VARCHAR(10) NOT NULL DEFAULT \'DC\' AFTER purchase_order_prefix'
   )
   await runAlter(
     'ALTER TABLE business_settings ADD COLUMN bank_micr VARCHAR(9) NULL AFTER bank_branch'
