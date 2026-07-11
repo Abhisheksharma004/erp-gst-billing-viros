@@ -34,21 +34,23 @@ async function getStaffPermission(userId: string, organizationId: string) {
 
 export async function GET(
   _req: NextRequest,
-  { params }: { params: { userId: string } }
+  { params }: { params: Promise<{ userId: string }> }
 ) {
+  const { userId } = await params
   const { error, organizationId } = await requireAdmin()
   if (error) return error
 
   await ensureStaffPermissionsSchema()
-  const record = await getStaffPermission(params.userId, organizationId!)
+  const record = await getStaffPermission(userId, organizationId!)
   if (!record) return NextResponse.json({ error: 'Not found' }, { status: 404 })
   return NextResponse.json(record)
 }
 
 export async function PUT(
   req: NextRequest,
-  { params }: { params: { userId: string } }
+  { params }: { params: Promise<{ userId: string }> }
 ) {
+  const { userId } = await params
   const { error, organizationId } = await requireAdmin()
   if (error) return error
 
@@ -57,7 +59,7 @@ export async function PUT(
     const body = await req.json()
     const data = updateSchema.parse(body)
 
-    const record = await getStaffPermission(params.userId, organizationId!)
+    const record = await getStaffPermission(userId, organizationId!)
     if (!record) {
       return NextResponse.json({ error: 'Staff member not found' }, { status: 404 })
     }
@@ -68,16 +70,16 @@ export async function PUT(
 
     await db.execute(
       'DELETE FROM staff_module_permissions WHERE user_id = ? AND organization_id = ?',
-      [params.userId, organizationId]
+      [userId, organizationId]
     )
     for (const mod of validModules) {
       await db.execute(
         'INSERT INTO staff_module_permissions (id, user_id, organization_id, module) VALUES (?,?,?,?)',
-        [randomUUID(), params.userId, organizationId, mod]
+        [randomUUID(), userId, organizationId, mod]
       )
     }
 
-    const updated = await getStaffPermission(params.userId, organizationId!)
+    const updated = await getStaffPermission(userId, organizationId!)
     return NextResponse.json(updated)
   } catch (err: any) {
     if (err.name === 'ZodError') {
@@ -89,20 +91,21 @@ export async function PUT(
 
 export async function DELETE(
   _req: NextRequest,
-  { params }: { params: { userId: string } }
+  { params }: { params: Promise<{ userId: string }> }
 ) {
+  const { userId } = await params
   const { error, organizationId } = await requireAdmin()
   if (error) return error
 
   await ensureStaffPermissionsSchema()
-  const record = await getStaffPermission(params.userId, organizationId!)
+  const record = await getStaffPermission(userId, organizationId!)
   if (!record) {
     return NextResponse.json({ error: 'Staff member not found' }, { status: 404 })
   }
 
   await db.execute(
     'DELETE FROM staff_module_permissions WHERE user_id = ? AND organization_id = ?',
-    [params.userId, organizationId]
+    [userId, organizationId]
   )
   return NextResponse.json({ success: true })
 }

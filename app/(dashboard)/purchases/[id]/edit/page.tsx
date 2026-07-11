@@ -6,6 +6,11 @@ const PurchaseForm = dynamic(
   { loading: () => <FormPageLoader title="purchase form" /> }
 )
 
-export default function EditPurchasePage({ params }: { params: { id: string } }) {
-  return <PurchaseForm purchaseId={params.id} />
+export default async function EditPurchasePage({
+  params,
+}: {
+  params: Promise<{ id: string }>
+}) {
+  const { id } = await params
+  return <PurchaseForm purchaseId={id} />
 }

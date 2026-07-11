@@ -9,6 +9,11 @@ const DeliveryChallanForm = dynamic(
   { loading: () => <FormPageLoader title="delivery challan form" /> }
 )
 
-export default function EditDeliveryChallanPage({ params }: { params: { id: string } }) {
-  return <DeliveryChallanForm mode="edit" challanId={params.id} />
+export default async function EditDeliveryChallanPage({
+  params,
+}: {
+  params: Promise<{ id: string }>
+}) {
+  const { id } = await params
+  return <DeliveryChallanForm mode="edit" challanId={id} />
 }

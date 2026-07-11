@@ -4,30 +4,32 @@ import { requireAdmin } from '@/lib/api-auth'
 import { roleSchema } from '@/lib/validations'
 import { randomUUID } from 'crypto'
 
-export async function GET(req: NextRequest, { params }: { params: { id: string } }) {
+export async function GET(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+  const { id } = await params
   const { error, organizationId } = await requireAdmin()
   if (error) return error
   const [rows] = await db.execute(
     'SELECT * FROM roles WHERE id = ? AND organization_id = ?',
-    [params.id, organizationId]
+    [id, organizationId]
   ) as any[]
   if (!rows[0]) return NextResponse.json({ error: 'Not found' }, { status: 404 })
   const [perms] = await db.execute(
-    'SELECT p.* FROM role_permissions rp JOIN permissions p ON rp.permission_id = p.id WHERE rp.role_id = ?', [params.id]
+    'SELECT p.* FROM role_permissions rp JOIN permissions p ON rp.permission_id = p.id WHERE rp.role_id = ?', [id]
   ) as any[]
-  const [cnt] = await db.execute('SELECT COUNT(*) as cnt FROM staff_roles WHERE role_id = ?', [params.id]) as any[]
+  const [cnt] = await db.execute('SELECT COUNT(*) as cnt FROM staff_roles WHERE role_id = ?', [id]) as any[]
   rows[0].permissions = perms.map((p: any) => ({ permission: p }))
   rows[0]._count = { staffRoles: cnt[0].cnt }
   return NextResponse.json(rows[0])
 }
 
-export async function PUT(req: NextRequest, { params }: { params: { id: string } }) {
+export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+  const { id } = await params
   const { error, organizationId } = await requireAdmin()
   if (error) return error
   try {
     const [existing] = await db.execute(
       'SELECT id FROM roles WHERE id = ? AND organization_id = ?',
-      [params.id, organizationId]
+      [id, organizationId]
     ) as any[]
     if (!existing[0]) return NextResponse.json({ error: 'Not found' }, { status: 404 })
 
@@ -35,22 +37,22 @@ export async function PUT(req: NextRequest, { params }: { params: { id: string }
     const data = roleSchema.parse(body)
     await db.execute(
       'UPDATE roles SET name=?, description=? WHERE id=? AND organization_id = ?',
-      [data.name, data.description||null, params.id, organizationId]
+      [data.name, data.description||null, id, organizationId]
     )
-    await db.execute('DELETE FROM role_permissions WHERE role_id = ?', [params.id])
+    await db.execute('DELETE FROM role_permissions WHERE role_id = ?', [id])
     for (const perm of data.permissions) {
       const [mod, action] = perm.split(':')
       const [ex] = await db.execute('SELECT id FROM permissions WHERE module=? AND action=?', [mod, action]) as any[]
       const permId = ex[0] ? ex[0].id : randomUUID()
       if (!ex[0]) await db.execute('INSERT INTO permissions (id, module, action) VALUES (?,?,?)', [permId, mod, action])
-      await db.execute('INSERT IGNORE INTO role_permissions (id, role_id, permission_id) VALUES (?,?,?)', [randomUUID(), params.id, permId])
+      await db.execute('INSERT IGNORE INTO role_permissions (id, role_id, permission_id) VALUES (?,?,?)', [randomUUID(), id, permId])
     }
     const [rows] = await db.execute(
       'SELECT * FROM roles WHERE id = ? AND organization_id = ?',
-      [params.id, organizationId]
+      [id, organizationId]
     ) as any[]
     const [perms] = await db.execute(
-      'SELECT p.* FROM role_permissions rp JOIN permissions p ON rp.permission_id = p.id WHERE rp.role_id = ?', [params.id]
+      'SELECT p.* FROM role_permissions rp JOIN permissions p ON rp.permission_id = p.id WHERE rp.role_id = ?', [id]
     ) as any[]
     rows[0].permissions = perms.map((p: any) => ({ permission: p }))
     return NextResponse.json(rows[0])
@@ -60,16 +62,17 @@ export async function PUT(req: NextRequest, { params }: { params: { id: string }
   }
 }
 
-export async function DELETE(req: NextRequest, { params }: { params: { id: string } }) {
+export async function DELETE(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+  const { id } = await params
   const { error, organizationId } = await requireAdmin()
   if (error) return error
   const [rows] = await db.execute(
     'SELECT id FROM roles WHERE id = ? AND organization_id = ?',
-    [params.id, organizationId]
+    [id, organizationId]
   ) as any[]
   if (!rows[0]) return NextResponse.json({ error: 'Not found' }, { status: 404 })
-  const [cnt] = await db.execute('SELECT COUNT(*) as cnt FROM staff_roles WHERE role_id = ?', [params.id]) as any[]
+  const [cnt] = await db.execute('SELECT COUNT(*) as cnt FROM staff_roles WHERE role_id = ?', [id]) as any[]
   if (cnt[0].cnt > 0) return NextResponse.json({ error: 'Role is assigned to staff members' }, { status: 400 })
-  await db.execute('DELETE FROM roles WHERE id = ? AND organization_id = ?', [params.id, organizationId])
+  await db.execute('DELETE FROM roles WHERE id = ? AND organization_id = ?', [id, organizationId])
   return NextResponse.json({ success: true })
 }

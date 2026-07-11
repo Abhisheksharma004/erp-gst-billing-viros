@@ -7,21 +7,23 @@ import { computeSalesDocumentItemTotals } from '@/lib/sales-document-totals'
 import { randomUUID } from 'crypto'
 import { assertCustomerInOrg } from '@/lib/org-entity'
 
-export async function GET(req: NextRequest, { params }: { params: { id: string } }) {
+export async function GET(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+  const { id } = await params
   const { error, organizationId } = await requirePermission('delivery-challans', 'view')
   if (error) return error
 
   const [rows] = await db.execute(
     'SELECT dc.*, c.name as customer_name FROM delivery_challans dc LEFT JOIN customers c ON dc.customer_id = c.id WHERE dc.id = ? AND dc.organization_id = ?',
-    [params.id, organizationId]
+    [id, organizationId]
   ) as any[]
   if (!rows[0]) return NextResponse.json({ error: 'Not found' }, { status: 404 })
 
-  const [items] = await db.execute('SELECT * FROM challan_items WHERE challan_id = ?', [params.id]) as any[]
+  const [items] = await db.execute('SELECT * FROM challan_items WHERE challan_id = ?', [id]) as any[]
   return NextResponse.json({ ...rows[0], items })
 }
 
-export async function PUT(req: NextRequest, { params }: { params: { id: string } }) {
+export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+  const { id } = await params
   const { error, organizationId } = await requirePermission('delivery-challans', 'edit')
   if (error) return error
 
@@ -36,7 +38,7 @@ export async function PUT(req: NextRequest, { params }: { params: { id: string }
 
     const [existingRows] = await conn.execute(
       'SELECT id FROM delivery_challans WHERE id = ? AND organization_id = ?',
-      [params.id, organizationId]
+      [id, organizationId]
     ) as any[]
     if (!existingRows[0]) return NextResponse.json({ error: 'Not found' }, { status: 404 })
 
@@ -54,12 +56,12 @@ export async function PUT(req: NextRequest, { params }: { params: { id: string }
         partyDetailsJson,
         data.terms || null,
         data.includePricing ? 1 : 0,
-        params.id,
+        id,
         organizationId,
       ]
     )
 
-    await conn.execute('DELETE FROM challan_items WHERE challan_id = ?', [params.id])
+    await conn.execute('DELETE FROM challan_items WHERE challan_id = ?', [id])
 
     for (const item of data.items) {
       let productName = item.description || 'Item'
@@ -86,7 +88,7 @@ export async function PUT(req: NextRequest, { params }: { params: { id: string }
         'INSERT INTO challan_items (id, challan_id, product_id, description, quantity, rate, discount, gst_rate, gst_amount, amount) VALUES (?,?,?,?,?,?,?,?,?,?)',
         [
           randomUUID(),
-          params.id,
+          id,
           item.productId || null,
           item.description || productName,
           item.quantity,
@@ -102,9 +104,9 @@ export async function PUT(req: NextRequest, { params }: { params: { id: string }
     await conn.commit()
     const [rows] = await db.execute(
       'SELECT dc.*, c.name as customer_name FROM delivery_challans dc LEFT JOIN customers c ON dc.customer_id = c.id WHERE dc.id = ? AND dc.organization_id = ?',
-      [params.id, organizationId]
+      [id, organizationId]
     ) as any[]
-    const [items] = await db.execute('SELECT * FROM challan_items WHERE challan_id = ?', [params.id]) as any[]
+    const [items] = await db.execute('SELECT * FROM challan_items WHERE challan_id = ?', [id]) as any[]
     return NextResponse.json({ ...rows[0], items })
   } catch (err: unknown) {
     await conn.rollback()
@@ -117,17 +119,18 @@ export async function PUT(req: NextRequest, { params }: { params: { id: string }
   }
 }
 
-export async function DELETE(req: NextRequest, { params }: { params: { id: string } }) {
+export async function DELETE(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+  const { id } = await params
   const { error, organizationId } = await requirePermission('delivery-challans', 'delete')
   if (error) return error
 
   const [existing] = await db.execute(
     'SELECT id FROM delivery_challans WHERE id = ? AND organization_id = ?',
-    [params.id, organizationId]
+    [id, organizationId]
   ) as any[]
   if (!existing[0]) return NextResponse.json({ error: 'Not found' }, { status: 404 })
 
-  await db.execute('DELETE FROM challan_items WHERE challan_id = ?', [params.id])
-  await db.execute('DELETE FROM delivery_challans WHERE id = ? AND organization_id = ?', [params.id, organizationId])
+  await db.execute('DELETE FROM challan_items WHERE challan_id = ?', [id])
+  await db.execute('DELETE FROM delivery_challans WHERE id = ? AND organization_id = ?', [id, organizationId])
   return NextResponse.json({ success: true })
 }

@@ -8,7 +8,8 @@ import { parseInvoiceCopiesParam } from '@/lib/invoice-copy'
 import { buildPdfParties, parseQuotationPartyDetails } from '@/lib/quotation-party'
 import { roundToTwo } from '@/lib/utils'
 
-export async function GET(req: NextRequest, { params }: { params: { id: string } }) {
+export async function GET(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+  const { id } = await params
   const { error, organizationId } = await requirePermission('billing', 'view')
   if (error) return error
 
@@ -21,7 +22,7 @@ export async function GET(req: NextRequest, { params }: { params: { id: string }
               i.paid_amount, i.balance_amount, i.notes, i.terms, i.party_details
        FROM invoices i
        WHERE i.id = ? AND i.organization_id = ?`,
-      [params.id, organizationId]
+      [id, organizationId]
     ) as any[]
 
     const invoice = invoiceRows[0]
@@ -49,7 +50,7 @@ export async function GET(req: NextRequest, { params }: { params: { id: string }
        LEFT JOIN units u ON p.unit_id = u.id
        WHERE ii.invoice_id = ?
        ORDER BY ii.id`,
-      [params.id]
+      [id]
     ) as any[]
 
     const [settingsRows] = await db.execute(`

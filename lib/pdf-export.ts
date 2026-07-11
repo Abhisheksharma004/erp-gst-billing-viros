@@ -1,5 +1,5 @@
 import jsPDF from 'jspdf'
-import autoTable from 'jspdf-autotable'
+import { autoTable } from 'jspdf-autotable'
 import { formatCurrency, formatDate } from '@/lib/utils'
 
 interface BusinessSettings {

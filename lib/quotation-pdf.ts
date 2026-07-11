@@ -1,5 +1,5 @@
 import jsPDF from 'jspdf'
-import autoTable from 'jspdf-autotable'
+import { autoTable } from 'jspdf-autotable'
 import { amountInWords } from '@/lib/amount-in-words'
 import { drawDocumentHeader } from '@/lib/document-header-pdf'
 import { computePurchaseItemTotals, computePurchaseOrderItemTotals } from '@/lib/purchase-totals'

@@ -6,7 +6,8 @@ import { ensureQuotationSchema } from '@/lib/ensure-quotation-schema'
 import { generateQuotationPdfBuffer } from '@/lib/quotation-pdf'
 import { buildPdfParties, parseQuotationPartyDetails } from '@/lib/quotation-party'
 
-export async function GET(req: NextRequest, { params }: { params: { id: string } }) {
+export async function GET(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+  const { id } = await params
   const { error, organizationId } = await requirePermission('quotations', 'view')
   if (error) return error
 
@@ -19,7 +20,7 @@ export async function GET(req: NextRequest, { params }: { params: { id: string }
               q.notes, q.terms, q.party_details
        FROM quotations q
        WHERE q.id = ? AND q.organization_id = ?`,
-      [params.id, organizationId]
+      [id, organizationId]
     ) as any[]
 
     const quotation = quotationRows[0]
@@ -47,7 +48,7 @@ export async function GET(req: NextRequest, { params }: { params: { id: string }
        LEFT JOIN units u ON p.unit_id = u.id
        WHERE qi.quotation_id = ?
        ORDER BY qi.id`,
-      [params.id]
+      [id]
     ) as any[]
 
     const [settingsRows] = await db.execute(`

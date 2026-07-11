@@ -6,6 +6,11 @@ const InvoiceForm = dynamic(
   { loading: () => <FormPageLoader title="invoice form" /> }
 )
 
-export default function EditInvoicePage({ params }: { params: { id: string } }) {
-  return <InvoiceForm invoiceId={params.id} />
+export default async function EditInvoicePage({
+  params,
+}: {
+  params: Promise<{ id: string }>
+}) {
+  const { id } = await params
+  return <InvoiceForm invoiceId={id} />
 }

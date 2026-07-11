@@ -1,5 +1,5 @@
 import jsPDF from 'jspdf'
-import autoTable from 'jspdf-autotable'
+import { autoTable } from 'jspdf-autotable'
 import { drawDocumentHeader } from '@/lib/document-header-pdf'
 import type { QuotationPdfCustomer, QuotationPdfSettings } from '@/lib/quotation-pdf'
 import { INDIAN_STATES, roundToTwo } from '@/lib/utils'

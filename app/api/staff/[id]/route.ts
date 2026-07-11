@@ -16,28 +16,30 @@ async function getOrgMember(userId: string, organizationId: string) {
   return rows[0] || null
 }
 
-export async function GET(req: NextRequest, { params }: { params: { id: string } }) {
+export async function GET(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+  const { id } = await params
   const { error, organizationId } = await requireAdmin()
   if (error) return error
 
-  const user = await getOrgMember(params.id, organizationId!)
+  const user = await getOrgMember(id, organizationId!)
   if (!user) return NextResponse.json({ error: 'Not found' }, { status: 404 })
 
   const [roles] = await db.execute(
     `SELECT r.id, r.name FROM staff_roles sr
      JOIN roles r ON sr.role_id = r.id
      WHERE sr.user_id = ? AND r.organization_id = ?`,
-    [params.id, organizationId]
+    [id, organizationId]
   ) as any[]
   user.staffRoles = roles.map((r: any) => ({ role: r }))
   return NextResponse.json(user)
 }
 
-export async function PUT(req: NextRequest, { params }: { params: { id: string } }) {
+export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+  const { id } = await params
   const { error, organizationId } = await requireAdmin()
   if (error) return error
   try {
-    const existing = await getOrgMember(params.id, organizationId!)
+    const existing = await getOrgMember(id, organizationId!)
     if (!existing) return NextResponse.json({ error: 'Not found' }, { status: 404 })
 
     const body = await req.json()
@@ -48,7 +50,7 @@ export async function PUT(req: NextRequest, { params }: { params: { id: string }
         `DELETE sr FROM staff_roles sr
          INNER JOIN roles r ON r.id = sr.role_id
          WHERE sr.user_id = ? AND r.organization_id = ?`,
-        [params.id, organizationId]
+        [id, organizationId]
       )
       for (const roleId of data.roleIds) {
         const [roleRow] = await db.execute(
@@ -56,7 +58,7 @@ export async function PUT(req: NextRequest, { params }: { params: { id: string }
           [roleId, organizationId]
         ) as any[]
         if (roleRow[0]) {
-          await db.execute('INSERT IGNORE INTO staff_roles (id, user_id, role_id) VALUES (?,?,?)', [randomUUID(), params.id, roleId])
+          await db.execute('INSERT IGNORE INTO staff_roles (id, user_id, role_id) VALUES (?,?,?)', [randomUUID(), id, roleId])
         }
       }
     }
@@ -64,7 +66,7 @@ export async function PUT(req: NextRequest, { params }: { params: { id: string }
     if (data.email) {
       const [emailInUse] = await db.execute(
         'SELECT id FROM users WHERE email = ? AND id != ?',
-        [data.email, params.id]
+        [data.email, id]
       ) as any[]
       if (emailInUse[0]) {
         return NextResponse.json({ error: 'Email already in use' }, { status: 400 })
@@ -82,12 +84,12 @@ export async function PUT(req: NextRequest, { params }: { params: { id: string }
     if (data.password) { updates.push('password = ?'); values.push(await bcrypt.hash(data.password, 12)) }
 
     if (updates.length > 0) {
-      await db.execute(`UPDATE users SET ${updates.join(', ')} WHERE id = ?`, [...values, params.id])
+      await db.execute(`UPDATE users SET ${updates.join(', ')} WHERE id = ?`, [...values, id])
     }
 
     const [rows] = await db.execute(
       'SELECT id, name, email, mobile, role, branch, status, created_at FROM users WHERE id = ?',
-      [params.id]
+      [id]
     ) as any[]
     return NextResponse.json(rows[0])
   } catch (err: any) {
@@ -99,25 +101,26 @@ export async function PUT(req: NextRequest, { params }: { params: { id: string }
   }
 }
 
-export async function DELETE(req: NextRequest, { params }: { params: { id: string } }) {
+export async function DELETE(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+  const { id } = await params
   const { error, session, organizationId } = await requireAdmin()
   if (error) return error
-  if (params.id === session!.user.id) return NextResponse.json({ error: 'Cannot delete your own account' }, { status: 400 })
+  if (id === session!.user.id) return NextResponse.json({ error: 'Cannot delete your own account' }, { status: 400 })
 
-  const existing = await getOrgMember(params.id, organizationId!)
+  const existing = await getOrgMember(id, organizationId!)
   if (!existing) return NextResponse.json({ error: 'Not found' }, { status: 404 })
 
   await db.execute(
     'DELETE FROM organization_members WHERE organization_id = ? AND user_id = ?',
-    [organizationId, params.id]
+    [organizationId, id]
   )
 
   const [otherMemberships] = await db.execute(
     'SELECT id FROM organization_members WHERE user_id = ? LIMIT 1',
-    [params.id]
+    [id]
   ) as any[]
   if (!otherMemberships[0]) {
-    await db.execute('DELETE FROM users WHERE id = ?', [params.id])
+    await db.execute('DELETE FROM users WHERE id = ?', [id])
   }
 
   return NextResponse.json({ success: true })

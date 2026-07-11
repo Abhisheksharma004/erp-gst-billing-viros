@@ -9,6 +9,11 @@ const ReturnableChallanForm = dynamic(
   { loading: () => <FormPageLoader title="returnable challan form" /> }
 )
 
-export default function EditReturnableChallanPage({ params }: { params: { id: string } }) {
-  return <ReturnableChallanForm mode="edit" challanId={params.id} />
+export default async function EditReturnableChallanPage({
+  params,
+}: {
+  params: Promise<{ id: string }>
+}) {
+  const { id } = await params
+  return <ReturnableChallanForm mode="edit" challanId={id} />
 }

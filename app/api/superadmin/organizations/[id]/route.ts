@@ -24,8 +24,9 @@ function formatZodError(err: z.ZodError): string {
 
 export async function GET(
   _req: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
+  const { id } = await params
   const { error } = await requireSuperAdmin()
   if (error) return error
 
@@ -63,7 +64,7 @@ export async function GET(
      LEFT JOIN business_settings bs ON bs.organization_id = o.id
      WHERE o.id = ?
      LIMIT 1`,
-    [params.id]
+    [id]
   )) as [Record<string, unknown>[], unknown]
 
   if (!rows[0]) {
@@ -76,7 +77,7 @@ export async function GET(
      JOIN users u ON u.id = om.user_id
      WHERE om.organization_id = ?
      ORDER BY om.created_at ASC`,
-    [params.id]
+    [id]
   )) as [unknown[], unknown]
 
   return NextResponse.json({
@@ -91,12 +92,13 @@ export async function GET(
 
 export async function PATCH(
   req: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
+  const { id } = await params
   const { error } = await requireSuperAdmin()
   if (error) return error
 
-  const orgId = params?.id
+  const orgId = id
   if (!orgId) {
     return NextResponse.json({ error: 'Organization id is required' }, { status: 400 })
   }
@@ -190,20 +192,21 @@ export async function PATCH(
 
 export async function DELETE(
   _req: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
+  const { id } = await params
   const { error } = await requireSuperAdmin()
   if (error) return error
 
   const [existing] = (await db.execute('SELECT id, slug FROM organizations WHERE id = ? LIMIT 1', [
-    params.id,
+    id,
   ])) as [{ id: string; slug: string }[], unknown]
 
   if (!existing[0]) {
     return NextResponse.json({ error: 'Organization not found' }, { status: 404 })
   }
 
-  await db.execute('DELETE FROM organizations WHERE id = ?', [params.id])
+  await db.execute('DELETE FROM organizations WHERE id = ?', [id])
 
   return NextResponse.json({ message: 'Organization suspended' })
 }

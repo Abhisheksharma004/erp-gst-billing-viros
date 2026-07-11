@@ -9,7 +9,8 @@ import { buildPdfParties, parseQuotationPartyDetails } from '@/lib/quotation-par
 import { computeSalesDocumentItemTotals } from '@/lib/sales-document-totals'
 import { roundToNearestRupee, roundToTwo } from '@/lib/utils'
 
-export async function GET(req: NextRequest, { params }: { params: { id: string } }) {
+export async function GET(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+  const { id } = await params
   const { error, organizationId } = await requirePermission('delivery-challans', 'view')
   if (error) return error
 
@@ -20,7 +21,7 @@ export async function GET(req: NextRequest, { params }: { params: { id: string }
       `SELECT dc.id, dc.challan_no, dc.customer_id, dc.date, dc.completion_date, dc.terms, dc.party_details, dc.include_pricing
        FROM delivery_challans dc
        WHERE dc.id = ? AND dc.organization_id = ?`,
-      [params.id, organizationId]
+      [id, organizationId]
     ) as any[]
 
     const challan = challanRows[0]
@@ -48,7 +49,7 @@ export async function GET(req: NextRequest, { params }: { params: { id: string }
        LEFT JOIN units u ON p.unit_id = u.id
        WHERE ci.challan_id = ?
        ORDER BY ci.id`,
-      [params.id]
+      [id]
     ) as any[]
 
     const [settingsRows] = await db.execute(

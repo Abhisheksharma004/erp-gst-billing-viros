@@ -83,8 +83,8 @@ export default function ReportsPage() {
   }
 
   const exportExcel = async () => {
-    const { utils, writeFile } = await import('xlsx')
-    const ws = utils.json_to_sheet(data.map((row: any) => {
+    const { exportToExcel } = await import('@/lib/excel-export')
+    const rows = data.map((row: any) => {
       if (reportType === 'sales-summary') {
         return {
           Date: formatDate(row.date),
@@ -130,10 +130,8 @@ export default function ReportsPage() {
         }
       }
       return row
-    }))
-    const wb = utils.book_new()
-    utils.book_append_sheet(wb, ws, 'Report')
-    writeFile(wb, `${reportType}-${from}-${to}.xlsx`)
+    })
+    exportToExcel(rows, `${reportType}-${from}-${to}.xls`, 'Report')
   }
 
   const showDateRange = !['stock-report', 'low-stock'].includes(reportType)

@@ -10,7 +10,8 @@ import { resolveStoredIncludePricing } from '@/lib/purchase-include-pricing'
 import { computePurchaseOrderItemTotals } from '@/lib/purchase-totals'
 import { roundToTwo } from '@/lib/utils'
 
-export async function GET(req: NextRequest, { params }: { params: { id: string } }) {
+export async function GET(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+  const { id } = await params
   const { error, organizationId } = await requirePermission('purchase-orders', 'view')
   if (error) return error
 
@@ -22,7 +23,7 @@ export async function GET(req: NextRequest, { params }: { params: { id: string }
               po.subtotal, po.discount_amount, po.tax_amount, po.total_amount, po.notes, po.terms, po.include_pricing
        FROM purchase_orders po
        WHERE po.id = ? AND po.organization_id = ?`,
-      [params.id, organizationId]
+      [id, organizationId]
     ) as any[]
 
     const po = poRows[0]
@@ -46,7 +47,7 @@ export async function GET(req: NextRequest, { params }: { params: { id: string }
        LEFT JOIN units u ON p.unit_id = u.id
        WHERE poi.purchase_order_id = ?
        ORDER BY poi.id`,
-      [params.id]
+      [id]
     ) as any[]
 
     const [settingsRows] = await db.execute(

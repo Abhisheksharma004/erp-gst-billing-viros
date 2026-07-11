@@ -8,7 +8,8 @@ import { roundToTwo } from '@/lib/utils'
 import { randomUUID } from 'crypto'
 import { assertVendorInOrg } from '@/lib/org-entity'
 
-export async function GET(req: NextRequest, { params }: { params: { id: string } }) {
+export async function GET(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+  const { id } = await params
   const { error, organizationId } = await requirePermission('purchases', 'view')
   if (error) return error
 
@@ -24,11 +25,11 @@ export async function GET(req: NextRequest, { params }: { params: { id: string }
      FROM purchases p
      LEFT JOIN vendors v ON p.vendor_id = v.id
      WHERE p.id = ? AND p.organization_id = ?`,
-    [params.id, organizationId]
+    [id, organizationId]
   ) as any[]
   if (!rows[0]) return NextResponse.json({ error: 'Not found' }, { status: 404 })
 
-  const [items] = await db.execute('SELECT * FROM purchase_items WHERE purchase_id = ?', [params.id]) as any[]
+  const [items] = await db.execute('SELECT * FROM purchase_items WHERE purchase_id = ?', [id]) as any[]
   return NextResponse.json({ ...rows[0], items })
 }
 
@@ -69,7 +70,8 @@ async function insertPurchaseItems(
   }
 }
 
-export async function PUT(req: NextRequest, { params }: { params: { id: string } }) {
+export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+  const { id } = await params
   const { error, organizationId } = await requirePermission('purchases', 'edit')
   if (error) return error
 
@@ -82,7 +84,7 @@ export async function PUT(req: NextRequest, { params }: { params: { id: string }
     if (!body.items || !Array.isArray(body.items)) {
       const [rows] = await conn.execute(
         'SELECT * FROM purchases WHERE id = ? AND organization_id = ?',
-        [params.id, organizationId]
+        [id, organizationId]
       ) as any[]
       if (!rows[0]) return NextResponse.json({ error: 'Not found' }, { status: 404 })
 
@@ -92,11 +94,11 @@ export async function PUT(req: NextRequest, { params }: { params: { id: string }
 
       await conn.execute(
         'UPDATE purchases SET status=COALESCE(?,status), paid_amount=?, balance_amount=?, payment_mode=COALESCE(?,payment_mode), notes=COALESCE(?,notes) WHERE id=? AND organization_id = ?',
-        [status || null, paid, balance, paymentMode || null, notes || null, params.id, organizationId]
+        [status || null, paid, balance, paymentMode || null, notes || null, id, organizationId]
       )
       const [updated] = await db.execute(
         'SELECT p.*, v.name as vendor_name FROM purchases p LEFT JOIN vendors v ON p.vendor_id = v.id WHERE p.id = ? AND p.organization_id = ?',
-        [params.id, organizationId]
+        [id, organizationId]
       ) as any[]
       return NextResponse.json(updated[0])
     }
@@ -109,7 +111,7 @@ export async function PUT(req: NextRequest, { params }: { params: { id: string }
 
     const [existingRows] = await conn.execute(
       'SELECT * FROM purchases WHERE id = ? AND organization_id = ?',
-      [params.id, organizationId]
+      [id, organizationId]
     ) as any[]
     if (!existingRows[0]) return NextResponse.json({ error: 'Not found' }, { status: 404 })
 
@@ -118,7 +120,7 @@ export async function PUT(req: NextRequest, { params }: { params: { id: string }
 
     await conn.beginTransaction()
 
-    const [oldItems] = await conn.execute('SELECT * FROM purchase_items WHERE purchase_id = ?', [params.id]) as any[]
+    const [oldItems] = await conn.execute('SELECT * FROM purchase_items WHERE purchase_id = ?', [id]) as any[]
     for (const item of oldItems as any[]) {
       if (item.product_id) {
         await conn.execute(
@@ -127,8 +129,8 @@ export async function PUT(req: NextRequest, { params }: { params: { id: string }
         )
       }
     }
-    await conn.execute('DELETE FROM stock_movements WHERE reference_type = ? AND reference_id = ?', ['PURCHASE', params.id])
-    await conn.execute('DELETE FROM purchase_items WHERE purchase_id = ?', [params.id])
+    await conn.execute('DELETE FROM stock_movements WHERE reference_type = ? AND reference_id = ?', ['PURCHASE', id])
+    await conn.execute('DELETE FROM purchase_items WHERE purchase_id = ?', [id])
 
     let subtotal = 0,
       totalDiscount = 0,
@@ -166,15 +168,15 @@ export async function PUT(req: NextRequest, { params }: { params: { id: string }
        gstType, data.billNo || null, data.billDate || null,
        subtotal, totalDiscount, totalCgst, totalSgst, totalIgst, totalCgst + totalSgst + totalIgst, roundOff, finalTotal,
        paidAmount, balanceAmount, data.paymentMode || null, data.notes || null, data.terms || null, status,
-       params.id, organizationId]
+       id, organizationId]
     )
 
-    await insertPurchaseItems(conn, params.id, purchaseNo, itemsWithTotals, gstType, organizationId!)
+    await insertPurchaseItems(conn, id, purchaseNo, itemsWithTotals, gstType, organizationId!)
 
     await conn.commit()
     const [rows] = await db.execute(
       'SELECT p.*, v.name as vendor_name FROM purchases p LEFT JOIN vendors v ON p.vendor_id = v.id WHERE p.id = ? AND p.organization_id = ?',
-      [params.id, organizationId]
+      [id, organizationId]
     ) as any[]
     return NextResponse.json(rows[0])
   } catch (err: any) {
@@ -191,7 +193,8 @@ export async function PUT(req: NextRequest, { params }: { params: { id: string }
   }
 }
 
-export async function DELETE(req: NextRequest, { params }: { params: { id: string } }) {
+export async function DELETE(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+  const { id } = await params
   const { error, organizationId } = await requirePermission('purchases', 'delete')
   if (error) return error
 
@@ -199,12 +202,12 @@ export async function DELETE(req: NextRequest, { params }: { params: { id: strin
   try {
     const [existing] = await conn.execute(
       'SELECT id FROM purchases WHERE id = ? AND organization_id = ?',
-      [params.id, organizationId]
+      [id, organizationId]
     ) as any[]
     if (!existing[0]) return NextResponse.json({ error: 'Not found' }, { status: 404 })
 
     await conn.beginTransaction()
-    const [items] = await conn.execute('SELECT * FROM purchase_items WHERE purchase_id = ?', [params.id]) as any[]
+    const [items] = await conn.execute('SELECT * FROM purchase_items WHERE purchase_id = ?', [id]) as any[]
     for (const item of items as any[]) {
       if (item.product_id) {
         await conn.execute(
@@ -213,9 +216,9 @@ export async function DELETE(req: NextRequest, { params }: { params: { id: strin
         )
       }
     }
-    await conn.execute('DELETE FROM stock_movements WHERE reference_type = ? AND reference_id = ?', ['PURCHASE', params.id])
-    await conn.execute('DELETE FROM purchase_items WHERE purchase_id = ?', [params.id])
-    await conn.execute('DELETE FROM purchases WHERE id = ? AND organization_id = ?', [params.id, organizationId])
+    await conn.execute('DELETE FROM stock_movements WHERE reference_type = ? AND reference_id = ?', ['PURCHASE', id])
+    await conn.execute('DELETE FROM purchase_items WHERE purchase_id = ?', [id])
+    await conn.execute('DELETE FROM purchases WHERE id = ? AND organization_id = ?', [id, organizationId])
     await conn.commit()
     return NextResponse.json({ success: true })
   } catch {

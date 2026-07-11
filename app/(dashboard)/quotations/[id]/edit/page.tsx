@@ -6,6 +6,11 @@ const QuotationForm = dynamic(
   { loading: () => <FormPageLoader title="quotation form" /> }
 )
 
-export default function EditQuotationPage({ params }: { params: { id: string } }) {
-  return <QuotationForm mode="edit" quotationId={params.id} />
+export default async function EditQuotationPage({
+  params,
+}: {
+  params: Promise<{ id: string }>
+}) {
+  const { id } = await params
+  return <QuotationForm mode="edit" quotationId={id} />
 }

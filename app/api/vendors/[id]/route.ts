@@ -10,26 +10,28 @@ function optionalToNull(value: string | undefined | null): string | null {
   return trimmed === '' ? null : trimmed
 }
 
-export async function GET(req: NextRequest, { params }: { params: { id: string } }) {
+export async function GET(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+  const { id } = await params
   const { error, organizationId } = await requirePermission('vendors', 'view')
   if (error) return error
 
   const [rows] = await db.execute(
     'SELECT * FROM vendors WHERE id = ? AND organization_id = ?',
-    [params.id, organizationId]
+    [id, organizationId]
   ) as any[]
   if (!rows[0]) return NextResponse.json({ error: 'Not found' }, { status: 404 })
 
   const [purchases] = await db.execute(
     `SELECT id, purchase_no, date, total_amount, paid_amount, balance_amount, status
      FROM purchases WHERE vendor_id = ? AND organization_id = ? ORDER BY date DESC LIMIT 20`,
-    [params.id, organizationId]
+    [id, organizationId]
   ) as any[]
 
   return NextResponse.json({ ...rows[0], purchases })
 }
 
-export async function PUT(req: NextRequest, { params }: { params: { id: string } }) {
+export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+  const { id } = await params
   const { error, organizationId } = await requirePermission('vendors', 'edit')
   if (error) return error
   try {
@@ -39,7 +41,7 @@ export async function PUT(req: NextRequest, { params }: { params: { id: string }
 
     const [existing] = await db.execute(
       'SELECT id FROM vendors WHERE id = ? AND organization_id = ?',
-      [params.id, organizationId]
+      [id, organizationId]
     ) as any[]
     if (!existing[0]) return NextResponse.json({ error: 'Not found' }, { status: 404 })
 
@@ -65,14 +67,14 @@ export async function PUT(req: NextRequest, { params }: { params: { id: string }
         data.openingBalance,
         data.isActive ? 1 : 0,
         optionalToNull(data.notes),
-        params.id,
+        id,
         organizationId,
       ]
     )
 
     const [rows] = await db.execute(
       'SELECT * FROM vendors WHERE id = ? AND organization_id = ?',
-      [params.id, organizationId]
+      [id, organizationId]
     ) as any[]
     return NextResponse.json(rows[0])
   } catch (err: unknown) {
@@ -82,21 +84,22 @@ export async function PUT(req: NextRequest, { params }: { params: { id: string }
   }
 }
 
-export async function DELETE(req: NextRequest, { params }: { params: { id: string } }) {
+export async function DELETE(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
+  const { id } = await params
   const { error, organizationId } = await requirePermission('vendors', 'delete')
   if (error) return error
 
   const [existing] = await db.execute(
     'SELECT id FROM vendors WHERE id = ? AND organization_id = ?',
-    [params.id, organizationId]
+    [id, organizationId]
   ) as any[]
   if (!existing[0]) return NextResponse.json({ error: 'Not found' }, { status: 404 })
 
   const [rows] = await db.execute(
     'SELECT COUNT(*) as cnt FROM purchases WHERE vendor_id = ? AND organization_id = ?',
-    [params.id, organizationId]
+    [id, organizationId]
   ) as any[]
   if (rows[0].cnt > 0) return NextResponse.json({ error: 'Cannot delete vendor with existing purchases' }, { status: 400 })
-  await db.execute('DELETE FROM vendors WHERE id = ? AND organization_id = ?', [params.id, organizationId])
+  await db.execute('DELETE FROM vendors WHERE id = ? AND organization_id = ?', [id, organizationId])
   return NextResponse.json({ success: true })
 }
