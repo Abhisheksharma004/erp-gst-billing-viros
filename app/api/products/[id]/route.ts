@@ -48,7 +48,7 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
         name = ?, sku = ?, barcode = ?, hsn_code = ?, sac_code = ?, description = ?,
         category_id = ?, brand_id = ?, unit_id = ?,
         purchase_price = ?, selling_price = ?, mrp = ?,
-        gst_rate = ?, gst_type = ?, low_stock_alert = ?, discount = ?, is_active = ?
+        gst_rate = ?, gst_type = ?, current_stock = ?, low_stock_alert = ?, discount = ?, is_active = ?
        WHERE id = ? AND organization_id = ?`,
       [
         data.name,
@@ -65,6 +65,7 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
         data.mrp ?? null,
         data.gstRate,
         data.gstType,
+        data.openingStock,
         data.lowStockAlert,
         data.discount ?? null,
         data.isActive ? 1 : 0,

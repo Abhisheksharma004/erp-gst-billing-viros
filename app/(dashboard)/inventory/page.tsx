@@ -701,12 +701,13 @@ export default function InventoryPage() {
                   </SelectContent>
                 </Select>
               </div>
-              {!editing && (
-                <div className="space-y-1">
-                  <Label className="text-xs sm:text-sm">Opening Stock</Label>
-                  <Input type="number" className="h-9 no-spinner" {...form.register('openingStock', { valueAsNumber: true })} />
-                </div>
-              )}
+              <div className="space-y-1">
+                <Label className="text-xs sm:text-sm">{editing ? 'Current Stock' : 'Opening Stock'}</Label>
+                <Input type="number" className="h-9 no-spinner" {...form.register('openingStock', { valueAsNumber: true })} />
+                {form.formState.errors.openingStock && (
+                  <p className="text-destructive text-xs">{form.formState.errors.openingStock.message}</p>
+                )}
+              </div>
               <div className="space-y-1">
                 <Label className="text-xs sm:text-sm">Category</Label>
                 <Select
@@ -715,6 +716,11 @@ export default function InventoryPage() {
                 >
                   <SelectTrigger className="h-9"><SelectValue placeholder="Select..." /></SelectTrigger>
                   <SelectContent>
+                    {editing?.category_id && !categories.some((c) => c.id === editing.category_id) ? (
+                      <SelectItem value={editing.category_id}>
+                        {editing.category_name || 'Selected category'}
+                      </SelectItem>
+                    ) : null}
                     {categories.map(c => <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>)}
                   </SelectContent>
                 </Select>
@@ -727,6 +733,11 @@ export default function InventoryPage() {
                 >
                   <SelectTrigger className="h-9"><SelectValue placeholder="Select..." /></SelectTrigger>
                   <SelectContent>
+                    {editing?.unit_id && !units.some((u) => u.id === editing.unit_id) ? (
+                      <SelectItem value={editing.unit_id}>
+                        {editing.unit_name || 'Selected unit'}
+                      </SelectItem>
+                    ) : null}
                     {units.map(u => <SelectItem key={u.id} value={u.id}>{u.name}</SelectItem>)}
                   </SelectContent>
                 </Select>
