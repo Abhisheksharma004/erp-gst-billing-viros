@@ -12,6 +12,7 @@ export const STAFF_ASSIGNABLE_MODULES = [
   'purchase-orders',
   'delivery-challans',
   'returnable-challans',
+  'payments',
   'reports',
 ] as const
 
@@ -28,6 +29,7 @@ export const PATH_MODULE_MAP: { prefix: string; module: string }[] = [
   { prefix: '/purchase-orders', module: 'purchase-orders' },
   { prefix: '/delivery-challans', module: 'delivery-challans' },
   { prefix: '/returnable-challans', module: 'returnable-challans' },
+  { prefix: '/payments', module: 'payments' },
   { prefix: '/reports', module: 'reports' },
 ]
 
@@ -49,6 +51,7 @@ const MODULE_DISPLAY_TITLES: Record<string, string> = {
   purchases: 'Purchase Invoice',
   'delivery-challans': 'Delivery Challans',
   'returnable-challans': 'Returnable Challans',
+  payments: 'Payments',
   reports: 'Reports',
   staff: 'Staff',
   roles: 'Staff Permissions',

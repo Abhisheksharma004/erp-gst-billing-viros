@@ -56,12 +56,29 @@ async function runAlter(sql: string): Promise<void> {
       err?.code === 'ER_DUP_FIELDNAME' ||
       err?.errno === 1060 ||
       /duplicate column name/i.test(msg)
+    const isDuplicateKey =
+      err?.errno === 1061 ||
+      /duplicate key name/i.test(msg)
     const isExists =
       err?.code === 'ER_TABLE_EXISTS_ERROR' ||
       err?.errno === 1050 ||
       /already exists/i.test(msg)
-    if (!isDuplicate && !isExists) throw e
+    if (!isDuplicate && !isDuplicateKey && !isExists) throw e
   }
+}
+
+async function indexExists(table: string, indexName: string): Promise<boolean> {
+  const [rows] = (await db.execute(
+    `SELECT COUNT(*) as cnt FROM information_schema.STATISTICS
+     WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = ? AND INDEX_NAME = ?`,
+    [table, indexName]
+  )) as [{ cnt: number }[], unknown]
+  return Number(rows[0]?.cnt) > 0
+}
+
+async function dropIndexIfExists(table: string, indexName: string): Promise<void> {
+  if (!(await indexExists(table, indexName))) return
+  await db.execute(`ALTER TABLE ${table} DROP INDEX ${indexName}`)
 }
 
 async function columnExists(table: string, column: string): Promise<boolean> {
@@ -88,6 +105,13 @@ async function addOrgColumn(table: string, fallbackOrgId: string): Promise<void>
   await runAlter(
     `ALTER TABLE ${table} ADD INDEX idx_${table}_organization_id (organization_id)`
   )
+
+  if (table === 'categories') {
+    await dropIndexIfExists(table, 'name')
+    await runAlter(
+      `ALTER TABLE categories ADD UNIQUE KEY uq_categories_org_name (organization_id, name)`
+    )
+  }
 }
 
 const TENANT_TABLES = [

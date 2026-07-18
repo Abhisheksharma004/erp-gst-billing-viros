@@ -652,7 +652,16 @@ export default function InventoryPage() {
               <div className="grid grid-cols-2 gap-2.5 sm:gap-4 pb-1">
               <div className="col-span-2 space-y-1">
                 <Label className="text-xs sm:text-sm">Product Name *</Label>
-                <Input className="h-9" {...form.register('name')} />
+                <Input className="h-9" 
+                onFocus={(e) => {
+                    const len = e.target.value.length
+                    setTimeout(() => e.target.setSelectionRange(len, len), 0)
+                  }}
+                  onMouseUp={(e) => {
+                    const len = e.currentTarget.value.length
+                    e.currentTarget.setSelectionRange(len, len)
+                  }}
+                {...form.register('name')} />
                 {form.formState.errors.name && <p className="text-destructive text-xs">{form.formState.errors.name.message}</p>}
               </div>
               <div className="col-span-2 space-y-1">
@@ -700,7 +709,10 @@ export default function InventoryPage() {
               )}
               <div className="space-y-1">
                 <Label className="text-xs sm:text-sm">Category</Label>
-                <Select onValueChange={(v) => form.setValue('categoryId', v)}>
+                <Select
+                  value={form.watch('categoryId') || ''}
+                  onValueChange={(v) => form.setValue('categoryId', v, { shouldDirty: true, shouldValidate: true })}
+                >
                   <SelectTrigger className="h-9"><SelectValue placeholder="Select..." /></SelectTrigger>
                   <SelectContent>
                     {categories.map(c => <SelectItem key={c.id} value={c.id}>{c.name}</SelectItem>)}
@@ -709,7 +721,10 @@ export default function InventoryPage() {
               </div>
               <div className="space-y-1">
                 <Label className="text-xs sm:text-sm">Unit</Label>
-                <Select onValueChange={(v) => form.setValue('unitId', v)}>
+                <Select
+                  value={form.watch('unitId') || ''}
+                  onValueChange={(v) => form.setValue('unitId', v, { shouldDirty: true, shouldValidate: true })}
+                >
                   <SelectTrigger className="h-9"><SelectValue placeholder="Select..." /></SelectTrigger>
                   <SelectContent>
                     {units.map(u => <SelectItem key={u.id} value={u.id}>{u.name}</SelectItem>)}

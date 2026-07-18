@@ -90,6 +90,7 @@ const protectedMiddleware = withAuth(
               'purchase-orders': '/purchase-orders',
               'delivery-challans': '/delivery-challans',
               'returnable-challans': '/returnable-challans',
+              payments: '/payments',
               reports: '/reports',
             }
             const redirectTo = redirectMap[allowedModule] || '/login'
@@ -145,6 +146,7 @@ export const config = {
     '/purchase-orders/:path*',
     '/delivery-challans/:path*',
     '/returnable-challans/:path*',
+    '/payments/:path*',
     '/reports/:path*',
     '/staff/:path*',
     '/roles/:path*',
