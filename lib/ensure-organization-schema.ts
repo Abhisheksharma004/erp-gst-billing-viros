@@ -81,6 +81,23 @@ async function dropIndexIfExists(table: string, indexName: string): Promise<void
   await db.execute(`ALTER TABLE ${table} DROP INDEX ${indexName}`)
 }
 
+async function dropUniqueIndexesOnColumn(table: string, column: string): Promise<void> {
+  const [rows] = (await db.execute(
+    `SELECT INDEX_NAME FROM information_schema.STATISTICS
+     WHERE TABLE_SCHEMA = DATABASE() AND TABLE_NAME = ? AND COLUMN_NAME = ? AND NON_UNIQUE = 0`,
+    [table, column]
+  )) as [{ INDEX_NAME: string }[], unknown]
+
+  for (const r of rows) {
+    const idx = r.INDEX_NAME
+    try {
+      await db.execute(`ALTER TABLE ${table} DROP INDEX ${idx}`)
+    } catch {
+      // ignore failures dropping individual indexes
+    }
+  }
+}
+
 async function columnExists(table: string, column: string): Promise<boolean> {
   const [rows] = (await db.execute(
     `SELECT COUNT(*) as cnt FROM information_schema.COLUMNS
@@ -107,7 +124,9 @@ async function addOrgColumn(table: string, fallbackOrgId: string): Promise<void>
   )
 
   if (table === 'categories') {
-    await dropIndexIfExists(table, 'name')
+    // Remove any existing unique indexes on the plain `name` column so we can
+    // enforce per-organization uniqueness instead.
+    await dropUniqueIndexesOnColumn(table, 'name')
     await runAlter(
       `ALTER TABLE categories ADD UNIQUE KEY uq_categories_org_name (organization_id, name)`
     )
