@@ -682,8 +682,9 @@ export function PurchaseForm({ purchaseId }: { purchaseId?: string }) {
                 <Input type="date" className="h-9" {...register('billDate')} />
               </div>
               <div className="space-y-2">
-                <Label>Bill Number</Label>
+                <Label>Bill Number *</Label>
                 <Input className="h-9" {...register('billNo')} placeholder="Vendor bill number" />
+                {errors.billNo && <p className="text-destructive text-xs">{String(errors.billNo.message)}</p>}
               </div>
               <div className="space-y-2">
                 <Label>Payment Mode</Label>

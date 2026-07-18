@@ -11,13 +11,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { DocumentPdfViewer } from '@/components/shared/document-pdf-viewer'
 import { useToast } from '@/hooks/use-toast'
 import { usePageCount } from '@/hooks/use-page-count'
-import {
-  Eye,
-  Edit,
-  Trash2,
-  ShoppingCart,
-  Calendar,
-} from 'lucide-react'
+import {Eye,Edit,Trash2,ShoppingCart,Calendar,} from 'lucide-react'
 import { formatCurrency, formatDate, cn } from '@/lib/utils'
 import { ListPageToolbar } from '@/components/shared/list-page-toolbar'
 import { parseJsonResponse } from '@/lib/fetch-json'
@@ -300,7 +294,7 @@ export default function PurchasesPage() {
             <Table>
               <TableHeader>
                 <TableRow>
-                  <TableHead>Purchase No</TableHead>
+                  <TableHead>Bill No</TableHead>
                   <TableHead>Vendor</TableHead>
                   <TableHead>Date</TableHead>
                   <TableHead className="text-right">Amount</TableHead>
@@ -310,7 +304,7 @@ export default function PurchasesPage() {
               <TableBody>
                 {purchases.map((p) => (
                   <TableRow key={p.id}>
-                    <TableCell className="font-medium whitespace-nowrap">{p.purchase_no}</TableCell>
+                    <TableCell className="font-medium whitespace-nowrap">{p.bill_no}</TableCell>
                     <TableCell className="max-w-[180px] truncate">{p.vendor_name}</TableCell>
                     <TableCell className="whitespace-nowrap">{formatDate(p.date)}</TableCell>
                     <TableCell className="text-right font-medium whitespace-nowrap">
@@ -332,7 +326,7 @@ export default function PurchasesPage() {
           renderCardGrid()
         )}
 
-        <Pagination />
+        <Pagination/>
       </Card>
 
       <DocumentPdfViewer
