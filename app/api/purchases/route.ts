@@ -10,6 +10,7 @@ import { randomUUID } from 'crypto'
 import { apiErrorResponse } from '@/lib/api-error'
 import { buildDocumentNumberPrefix, documentSerialSubstringStart, nextDocumentNumber } from '@/lib/document-number'
 import { assertVendorInOrg } from '@/lib/org-entity'
+import { ensureDocumentCreateSchema } from '@/lib/ensure-document-create-schema'
 
 export async function GET(req: NextRequest) {
   const { error, organizationId } = await requirePermission('purchases', 'view')
@@ -56,7 +57,9 @@ export async function POST(req: NextRequest) {
   if (error) return error
 
   const conn = await db.getConnection()
+  let txStarted = false
   try {
+    await ensureDocumentCreateSchema()
     await ensurePurchaseSchema()
     await ensureDocumentTermsColumns()
     const body = await req.json()
@@ -66,6 +69,7 @@ export async function POST(req: NextRequest) {
     }
     const gstType = data.gstType
     await conn.beginTransaction()
+    txStarted = true
 
     const prefix = 'PUR'
     const numberPrefix = buildDocumentNumberPrefix(prefix, data.date)
@@ -148,14 +152,9 @@ export async function POST(req: NextRequest) {
     ) as any[]
     return NextResponse.json(rows[0], { status: 201 })
   } catch (err: any) {
-    await conn.rollback()
+    if (txStarted) await conn.rollback().catch(() => {})
     if (err.name === 'ZodError') return NextResponse.json({ error: err.errors }, { status: 400 })
-    console.error(err)
-    const message =
-      process.env.NODE_ENV === 'development' && err?.sqlMessage
-        ? err.sqlMessage
-        : 'Internal server error'
-    return NextResponse.json({ error: message }, { status: 500 })
+    return apiErrorResponse(err, 'POST /api/purchases')
   } finally {
     conn.release()
   }

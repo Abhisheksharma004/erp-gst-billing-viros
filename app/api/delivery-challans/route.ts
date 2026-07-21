@@ -4,10 +4,12 @@ import { requirePermission } from '@/lib/api-auth'
 import { appendOrgFilter } from '@/lib/tenant'
 import { challanSchema } from '@/lib/validations'
 import { randomUUID } from 'crypto'
-import { buildDocumentNumberPrefix, documentSerialSubstringStart, nextDocumentNumber } from '@/lib/document-number'
+import { buildDocumentNumberPrefix, documentSerialSubstringStart, loadDocumentPrefix, nextDocumentNumber } from '@/lib/document-number'
 import { ensureDeliveryChallanSchema } from '@/lib/ensure-delivery-challan-schema'
 import { computeSalesDocumentItemTotals } from '@/lib/sales-document-totals'
 import { assertCustomerInOrg } from '@/lib/org-entity'
+import { ensureDocumentCreateSchema } from '@/lib/ensure-document-create-schema'
+import { apiErrorResponse } from '@/lib/api-error'
 
 export async function GET(req: NextRequest) {
   const { error, organizationId } = await requirePermission('delivery-challans', 'view')
@@ -44,7 +46,9 @@ export async function POST(req: NextRequest) {
   if (error) return error
 
   const conn = await db.getConnection()
+  let txStarted = false
   try {
+    await ensureDocumentCreateSchema()
     await ensureDeliveryChallanSchema()
     const body = await req.json()
     const data = challanSchema.parse(body)
@@ -52,12 +56,9 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'Invalid customer' }, { status: 400 })
     }
     await conn.beginTransaction()
+    txStarted = true
 
-    const [settings] = await conn.execute(
-      'SELECT challan_prefix FROM business_settings WHERE organization_id = ? LIMIT 1',
-      [organizationId]
-    ) as any[]
-    const prefix = settings[0]?.challan_prefix || 'DC'
+    const prefix = await loadDocumentPrefix(conn, organizationId!, 'challan_prefix', 'DC')
     const numberPrefix = buildDocumentNumberPrefix(prefix, data.date)
     const [last] = await conn.execute(
       `SELECT challan_no FROM delivery_challans WHERE organization_id = ? AND challan_no LIKE ? ORDER BY CAST(SUBSTRING(challan_no, ?) AS UNSIGNED) DESC LIMIT 1`,
@@ -130,9 +131,9 @@ export async function POST(req: NextRequest) {
     ) as any[]
     return NextResponse.json(rows[0], { status: 201 })
   } catch (err: any) {
-    await conn.rollback()
+    if (txStarted) await conn.rollback().catch(() => {})
     if (err.name === 'ZodError') return NextResponse.json({ error: err.errors }, { status: 400 })
-    return NextResponse.json({ error: 'Internal server error' }, { status: 500 })
+    return apiErrorResponse(err, 'POST /api/delivery-challans')
   } finally {
     conn.release()
   }

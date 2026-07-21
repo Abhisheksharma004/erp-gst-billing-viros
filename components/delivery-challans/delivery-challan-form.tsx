@@ -113,6 +113,7 @@ export function DeliveryChallanForm({ mode, challanId }: DeliveryChallanFormProp
   const { fields, append, remove } = useFieldArray({ control, name: 'items' })
   const items = watch('items')
   const includePricing = watch('includePricing')
+  const challanDate = watch("date")
 
   const party = useDocumentPartyFields(customers)
   const { loadParties } = party
@@ -468,6 +469,7 @@ export function DeliveryChallanForm({ mode, challanId }: DeliveryChallanFormProp
                 <Input
                   type="date"
                   className="h-9 w-full min-w-0 text-sm px-2 sm:px-3"
+                  min={challanDate ? toDateInput(challanDate) : undefined}
                   {...register('completionDate')}
                 />
               </div>

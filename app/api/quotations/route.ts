@@ -5,9 +5,11 @@ import { appendOrgFilter } from '@/lib/tenant'
 import { quotationSchema } from '@/lib/validations'
 import { ensureQuotationSchema } from '@/lib/ensure-quotation-schema'
 import { buildQuotationTotals, insertQuotationItems } from '@/lib/quotation-save'
-import { buildDocumentNumberPrefix, documentSerialSubstringStart, nextDocumentNumber } from '@/lib/document-number'
+import { buildDocumentNumberPrefix, documentSerialSubstringStart, loadDocumentPrefix, nextDocumentNumber } from '@/lib/document-number'
 import { randomUUID } from 'crypto'
 import { assertCustomerInOrg } from '@/lib/org-entity'
+import { ensureDocumentCreateSchema } from '@/lib/ensure-document-create-schema'
+import { apiErrorResponse } from '@/lib/api-error'
 
 export async function GET(req: NextRequest) {
   const { error, organizationId } = await requirePermission('quotations', 'view')
@@ -58,7 +60,9 @@ export async function POST(req: NextRequest) {
   if (error) return error
 
   const conn = await db.getConnection()
+  let txStarted = false
   try {
+    await ensureDocumentCreateSchema()
     await ensureQuotationSchema()
     const body = await req.json()
     const data = quotationSchema.parse(body)
@@ -66,12 +70,9 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'Invalid customer' }, { status: 400 })
     }
     await conn.beginTransaction()
+    txStarted = true
 
-    const [settings] = await conn.execute(
-      'SELECT quotation_prefix FROM business_settings WHERE organization_id = ? LIMIT 1',
-      [organizationId]
-    ) as any[]
-    const prefix = settings[0]?.quotation_prefix || 'QT'
+    const prefix = await loadDocumentPrefix(conn, organizationId!, 'quotation_prefix', 'QT')
     const numberPrefix = buildDocumentNumberPrefix(prefix, data.date)
     const [last] = await conn.execute(
       `SELECT quotation_no FROM quotations WHERE organization_id = ? AND quotation_no LIKE ? ORDER BY CAST(SUBSTRING(quotation_no, ?) AS UNSIGNED) DESC LIMIT 1`,
@@ -116,14 +117,9 @@ export async function POST(req: NextRequest) {
     ) as any[]
     return NextResponse.json(rows[0], { status: 201 })
   } catch (err: any) {
-    await conn.rollback()
+    if (txStarted) await conn.rollback().catch(() => {})
     if (err.name === 'ZodError') return NextResponse.json({ error: err.errors }, { status: 400 })
-    console.error('POST /api/quotations:', err?.code, err?.message ?? err)
-    const message =
-      process.env.NODE_ENV === 'development' && err?.sqlMessage
-        ? err.sqlMessage
-        : 'Internal server error'
-    return NextResponse.json({ error: message }, { status: 500 })
+    return apiErrorResponse(err, 'POST /api/quotations')
   } finally {
     conn.release()
   }
