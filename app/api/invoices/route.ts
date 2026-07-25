@@ -87,12 +87,6 @@ export async function POST(req: NextRequest) {
     ) as any[]
     const prefix = settings[0]?.invoice_prefix || 'INV'
     const numberPrefix = buildDocumentNumberPrefix(prefix, data.date)
-    const [lastInv] = await conn.execute(
-      `SELECT invoice_no FROM invoices WHERE organization_id = ? AND invoice_no LIKE ? ORDER BY CAST(SUBSTRING(invoice_no, ?) AS UNSIGNED) DESC LIMIT 1`,
-      [organizationId, `${numberPrefix}%`, documentSerialSubstringStart(numberPrefix)]
-    ) as any[]
-    const invoiceNo = nextDocumentNumber(prefix, data.date, lastInv[0]?.invoice_no)
-
     // Compute totals (match UI)
     let subtotal = 0, totalDiscount = 0, totalCgst = 0, totalSgst = 0, totalIgst = 0, grandTotal = 0
     const itemsWithTotals = data.items.map((item: any) => {
@@ -107,20 +101,40 @@ export async function POST(req: NextRequest) {
     })
     const taxAmount = roundToTwo(totalCgst + totalSgst + totalIgst)
     const totalAmount = roundToNearestRupee(roundToTwo(grandTotal))
-
     const id = randomUUID()
     const partyDetailsJson = data.partyDetails ? JSON.stringify(data.partyDetails) : null
-    await conn.execute(
-      `INSERT INTO invoices (id, organization_id, invoice_no, customer_id, date, due_date, gst_type, place_of_supply,
-        subtotal, discount_amount, cgst_amount, sgst_amount, igst_amount, tax_amount, total_amount,
-        paid_amount, balance_amount, payment_mode, notes, terms, party_details)
-       VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
-      [id, organizationId, invoiceNo, data.customerId, data.date, data.dueDate || null,
-       gstType, data.placeOfSupply || null,
-       roundToTwo(subtotal), roundToTwo(totalDiscount), roundToTwo(totalCgst), roundToTwo(totalSgst), roundToTwo(totalIgst), taxAmount, totalAmount,
-       data.paidAmount, roundToTwo(totalAmount - data.paidAmount),
-       data.paymentMode || null, data.notes || null, data.terms || null, partyDetailsJson]
-    )
+
+    // Retry loop: use MAX() serial + retry on duplicate to avoid ordering bugs & race conditions
+    let invoiceNo = ''
+    let inserted = false
+    for (let attempt = 0; attempt < 10 && !inserted; attempt++) {
+      const [maxRow] = await conn.execute(
+        `SELECT MAX(CAST(SUBSTRING(invoice_no, ?) AS UNSIGNED)) AS maxSerial
+         FROM invoices
+         WHERE organization_id = ? AND invoice_no LIKE ?`,
+        [documentSerialSubstringStart(numberPrefix), organizationId, `${numberPrefix}%`]
+      ) as any[]
+      const maxSerial: number = Number(maxRow[0]?.maxSerial) || 0
+      invoiceNo = `${numberPrefix}${maxSerial + 1 + attempt}`
+
+      try {
+        await conn.execute(
+          `INSERT INTO invoices (id, organization_id, invoice_no, customer_id, date, due_date, gst_type, place_of_supply,
+            subtotal, discount_amount, cgst_amount, sgst_amount, igst_amount, tax_amount, total_amount,
+            paid_amount, balance_amount, payment_mode, notes, terms, party_details)
+           VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+          [id, organizationId, invoiceNo, data.customerId, data.date, data.dueDate || null,
+           gstType, data.placeOfSupply || null,
+           roundToTwo(subtotal), roundToTwo(totalDiscount), roundToTwo(totalCgst), roundToTwo(totalSgst), roundToTwo(totalIgst), taxAmount, totalAmount,
+           data.paidAmount, roundToTwo(totalAmount - data.paidAmount),
+           data.paymentMode || null, data.notes || null, data.terms || null, partyDetailsJson]
+        )
+        inserted = true
+      } catch (dupErr: any) {
+        if (dupErr?.errno !== 1062) throw dupErr
+      }
+    }
+    if (!inserted) throw new Error('Could not generate a unique invoice number after 10 attempts')
 
     for (const item of itemsWithTotals) {
       await conn.execute(
