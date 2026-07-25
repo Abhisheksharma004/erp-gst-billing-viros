@@ -126,7 +126,6 @@ export interface DeliveryChallanPdfData {
 }
 
 export interface PurchasePdfData {
-  purchase_no: string
   date: string
   due_date?: string | null
   bill_no?: string | null
@@ -388,7 +387,6 @@ function getReturnableChallanMetaFields(challan: DeliveryChallanPdfData): Labele
 
 function getPurchaseMetaFields(purchase: PurchasePdfData): LabeledLine[] {
   const lines: LabeledLine[] = [
-    { label: 'Purchase No.', value: purchase.purchase_no, valueBold: true },
     { label: 'Purchase Date', value: formatPdfDate(purchase.date), valueBold: true },
   ]
   if (purchase.due_date) {

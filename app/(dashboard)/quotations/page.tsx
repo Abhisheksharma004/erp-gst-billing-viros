@@ -12,6 +12,7 @@ import { formatCurrency, formatDate } from '@/lib/utils'
 import { ListPageToolbar } from '@/components/shared/list-page-toolbar'
 import { parseJsonResponse } from '@/lib/fetch-json'
 import { DocumentPdfViewer } from '@/components/shared/document-pdf-viewer'
+import { Badge } from '@/components/ui/badge'
 
 interface Quotation {
   id: string
@@ -20,6 +21,21 @@ interface Quotation {
   valid_until?: string
   customer_name: string
   total_amount: number
+  status: string
+}
+
+const STATUS_COLORS: Record<string, 'secondary' | 'default' | 'destructive' | 'outline'> = {
+  DRAFT: 'secondary',
+  SENT: 'outline',
+  ACCEPTED: 'default',
+  REJECTED: 'destructive',
+  CONVERTED: 'default',
+}
+
+function StatusBadge({ status }: { status: string }) {
+  return (
+    <Badge variant={STATUS_COLORS[status] || 'secondary'}>{status}</Badge>
+  )
 }
 
 function QuotationActions({
@@ -128,7 +144,7 @@ export default function QuotationsPage() {
       toast({ title: 'Quotation deleted' })
       fetchQuotations()
     } else {
-      const e = await res.json()
+      const e = await parseJsonResponse<{ error?: string }>(res)
       toast({ title: e.error || 'Error', variant: 'destructive' })
     }
   }
@@ -172,19 +188,20 @@ export default function QuotationsPage() {
                 <TableHead>Date</TableHead>
                 <TableHead>Valid Until</TableHead>
                 <TableHead className="text-right">Amount</TableHead>
+                <TableHead className="text-center">Status</TableHead>
                 <TableHead className="text-right">Actions</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
               {loading ? (
                 <TableRow>
-                  <TableCell colSpan={6} className="text-center py-12 text-muted-foreground">
+                  <TableCell colSpan={7} className="text-center py-12 text-muted-foreground">
                     Loading...
                   </TableCell>
                 </TableRow>
               ) : quotations.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={6} className="text-center py-12 text-muted-foreground">
+                  <TableCell colSpan={7} className="text-center py-12 text-muted-foreground">
                     No quotations found
                   </TableCell>
                 </TableRow>
@@ -196,6 +213,9 @@ export default function QuotationsPage() {
                     <TableCell>{formatDate(q.date)}</TableCell>
                     <TableCell>{q.valid_until ? formatDate(q.valid_until) : '-'}</TableCell>
                     <TableCell className="text-right font-medium">{formatCurrency(q.total_amount)}</TableCell>
+                    <TableCell className="text-center">
+                      <StatusBadge status={q.status} />
+                    </TableCell>
                     <TableCell className="text-right">
                       <QuotationActions
                         id={q.id}
@@ -262,6 +282,13 @@ export default function QuotationsPage() {
                           <span className="font-semibold text-sm text-primary">{formatCurrency(q.total_amount)}</span>
                         </div>
                       </div>
+                    </div>
+
+                    <div className="flex items-center gap-2 border-t bg-muted/40 px-3 py-2.5">
+                      <span className="text-xs text-muted-foreground shrink-0">Status</span>
+                      <span className="ml-auto">
+                        <StatusBadge status={q.status} />
+                      </span>
                     </div>
                   </CardContent>
                 </Card>

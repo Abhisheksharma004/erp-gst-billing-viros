@@ -23,7 +23,7 @@ function mapInvoiceRow(row: Record<string, unknown>) {
 function mapPurchaseRow(row: Record<string, unknown>) {
   return {
     id: row.id,
-    purchaseNo: row.purchase_no,
+    purchaseNo: row.bill_no || '-',
     date: row.date,
     status: row.status,
     totalAmount: row.total_amount,
@@ -122,12 +122,12 @@ export async function GET(req: NextRequest) {
     const where = 'WHERE ' + conditions.join(' AND ')
 
     const [rows] = await db.execute(
-      `SELECT p.id, p.purchase_no, p.date, p.status, p.total_amount, p.paid_amount, p.balance_amount,
+      `SELECT p.id, p.bill_no, p.date, p.status, p.total_amount, p.paid_amount, p.balance_amount,
               p.cgst_amount, p.sgst_amount, p.igst_amount, v.name AS vendor_name
        FROM purchases p
        LEFT JOIN vendors v ON p.vendor_id = v.id
        ${where}
-       ORDER BY p.date DESC, p.purchase_no DESC
+       ORDER BY p.date DESC, p.id DESC
        ${sqlLimitClause(limit)}`,
       params
     ) as [Record<string, unknown>[], unknown]

@@ -22,7 +22,7 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
   if (!rows[0]) return NextResponse.json({ error: 'Not found' }, { status: 404 })
 
   const [purchases] = await db.execute(
-    `SELECT id, purchase_no, date, total_amount, paid_amount, balance_amount, status
+    `SELECT id, bill_no, date, total_amount, paid_amount, balance_amount, status
      FROM purchases WHERE vendor_id = ? AND organization_id = ? ORDER BY date DESC LIMIT 20`,
     [id, organizationId]
   ) as any[]

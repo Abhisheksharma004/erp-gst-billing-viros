@@ -17,7 +17,7 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
     await Promise.all([ensureBusinessSettingsBankingColumns(), ensurePurchaseSchema()])
 
     const [purchaseRows] = await db.execute(
-      `SELECT p.id, p.purchase_no, p.vendor_id, p.date, p.due_date, p.gst_type,
+      `SELECT p.id, p.vendor_id, p.date, p.due_date, p.gst_type,
               p.bill_no, p.bill_date, p.subtotal, p.discount_amount, p.tax_amount,
               p.round_off, p.total_amount, p.paid_amount, p.balance_amount, p.notes, p.terms
        FROM purchases p
@@ -68,7 +68,6 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
 
     const pdfBuffer = generatePurchasePdfBuffer(
       {
-        purchase_no: purchase.purchase_no,
         date: purchase.date,
         due_date: purchase.due_date,
         bill_no: purchase.bill_no,
@@ -119,7 +118,7 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
       copies
     )
 
-    const filename = `${purchase.purchase_no.replace(/[/\\?%*:|"<>]/g, '-')}.pdf`
+    const filename = `${(purchase.bill_no || 'purchase').replace(/[/\\?%*:|"<>]/g, '-')}.pdf`
 
     return new NextResponse(Buffer.from(pdfBuffer), {
       status: 200,

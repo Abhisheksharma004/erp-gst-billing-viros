@@ -162,7 +162,7 @@ export function PurchaseForm({ purchaseId }: { purchaseId?: string }) {
   const isEdit = Boolean(purchaseId)
   const [saving, setSaving] = useState(false)
   const [loadingInitial, setLoadingInitial] = useState(isEdit)
-  const [purchaseNo, setPurchaseNo] = useState('')
+
   const editLoadedRef = useRef(false)
   const [products, setProducts] = useState<Product[]>([])
   const [vendors, setVendors] = useState<Vendor[]>([])
@@ -305,7 +305,7 @@ export function PurchaseForm({ purchaseId }: { purchaseId?: string }) {
         const res = await fetch(`/api/purchases/${purchaseId}`)
         if (!res.ok) throw new Error('Not found')
         const data = await res.json()
-        setPurchaseNo(data.purchase_no || '')
+
         reset({
           vendorId: data.vendor_id,
           date: toDateInput(data.date) || new Date().toISOString().split('T')[0],
@@ -659,9 +659,7 @@ export function PurchaseForm({ purchaseId }: { purchaseId?: string }) {
           <h1 className="text-xl sm:text-2xl font-bold truncate">
             {isEdit ? 'Edit Purchase' : 'New Purchase'}
           </h1>
-          {isEdit && purchaseNo && (
-            <p className="text-sm text-muted-foreground">{purchaseNo}</p>
-          )}
+
         </div>
       </div>
 

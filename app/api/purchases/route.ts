@@ -27,7 +27,7 @@ export async function GET(req: NextRequest) {
 
   const conditions: string[] = []
   const params: any[] = []
-  if (search) { conditions.push('(p.purchase_no LIKE ? OR v.name LIKE ?)'); const s = `%${search}%`; params.push(s, s) }
+  if (search) { conditions.push('(p.bill_no LIKE ? OR v.name LIKE ?)'); const s = `%${search}%`; params.push(s, s) }
   if (status) { conditions.push('p.status = ?'); params.push(status) }
   if (vendorId) { conditions.push('p.vendor_id = ?'); params.push(vendorId) }
   if (fromDate) { conditions.push('p.date >= ?'); params.push(fromDate) }
@@ -67,17 +67,10 @@ export async function POST(req: NextRequest) {
     const gstType = data.gstType
     await conn.beginTransaction()
 
-    const prefix = 'PUR'
-    const numberPrefix = buildDocumentNumberPrefix(prefix, data.date)
-    const [last] = await conn.execute(
-      `SELECT purchase_no FROM purchases WHERE organization_id = ? AND purchase_no LIKE ? ORDER BY CAST(SUBSTRING(purchase_no, ?) AS UNSIGNED) DESC LIMIT 1`,
-      [organizationId, `${numberPrefix}%`, documentSerialSubstringStart(numberPrefix)]
-    ) as any[]
-    const purchaseNo = nextDocumentNumber(prefix, data.date, last[0]?.purchase_no)
+
 
     let subtotal = 0,
       totalDiscount = 0,
-      totalTaxable = 0,
       totalCgst = 0,
       totalSgst = 0,
       totalIgst = 0,
@@ -87,7 +80,6 @@ export async function POST(req: NextRequest) {
       const t = computePurchaseItemTotals(item, gstType)
       subtotal += item.quantity * item.rate
       totalDiscount += t.discAmt
-      totalTaxable += t.taxable
       totalCgst += t.cgst
       totalSgst += t.sgst
       totalIgst += t.igst
@@ -101,12 +93,12 @@ export async function POST(req: NextRequest) {
 
     const id = randomUUID()
     await conn.execute(
-      `INSERT INTO purchases (id, organization_id, purchase_no, vendor_id, date, due_date, gst_type, bill_no, bill_date,
+      `INSERT INTO purchases (id, organization_id, vendor_id, date, due_date, gst_type, bill_no, bill_date,
         subtotal, discount_amount, cgst_amount, sgst_amount, igst_amount, tax_amount, round_off, total_amount,
         paid_amount, balance_amount, payment_mode, notes, terms, status)
-       VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
-      [id, organizationId, purchaseNo, data.vendorId, data.date, data.dueDate || null,
-       gstType, data.billNo || null, data.billDate || null,
+       VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+      [id, organizationId, data.vendorId, data.date, data.dueDate || null,
+       gstType, data.billNo, data.billDate || null,
        subtotal, totalDiscount, totalCgst, totalSgst, totalIgst, totalCgst + totalSgst + totalIgst, roundOff, finalTotal,
        data.paidAmount, finalTotal - data.paidAmount,
        data.paymentMode || null, data.notes || null, data.terms || null,
@@ -136,7 +128,7 @@ export async function POST(req: NextRequest) {
         ) as any[][]
         await conn.execute(
           'INSERT INTO stock_movements (id, product_id, type, quantity, balance_after, reference_type, reference_id, note) VALUES (?,?,?,?,?,?,?,?)',
-          [randomUUID(), item.productId, 'IN', item.quantity, stockRow.current_stock, 'PURCHASE', id, purchaseNo]
+          [randomUUID(), item.productId, 'IN', item.quantity, stockRow.current_stock, 'PURCHASE', id, data.billNo]
         )
       }
     }

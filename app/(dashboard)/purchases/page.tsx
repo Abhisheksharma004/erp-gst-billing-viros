@@ -24,7 +24,6 @@ import { parseJsonResponse } from '@/lib/fetch-json'
 
 interface Purchase {
   id: string
-  purchase_no: string
   date: string
   vendor_name: string
   total_amount: number
@@ -144,21 +143,22 @@ export default function PurchasesPage() {
   }, [fetchPurchases])
 
   const handleView = (p: Purchase) => {
-    const safeName = p.purchase_no.replace(/[/\\?%*:|"<>]/g, '-')
-    setPdfViewerTitle(p.purchase_no)
+    const displayNo = p.bill_no || '-'
+    const safeName = displayNo.replace(/[/\\?%*:|"<>]/g, '-')
+    setPdfViewerTitle(displayNo)
     setPdfViewerFilename(`${safeName}.pdf`)
     setPdfViewerUrl(`/api/purchases/${p.id}/pdf`)
     setPdfViewerOpen(true)
   }
 
-  const handleDelete = async (id: string, purchaseNo: string) => {
-    if (!confirm(`Delete purchase "${purchaseNo}"? Stock will be reversed.`)) return
+  const handleDelete = async (id: string, billNo: string) => {
+    if (!confirm(`Delete bill "${billNo}"? Stock will be reversed.`)) return
     const res = await fetch(`/api/purchases/${id}`, { method: 'DELETE' })
     if (res.ok) {
       toast({ title: 'Purchase deleted' })
       fetchPurchases()
     } else {
-      const err = await res.json()
+      const err = await parseJsonResponse<{ error?: string }>(res)
       toast({ title: 'Error', description: err.error || 'Cannot delete', variant: 'destructive' })
     }
   }
@@ -194,7 +194,7 @@ export default function PurchasesPage() {
                   <ShoppingCart className="w-4 h-4 text-emerald-600" />
                 </div>
                 <div className="min-w-0 flex-1">
-                  <p className="font-medium text-sm leading-snug">{p.purchase_no}</p>
+                  <p className="font-medium text-sm leading-snug">{p.bill_no || '-'}</p>
                   <p className="text-xs text-muted-foreground mt-0.5 break-words">{p.vendor_name}</p>
                 </div>
               </div>
@@ -202,7 +202,7 @@ export default function PurchasesPage() {
                 compact
                 purchaseId={p.id}
                 onView={() => handleView(p)}
-                onDelete={() => handleDelete(p.id, p.purchase_no)}
+                onDelete={() => handleDelete(p.id, p.bill_no || '-')}
               />
             </div>
 
@@ -232,7 +232,7 @@ export default function PurchasesPage() {
   return (
     <div className="space-y-4 md:space-y-6 min-w-0">
       <ListPageToolbar
-        searchPlaceholder="Vendor or purchase no..."
+        searchPlaceholder="Vendor or bill no..."
         search={search}
         onSearchChange={(v) => { setSearch(v); setPage(1) }}
         addLabel="New Purchase"
@@ -300,27 +300,31 @@ export default function PurchasesPage() {
             <Table>
               <TableHeader>
                 <TableRow>
-                  <TableHead>Purchase No</TableHead>
+                  <TableHead>Bill No</TableHead>
                   <TableHead>Vendor</TableHead>
                   <TableHead>Date</TableHead>
                   <TableHead className="text-right">Amount</TableHead>
+                  <TableHead className="text-center">Status</TableHead>
                   <TableHead className="text-center w-[132px]">Actions</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {purchases.map((p) => (
                   <TableRow key={p.id}>
-                    <TableCell className="font-medium whitespace-nowrap">{p.purchase_no}</TableCell>
+                    <TableCell className="font-medium whitespace-nowrap">{p.bill_no || '-'}</TableCell>
                     <TableCell className="max-w-[180px] truncate">{p.vendor_name}</TableCell>
                     <TableCell className="whitespace-nowrap">{formatDate(p.date)}</TableCell>
                     <TableCell className="text-right font-medium whitespace-nowrap">
                       {formatCurrency(p.total_amount)}
                     </TableCell>
                     <TableCell className="text-center">
+                      <StatusBadge status={p.status} />
+                    </TableCell>
+                    <TableCell className="text-center">
                       <PurchaseActions
                         purchaseId={p.id}
                         onView={() => handleView(p)}
-                        onDelete={() => handleDelete(p.id, p.purchase_no)}
+                        onDelete={() => handleDelete(p.id, p.bill_no || '-')}
                       />
                     </TableCell>
                   </TableRow>

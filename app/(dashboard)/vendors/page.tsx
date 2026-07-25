@@ -36,7 +36,7 @@ interface Vendor {
 
 interface VendorPurchase {
   id: string
-  purchase_no: string
+  bill_no?: string | null
   date: string
   total_amount: number
   paid_amount: number
@@ -448,7 +448,7 @@ export default function VendorsPage() {
                       {viewing.purchases.map((p) => (
                         <div key={p.id} className="flex justify-between gap-2 px-3 py-2">
                           <div className="min-w-0">
-                            <p className="font-medium truncate">{p.purchase_no}</p>
+                            <p className="font-medium truncate">{p.bill_no || '-'}</p>
                             <p className="text-xs text-muted-foreground">{p.date}</p>
                           </div>
                           <div className="text-right shrink-0">

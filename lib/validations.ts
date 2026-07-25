@@ -331,7 +331,7 @@ export const purchaseSchema = z.object({
   date: z.string().or(z.date()),
   dueDate: z.string().or(z.date()).optional(),
   gstType: z.enum(['CGST_SGST', 'IGST', 'EXEMPT']).default('CGST_SGST'),
-  billNo: z.string().optional(),
+  billNo: z.string().min(1, 'Bill number is required'),
   billDate: z.string().or(z.date()).optional(),
   paymentMode: z
     .enum(['CASH', 'CHEQUE', 'BANK_TRANSFER', 'UPI', 'CARD', 'CREDIT', 'OTHER'])

@@ -36,7 +36,7 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
 async function insertPurchaseItems(
   conn: Awaited<ReturnType<typeof db.getConnection>>,
   purchaseId: string,
-  purchaseNo: string,
+  billNo: string,
   itemsWithTotals: any[],
   gstType: string,
   organizationId: string
@@ -64,7 +64,7 @@ async function insertPurchaseItems(
       ) as any[][]
       await conn.execute(
         'INSERT INTO stock_movements (id, product_id, type, quantity, balance_after, reference_type, reference_id, note) VALUES (?,?,?,?,?,?,?,?)',
-        [randomUUID(), item.productId, 'IN', item.quantity, stockRow.current_stock, 'PURCHASE', purchaseId, purchaseNo]
+        [randomUUID(), item.productId, 'IN', item.quantity, stockRow.current_stock, 'PURCHASE', purchaseId, billNo]
       )
     }
   }
@@ -116,7 +116,6 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
     if (!existingRows[0]) return NextResponse.json({ error: 'Not found' }, { status: 404 })
 
     const existing = existingRows[0]
-    const purchaseNo = existing.purchase_no
 
     await conn.beginTransaction()
 
@@ -171,7 +170,7 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
        id, organizationId]
     )
 
-    await insertPurchaseItems(conn, id, purchaseNo, itemsWithTotals, gstType, organizationId!)
+    await insertPurchaseItems(conn, id, data.billNo, itemsWithTotals, gstType, organizationId!)
 
     await conn.commit()
     const [rows] = await db.execute(
