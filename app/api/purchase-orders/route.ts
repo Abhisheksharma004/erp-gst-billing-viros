@@ -75,6 +75,22 @@ export async function POST(req: NextRequest) {
     ) as any[]
     const prefix = settings[0]?.purchase_order_prefix || 'PO'
     const numberPrefix = buildDocumentNumberPrefix(prefix, data.date)
+
+    let subtotal = 0, totalDiscount = 0, totalTaxable = 0, totalCgst = 0, totalSgst = 0, totalIgst = 0, grandTotal = 0
+    const itemsWithTotals = data.items.map((item: any) => {
+      const normalized = normalizePurchaseDocumentItem(item, includePricing)
+      const t = computeItemTotals(normalized, gstType)
+      subtotal += normalized.quantity * normalized.rate
+      totalDiscount += t.discAmt
+      totalTaxable += t.taxable
+      totalCgst += t.cgst
+      totalSgst += t.sgst
+      totalIgst += t.igst
+      grandTotal += t.total
+      return { ...normalized, ...t }
+    })
+    const id = randomUUID()
+
     // Retry loop: MAX() serial + retry on duplicate to avoid ordering bugs & race conditions
     let poNo = ''
     let inserted = false
