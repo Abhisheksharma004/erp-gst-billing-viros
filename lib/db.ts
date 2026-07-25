@@ -15,6 +15,8 @@ const poolOptions: mysql.PoolOptions = {
   connectionLimit: 10,
   queueLimit: 0,
   timezone: '+00:00',
+  enableKeepAlive: true,
+  keepAliveInitialDelay: 10000,
 }
 
 const poolKey = [
