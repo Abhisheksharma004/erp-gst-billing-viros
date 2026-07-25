@@ -73,5 +73,14 @@ export async function ensureDeliveryChallanSchema(): Promise<void> {
     )
   }
 
+  // Make product_id nullable so challans can be created without a linked product
+  try {
+    await db.execute(
+      'ALTER TABLE challan_items MODIFY COLUMN product_id VARCHAR(36) NULL'
+    )
+  } catch {
+    // ignore if already nullable or other benign error
+  }
+
   schemaReady = true
 }

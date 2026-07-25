@@ -132,7 +132,9 @@ export async function POST(req: NextRequest) {
   } catch (err: any) {
     await conn.rollback()
     if (err.name === 'ZodError') return NextResponse.json({ error: err.errors }, { status: 400 })
-    return NextResponse.json({ error: 'Internal server error' }, { status: 500 })
+    console.error('[POST /api/delivery-challans] error:', err?.sqlMessage ?? err?.message ?? err)
+    const message = err?.sqlMessage || err?.message || 'Internal server error'
+    return NextResponse.json({ error: message }, { status: 500 })
   } finally {
     conn.release()
   }
