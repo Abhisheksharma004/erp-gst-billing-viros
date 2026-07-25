@@ -59,31 +59,41 @@ export async function POST(req: NextRequest) {
     ) as any[]
     const prefix = settings[0]?.challan_prefix || 'DC'
     const numberPrefix = buildDocumentNumberPrefix(prefix, data.date)
-    const [last] = await conn.execute(
-      `SELECT challan_no FROM delivery_challans WHERE organization_id = ? AND challan_no LIKE ? ORDER BY CAST(SUBSTRING(challan_no, ?) AS UNSIGNED) DESC LIMIT 1`,
-      [organizationId, `${numberPrefix}%`, documentSerialSubstringStart(numberPrefix)]
-    ) as any[]
-    const challanNo = nextDocumentNumber(prefix, data.date, last[0]?.challan_no)
     const partyDetailsJson = data.partyDetails ? JSON.stringify(data.partyDetails) : null
-
     const id = randomUUID()
-    await conn.execute(
-      `INSERT INTO delivery_challans (
-        id, organization_id, challan_no, customer_id, date, completion_date, party_details, terms, include_pricing, status
-      ) VALUES (?,?,?,?,?,?,?,?,?,?)`,
-      [
-        id,
-        organizationId,
-        challanNo,
-        data.customerId,
-        data.date,
-        data.completionDate || null,
-        partyDetailsJson,
-        data.terms || null,
-        data.includePricing ? 1 : 0,
-        'PENDING',
-      ]
-    )
+
+    // Retry loop to handle duplicate challan_no (race condition or ordering issues)
+    let challanNo = ''
+    let inserted = false
+    for (let attempt = 0; attempt < 10 && !inserted; attempt++) {
+      // Use MAX to correctly find the highest serial number
+      const [maxRow] = await conn.execute(
+        `SELECT MAX(CAST(SUBSTRING(challan_no, ?) AS UNSIGNED)) AS maxSerial
+         FROM delivery_challans
+         WHERE organization_id = ? AND challan_no LIKE ?`,
+        [documentSerialSubstringStart(numberPrefix), organizationId, `${numberPrefix}%`]
+      ) as any[]
+      const maxSerial: number = Number(maxRow[0]?.maxSerial) || 0
+      challanNo = `${numberPrefix}${maxSerial + 1 + attempt}`
+
+      try {
+        await conn.execute(
+          `INSERT INTO delivery_challans (
+            id, organization_id, challan_no, customer_id, date, completion_date, party_details, terms, include_pricing, status
+          ) VALUES (?,?,?,?,?,?,?,?,?,?)`,
+          [
+            id, organizationId, challanNo, data.customerId, data.date,
+            data.completionDate || null, partyDetailsJson, data.terms || null,
+            data.includePricing ? 1 : 0, 'PENDING',
+          ]
+        )
+        inserted = true
+      } catch (dupErr: any) {
+        if (dupErr?.errno !== 1062) throw dupErr // rethrow non-duplicate errors
+        // duplicate key — loop will try next serial
+      }
+    }
+    if (!inserted) throw new Error('Could not generate a unique challan number after 10 attempts')
 
     for (const item of data.items) {
       let productName = item.description || 'Item'
@@ -98,25 +108,15 @@ export async function POST(req: NextRequest) {
       const discount = data.includePricing ? item.discount || 0 : 0
       const gstRate = data.includePricing ? item.gstRate || 0 : 0
       const totals = computeSalesDocumentItemTotals(
-        {
-          quantity: item.quantity,
-          rate,
-          discount,
-          gstRate,
-        },
+        { quantity: item.quantity, rate, discount, gstRate },
         'CGST_SGST'
       )
       await conn.execute(
         'INSERT INTO challan_items (id, challan_id, product_id, description, quantity, rate, discount, gst_rate, gst_amount, amount) VALUES (?,?,?,?,?,?,?,?,?,?)',
         [
-          randomUUID(),
-          id,
-          item.productId || null,
+          randomUUID(), id, item.productId || null,
           item.description || productName,
-          item.quantity,
-          rate,
-          discount,
-          gstRate,
+          item.quantity, rate, discount, gstRate,
           totals.cgst + totals.sgst + totals.igst,
           totals.total,
         ]
