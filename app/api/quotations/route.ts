@@ -73,39 +73,42 @@ export async function POST(req: NextRequest) {
     ) as any[]
     const prefix = settings[0]?.quotation_prefix || 'QT'
     const numberPrefix = buildDocumentNumberPrefix(prefix, data.date)
-    const [last] = await conn.execute(
-      `SELECT quotation_no FROM quotations WHERE organization_id = ? AND quotation_no LIKE ? ORDER BY CAST(SUBSTRING(quotation_no, ?) AS UNSIGNED) DESC LIMIT 1`,
-      [organizationId, `${numberPrefix}%`, documentSerialSubstringStart(numberPrefix)]
-    ) as any[]
-    const quotationNo = nextDocumentNumber(prefix, data.date, last[0]?.quotation_no)
 
     const gstType = data.gstType || 'CGST_SGST'
     const totals = buildQuotationTotals(data.items, gstType)
     const id = randomUUID()
     const partyDetailsJson = data.partyDetails ? JSON.stringify(data.partyDetails) : null
 
-    await conn.execute(
-      `INSERT INTO quotations (id, organization_id, quotation_no, customer_id, date, valid_until, gst_type, subtotal,
-        discount_amount, tax_amount, round_off, total_amount, notes, terms, party_details)
-       VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
-      [
-        id,
-        organizationId,
-        quotationNo,
-        data.customerId,
-        data.date,
-        data.validUntil || null,
-        gstType,
-        totals.subtotal,
-        totals.totalDiscount,
-        totals.taxAmount,
-        totals.roundOff,
-        totals.grandTotal,
-        data.notes || null,
-        data.terms || null,
-        partyDetailsJson,
-      ]
-    )
+    // Retry loop: MAX() serial + retry on duplicate to avoid ordering bugs & race conditions
+    let quotationNo = ''
+    let inserted = false
+    for (let attempt = 0; attempt < 10 && !inserted; attempt++) {
+      const [maxRow] = await conn.execute(
+        `SELECT MAX(CAST(SUBSTRING(quotation_no, ?) AS UNSIGNED)) AS maxSerial
+         FROM quotations WHERE organization_id = ? AND quotation_no LIKE ?`,
+        [documentSerialSubstringStart(numberPrefix), organizationId, `${numberPrefix}%`]
+      ) as any[]
+      const maxSerial: number = Number(maxRow[0]?.maxSerial) || 0
+      quotationNo = `${numberPrefix}${maxSerial + 1 + attempt}`
+
+      try {
+        await conn.execute(
+          `INSERT INTO quotations (id, organization_id, quotation_no, customer_id, date, valid_until, gst_type, subtotal,
+            discount_amount, tax_amount, round_off, total_amount, notes, terms, party_details)
+           VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+          [
+            id, organizationId, quotationNo, data.customerId, data.date,
+            data.validUntil || null, gstType, totals.subtotal, totals.totalDiscount,
+            totals.taxAmount, totals.roundOff, totals.grandTotal,
+            data.notes || null, data.terms || null, partyDetailsJson,
+          ]
+        )
+        inserted = true
+      } catch (dupErr: any) {
+        if (dupErr?.errno !== 1062) throw dupErr
+      }
+    }
+    if (!inserted) throw new Error('Could not generate a unique quotation number after 10 attempts')
 
     await insertQuotationItems(conn, id, totals.itemsWithTotals)
     await conn.commit()

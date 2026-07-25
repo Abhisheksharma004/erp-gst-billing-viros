@@ -75,35 +75,33 @@ export async function POST(req: NextRequest) {
     ) as any[]
     const prefix = settings[0]?.purchase_order_prefix || 'PO'
     const numberPrefix = buildDocumentNumberPrefix(prefix, data.date)
-    const [last] = await conn.execute(
-      `SELECT po_no FROM purchase_orders WHERE organization_id = ? AND po_no LIKE ? ORDER BY CAST(SUBSTRING(po_no, ?) AS UNSIGNED) DESC LIMIT 1`,
-      [organizationId, `${numberPrefix}%`, documentSerialSubstringStart(numberPrefix)]
-    ) as any[]
-    const poNo = nextDocumentNumber(prefix, data.date, last[0]?.po_no)
+    // Retry loop: MAX() serial + retry on duplicate to avoid ordering bugs & race conditions
+    let poNo = ''
+    let inserted = false
+    for (let attempt = 0; attempt < 10 && !inserted; attempt++) {
+      const [maxRow] = await conn.execute(
+        `SELECT MAX(CAST(SUBSTRING(po_no, ?) AS UNSIGNED)) AS maxSerial
+         FROM purchase_orders WHERE organization_id = ? AND po_no LIKE ?`,
+        [documentSerialSubstringStart(numberPrefix), organizationId, `${numberPrefix}%`]
+      ) as any[]
+      const maxSerial: number = Number(maxRow[0]?.maxSerial) || 0
+      poNo = `${numberPrefix}${maxSerial + 1 + attempt}`
 
-    let subtotal = 0, totalDiscount = 0, totalTaxable = 0, totalCgst = 0, totalSgst = 0, totalIgst = 0, grandTotal = 0
-    const itemsWithTotals = data.items.map((item: any) => {
-      const normalized = normalizePurchaseDocumentItem(item, includePricing)
-      const t = computeItemTotals(normalized, gstType)
-      subtotal += normalized.quantity * normalized.rate
-      totalDiscount += t.discAmt
-      totalTaxable += t.taxable
-      totalCgst += t.cgst
-      totalSgst += t.sgst
-      totalIgst += t.igst
-      grandTotal += t.total
-      return { ...normalized, ...t }
-    })
-
-    const id = randomUUID()
-    await conn.execute(
-      `INSERT INTO purchase_orders (id, organization_id, po_no, vendor_id, date, expected_date, subtotal,
-        discount_amount, tax_amount, total_amount, notes, terms, include_pricing, status)
-       VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
-      [id, organizationId, poNo, data.vendorId, data.date, data.expectedDate || null,
-       subtotal, totalDiscount, totalCgst + totalSgst + totalIgst, grandTotal,
-       data.notes || null, data.terms || null, includePricing ? 1 : 0, 'PENDING']
-    )
+      try {
+        await conn.execute(
+          `INSERT INTO purchase_orders (id, organization_id, po_no, vendor_id, date, expected_date, subtotal,
+            discount_amount, tax_amount, total_amount, notes, terms, include_pricing, status)
+           VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+          [id, organizationId, poNo, data.vendorId, data.date, data.expectedDate || null,
+           subtotal, totalDiscount, totalCgst + totalSgst + totalIgst, grandTotal,
+           data.notes || null, data.terms || null, includePricing ? 1 : 0, 'PENDING']
+        )
+        inserted = true
+      } catch (dupErr: any) {
+        if (dupErr?.errno !== 1062) throw dupErr
+      }
+    }
+    if (!inserted) throw new Error('Could not generate a unique PO number after 10 attempts')
 
     for (const item of itemsWithTotals) {
       await conn.execute(
@@ -125,7 +123,9 @@ export async function POST(req: NextRequest) {
   } catch (err: any) {
     await conn.rollback()
     if (err.name === 'ZodError') return NextResponse.json({ error: err.errors }, { status: 400 })
-    return NextResponse.json({ error: 'Internal server error' }, { status: 500 })
+    console.error('[POST /api/purchase-orders] error:', err?.sqlMessage ?? err?.message ?? err)
+    const message = err?.sqlMessage || err?.message || 'Internal server error'
+    return NextResponse.json({ error: message }, { status: 500 })
   } finally {
     conn.release()
   }
