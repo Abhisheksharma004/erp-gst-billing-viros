@@ -4,6 +4,20 @@ let purchaseSchemaReady = false
 
 export async function ensurePurchaseSchema(): Promise<void> {
   if (purchaseSchemaReady) return
+
+  // Drop legacy purchase_no column if it still exists (migration: replaced by bill_no)
+  try {
+    await db.execute('ALTER TABLE purchases DROP COLUMN purchase_no')
+  } catch (e: unknown) {
+    const err = e as { code?: string; errno?: number; message?: string }
+    const msg = String(err?.message ?? '')
+    const alreadyGone =
+      err?.code === 'ER_CANT_DROP_FIELD_OR_KEY' ||
+      err?.errno === 1091 ||
+      /can't drop.*check that.*exists/i.test(msg)
+    if (!alreadyGone) console.warn('[ensurePurchaseSchema] DROP purchase_no:', msg)
+  }
+
   try {
     await db.execute(
       'ALTER TABLE purchases ADD COLUMN round_off DECIMAL(10,2) NOT NULL DEFAULT 0 AFTER tax_amount'

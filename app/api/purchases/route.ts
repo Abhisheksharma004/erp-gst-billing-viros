@@ -8,7 +8,6 @@ import { computePurchaseItemTotals } from '@/lib/purchase-totals'
 import { roundToTwo } from '@/lib/utils'
 import { randomUUID } from 'crypto'
 import { apiErrorResponse } from '@/lib/api-error'
-import { buildDocumentNumberPrefix, documentSerialSubstringStart, nextDocumentNumber } from '@/lib/document-number'
 import { assertVendorInOrg } from '@/lib/org-entity'
 
 export async function GET(req: NextRequest) {
@@ -142,11 +141,8 @@ export async function POST(req: NextRequest) {
   } catch (err: any) {
     await conn.rollback()
     if (err.name === 'ZodError') return NextResponse.json({ error: err.errors }, { status: 400 })
-    console.error(err)
-    const message =
-      process.env.NODE_ENV === 'development' && err?.sqlMessage
-        ? err.sqlMessage
-        : 'Internal server error'
+    console.error('[POST /api/purchases] error:', err?.sqlMessage ?? err?.message ?? err)
+    const message = err?.sqlMessage || err?.message || 'Internal server error'
     return NextResponse.json({ error: message }, { status: 500 })
   } finally {
     conn.release()
