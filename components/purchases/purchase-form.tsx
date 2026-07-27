@@ -10,6 +10,7 @@ import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
+import { Separator } from '@/components/ui/separator'
 import { useToast, toastSuccessNavigate } from '@/hooks/use-toast'
 import { useDefaultDocumentTerms } from '@/hooks/use-default-document-terms'
 import { DocumentTermsField } from '@/components/shared/document-terms-field'
@@ -24,6 +25,10 @@ import {
   type PartyFieldErrors,
   validatePartyContactFields,
 } from '@/lib/field-validation'
+
+function isPaymentModeActive(mode?: string | null): boolean {
+  return Boolean(mode && mode !== 'NONE' && mode !== '')
+}
 
 interface Product {
   id: string
@@ -179,7 +184,8 @@ export function PurchaseForm({ purchaseId }: { purchaseId?: string }) {
       date: new Date().toISOString().split('T')[0],
       gstType: 'CGST_SGST',
       paidAmount: 0,
-      paymentMode: 'CASH',
+      paymentMode: '',
+      paymentRef: '',
       roundOff: 0,
       items: [{ productId: '', description: '', quantity: 1, rate: 0, discount: 0, roundOff: 0, gstRate: 18 }],
     },
@@ -189,6 +195,7 @@ export function PurchaseForm({ purchaseId }: { purchaseId?: string }) {
   const watchedItems = watch('items')
   const gstType = watch('gstType')
   const paymentMode = watch('paymentMode')
+  const paymentRef = watch('paymentRef')
   const prevCalcItemsRef = useRef<PurchaseInput['items']>()
 
   const applyDefaultTerms = useCallback(
@@ -313,8 +320,9 @@ export function PurchaseForm({ purchaseId }: { purchaseId?: string }) {
           gstType: data.gst_type || 'CGST_SGST',
           billNo: data.bill_no || '',
           billDate: toDateInput(data.bill_date),
-          paymentMode: data.payment_mode || 'CASH',
-          paidAmount: Number(data.paid_amount) || 0,
+          paymentMode: data.payment_mode || '',
+          paymentRef: data.payment_ref || '',
+          paidAmount: data.payment_mode ? (Number(data.paid_amount) || 0) : 0,
           notes: data.notes || '',
           terms: data.terms || '',
           roundOff: Number(data.round_off) || 0,
@@ -580,15 +588,59 @@ export function PurchaseForm({ purchaseId }: { purchaseId?: string }) {
 
   const totals = computeTotals()
 
+  const [vendorAdvance, setVendorAdvance] = useState(0)
+  const [advanceAmount, setAdvanceAmount] = useState(0)
+  const [adjustAdvance, setAdjustAdvance] = useState(false)
+
+  const selectedVendorId = watch('vendorId')
+
+  useEffect(() => {
+    if (!selectedVendorId) {
+      setVendorAdvance(0)
+      setAdvanceAmount(0)
+      setAdjustAdvance(false)
+      return
+    }
+    fetch(`/api/payments/party-due?partyType=VENDOR&partyId=${selectedVendorId}`)
+      .then((r) => r.json())
+      .then((d) => {
+        setVendorAdvance(Number(d.advanceBalance) || 0)
+      })
+      .catch(() => setVendorAdvance(0))
+  }, [selectedVendorId])
+
+  useEffect(() => {
+    if (adjustAdvance) {
+      const maxAdjustable = Math.min(vendorAdvance, totals.grandTotal)
+      setAdvanceAmount(maxAdjustable)
+    } else {
+      setAdvanceAmount(0)
+    }
+  }, [adjustAdvance, vendorAdvance, totals.grandTotal])
+
   useEffect(() => {
     setValue('roundOff', totals.totalRoundOff)
   }, [totals.totalRoundOff, setValue])
+
+  useEffect(() => {
+    if (isPaymentModeActive(paymentMode)) {
+      setValue('paidAmount', totals.grandTotal)
+    } else {
+      setValue('paidAmount', 0)
+    }
+  }, [paymentMode, totals.grandTotal, setValue])
 
   const validateBeforeSubmit = (data: PurchaseInput): string | null => {
     const ids = data.items.map((i) => i.productId).filter(Boolean)
     if (new Set(ids).size !== ids.length) return 'Duplicate products are not allowed'
     if (ids.length !== data.items.length) return 'Please select a product for every line item'
     if (!data.vendorId) return 'Please select a vendor from the list'
+
+    if (isPaymentModeActive(data.paymentMode)) {
+      if (!data.paymentRef || data.paymentRef.trim() === '') {
+        return 'Ref# is required when Payment Mode is selected'
+      }
+    }
 
     const vendorErrors = validatePartyContactFields(vendorFields)
     setVendorContactErrors(vendorErrors)
@@ -604,8 +656,13 @@ export function PurchaseForm({ purchaseId }: { purchaseId?: string }) {
     }
     setSaving(true)
     try {
+      const isPaidMode = isPaymentModeActive(data.paymentMode)
       const payload: PurchaseInput = {
         ...data,
+        paymentMode: isPaidMode ? data.paymentMode : '',
+        paymentRef: isPaidMode ? data.paymentRef?.trim() : '',
+        paidAmount: isPaidMode ? totals.grandTotal : 0,
+        advanceAmount: adjustAdvance ? advanceAmount : 0,
         items: data.items.map((item, idx) => {
           const fieldId = fields[idx]?.id
           const meta = fieldId ? itemMeta[fieldId] : undefined
@@ -669,7 +726,7 @@ export function PurchaseForm({ purchaseId }: { purchaseId?: string }) {
             <CardTitle className="text-base">Purchase Details</CardTitle>
           </CardHeader>
           <CardContent className="space-y-5">
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
               <div className="space-y-2">
                 <Label>Date *</Label>
                 <Input type="date" className="h-9" {...register('date')} />
@@ -682,24 +739,6 @@ export function PurchaseForm({ purchaseId }: { purchaseId?: string }) {
               <div className="space-y-2">
                 <Label>Bill Number</Label>
                 <Input className="h-9" {...register('billNo')} placeholder="Vendor bill number" />
-              </div>
-              <div className="space-y-2">
-                <Label>Payment Mode</Label>
-                <Select
-                  value={paymentMode}
-                  onValueChange={(v) => setValue('paymentMode', v as PurchaseInput['paymentMode'])}
-                >
-                  <SelectTrigger className="h-9">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="CASH">Cash</SelectItem>
-                    <SelectItem value="CHEQUE">Cheque</SelectItem>
-                    <SelectItem value="BANK_TRANSFER">Bank Transfer</SelectItem>
-                    <SelectItem value="UPI">UPI</SelectItem>
-                    <SelectItem value="CREDIT">Credit</SelectItem>
-                  </SelectContent>
-                </Select>
               </div>
             </div>
 
@@ -1044,14 +1083,97 @@ export function PurchaseForm({ purchaseId }: { purchaseId?: string }) {
           </Card>
 
           <Card className="shadow-md border-primary/10 w-full lg:max-w-none">
-            <CardHeader className="pb-2 bg-muted/40">
-              <CardTitle className="text-base">Summary</CardTitle>
-            </CardHeader>
-            <CardContent className="p-4 space-y-2">
-            <div className="flex justify-between text-sm">
-              <span className="text-muted-foreground">Taxable Amount</span>
-              <span>{formatCurrency(totals.taxable)}</span>
-            </div>
+            <CardContent className="p-4 space-y-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <Label>Payment Mode</Label>
+                  <Select
+                    value={paymentMode || 'NONE'}
+                    onValueChange={(v) => {
+                      const mode = v === 'NONE' ? '' : v
+                      setValue('paymentMode', mode as PurchaseInput['paymentMode'])
+                      if (!mode) setValue('paymentRef', '')
+                    }}
+                  >
+                    <SelectTrigger className="h-9">
+                      <SelectValue placeholder="-- Select Payment Mode --" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="NONE">-- Select Payment Mode --</SelectItem>
+                      <SelectItem value="BANK_TRANSFER">Bank Transfer</SelectItem>
+                      <SelectItem value="UPI">UPI</SelectItem>
+                      <SelectItem value="CASH">Cash</SelectItem>
+                      <SelectItem value="CHEQUE">Cheque</SelectItem>
+                      <SelectItem value="CARD">Credit / Debit Card</SelectItem>
+                      <SelectItem value="OTHER">Other</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="space-y-2">
+                  <Label>
+                    Ref#{isPaymentModeActive(paymentMode) ? <span className="text-destructive"> *</span> : ''}
+                  </Label>
+                  <Input
+                    className="h-9"
+                    placeholder={isPaymentModeActive(paymentMode) ? "Enter Ref# / UTR / Txn ID..." : "Ref#"}
+                    disabled={!isPaymentModeActive(paymentMode)}
+                    {...register('paymentRef')}
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label>Paid Amount (₹)</Label>
+                  <Input
+                    type="number"
+                    step="0.01"
+                    className={cn("h-9", !isPaymentModeActive(paymentMode) && "bg-muted/60")}
+                    readOnly={!isPaymentModeActive(paymentMode)}
+                    {...register('paidAmount', { valueAsNumber: true })}
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label>Notes</Label>
+                  <Input className="h-9" placeholder="Optional notes..." {...register('notes')} />
+                </div>
+                {vendorAdvance > 0 && (
+                  <div className="col-span-1 sm:col-span-2 p-3 bg-amber-50 border border-amber-200 dark:bg-amber-950 dark:border-amber-800 rounded-md space-y-2">
+                    <div className="flex items-center justify-between text-xs sm:text-sm">
+                      <span className="font-semibold text-amber-800 dark:text-amber-300 flex items-center gap-1.5">
+                        ✨ Unallocated Advance Available: ₹{vendorAdvance.toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+                      </span>
+                      <label className="flex items-center gap-2 cursor-pointer font-medium text-amber-900 dark:text-amber-200">
+                        <input
+                          type="checkbox"
+                          checked={adjustAdvance}
+                          onChange={(e) => setAdjustAdvance(e.target.checked)}
+                          className="h-4 w-4 rounded border-amber-400 text-amber-600 focus:ring-amber-500"
+                        />
+                        Adjust Advance
+                      </label>
+                    </div>
+                    {adjustAdvance && (
+                      <div className="flex items-center gap-2 pt-1">
+                        <Label className="text-xs shrink-0 text-amber-900 dark:text-amber-200">Adjust Amount (₹):</Label>
+                        <Input
+                          type="number"
+                          step="0.01"
+                          max={Math.min(vendorAdvance, totals.grandTotal)}
+                          value={advanceAmount}
+                          onChange={(e) => setAdvanceAmount(Math.min(vendorAdvance, Math.max(0, Number(e.target.value) || 0)))}
+                          className="h-8 bg-white dark:bg-slate-900 text-xs w-36"
+                        />
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
+              <Separator />
+              <div className="space-y-2">
+                <p className="text-base font-semibold">Summary</p>
+                <div className="space-y-2">
+                  <div className="flex justify-between text-sm">
+                    <span className="text-muted-foreground">Taxable Amount</span>
+                    <span>{formatCurrency(totals.taxable)}</span>
+                  </div>
             {gstType === 'CGST_SGST' && (
               <>
                 <div className="flex justify-between text-sm">
@@ -1089,6 +1211,8 @@ export function PurchaseForm({ purchaseId }: { purchaseId?: string }) {
               <span>Grand Total</span>
               <span className="text-primary">{formatCurrency(totals.grandTotal)}</span>
             </div>
+                </div>
+              </div>
           </CardContent>
         </Card>
         </div>

@@ -4,7 +4,7 @@ import { useEffect, useState, useCallback, useRef } from 'react'
 import dynamic from 'next/dynamic'
 import Link from 'next/link'
 import {
-  TrendingUp, ShoppingCart, FileText, AlertTriangle
+  TrendingUp, ShoppingCart, FileText, AlertTriangle, ArrowDownLeft, ArrowUpRight, Wallet
 } from 'lucide-react'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
@@ -35,6 +35,11 @@ interface DashboardStats {
   purchasesThisMonth: { amount: number; count: number }
   pendingQuotations: number
   lowStockCount: number
+  paymentsSummary?: {
+    totalInward: number
+    totalOutward: number
+    netCashflow: number
+  }
   chartType: 'monthly' | 'daily'
   chartYear: number
   chartMonth: string | null
@@ -257,6 +262,80 @@ export default function DashboardPage() {
           href="/inventory"
         />
       </div>
+
+      {/* Monthly Payments & Cash Flow Summary Cards */}
+      {stats.paymentsSummary && (
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-3 md:gap-4">
+          <Link href="/payments?type=INWARD" className="block group">
+            <Card className="border-l-4 border-l-emerald-500 shadow-sm transition-shadow hover:shadow-md cursor-pointer h-full">
+              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                <CardTitle className="text-sm font-medium text-muted-foreground">
+                  Total Inward (Received)
+                </CardTitle>
+                <div className="rounded-full bg-emerald-100 dark:bg-emerald-950 p-2 text-emerald-600">
+                  <ArrowDownLeft className="h-4 w-4" />
+                </div>
+              </CardHeader>
+              <CardContent>
+                <div className="text-2xl font-bold text-emerald-600 dark:text-emerald-400">
+                  {formatCurrency(stats.paymentsSummary.totalInward)}
+                </div>
+                <p className="text-xs text-muted-foreground mt-1">
+                  Payments collected from customers ({periodLabel})
+                </p>
+              </CardContent>
+            </Card>
+          </Link>
+
+          <Link href="/payments?type=OUTWARD" className="block group">
+            <Card className="border-l-4 border-l-blue-500 shadow-sm transition-shadow hover:shadow-md cursor-pointer h-full">
+              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                <CardTitle className="text-sm font-medium text-muted-foreground">
+                  Total Outward (Paid)
+                </CardTitle>
+                <div className="rounded-full bg-blue-100 dark:bg-blue-950 p-2 text-blue-600">
+                  <ArrowUpRight className="h-4 w-4" />
+                </div>
+              </CardHeader>
+              <CardContent>
+                <div className="text-2xl font-bold text-blue-600 dark:text-blue-400">
+                  {formatCurrency(stats.paymentsSummary.totalOutward)}
+                </div>
+                <p className="text-xs text-muted-foreground mt-1">
+                  Payments disbursed to vendors ({periodLabel})
+                </p>
+              </CardContent>
+            </Card>
+          </Link>
+
+          <Link href="/payments" className="block group">
+            <Card className="border-l-4 border-l-purple-500 shadow-sm transition-shadow hover:shadow-md cursor-pointer h-full">
+              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                <CardTitle className="text-sm font-medium text-muted-foreground">
+                  Net Cash Flow
+                </CardTitle>
+                <div className="rounded-full bg-purple-100 dark:bg-purple-950 p-2 text-purple-600">
+                  <Wallet className="h-4 w-4" />
+                </div>
+              </CardHeader>
+              <CardContent>
+                <div
+                  className={`text-2xl font-bold ${
+                    stats.paymentsSummary.netCashflow >= 0
+                      ? 'text-emerald-600 dark:text-emerald-400'
+                      : 'text-rose-600 dark:text-rose-400'
+                  }`}
+                >
+                  {formatCurrency(stats.paymentsSummary.netCashflow)}
+                </div>
+                <p className="text-xs text-muted-foreground mt-1">
+                  Net difference (Inward - Outward) ({periodLabel})
+                </p>
+              </CardContent>
+            </Card>
+          </Link>
+        </div>
+      )}
 
       <div className="relative">
         {chartLoading && (

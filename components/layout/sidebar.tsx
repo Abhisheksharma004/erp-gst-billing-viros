@@ -53,16 +53,7 @@ const navItems: NavItem[] = [
   { title: 'Vendors', href: '/vendors', icon: Truck, permission: 'vendors:view' },
   { title: 'Quotations', href: '/quotations', icon: ClipboardList, permission: 'quotations:view' },
   { title: 'Sales Invoice', href: '/billing', icon: FileText, permission: 'billing:view' },
-  {
-    title: 'Payments',
-    href: '/payments',
-    icon: Wallet,
-    permission: 'payments:view',
-    children: [
-      { title: 'Inward', href: '/payments/inward', permission: 'payments:view' },
-      { title: 'Outward', href: '/payments/outward', permission: 'payments:view' },
-    ],
-  },
+  { title: 'Payments', href: '/payments', icon: Wallet, permission: 'payments:view' },
   { title: 'Purchase Orders', href: '/purchase-orders', icon: ShoppingBag, permission: 'purchase-orders:view' },
   { title: 'Purchase Invoice', href: '/purchases', icon: ShoppingCart, permission: 'purchases:view' },
   { title: 'Delivery Challans', href: '/delivery-challans', icon: Send, permission: 'delivery-challans:view' },

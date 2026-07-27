@@ -153,24 +153,102 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
 
     const roundOff = roundToTwo(totalRoundOff)
     const finalTotal = roundToTwo(grandTotal)
-    const paidAmount = data.paidAmount ?? Number(existing.paid_amount) ?? 0
+    const hasPaymentMode = Boolean(data.paymentMode && data.paymentMode.trim() !== '')
+    const advanceAmount = Number(data.advanceAmount || 0)
+    const directPaidAmount = hasPaymentMode ? finalTotal : 0
+    let totalPaid = directPaidAmount + advanceAmount
+    if (totalPaid > finalTotal) totalPaid = finalTotal
+
+    const status = totalPaid >= finalTotal ? 'PAID' : totalPaid > 0 ? 'PARTIAL' : 'PENDING'
+    const paidAmount = totalPaid
     const balanceAmount = roundToTwo(finalTotal - paidAmount)
-    const status =
-      balanceAmount <= 0 ? 'PAID' : paidAmount > 0 ? 'PARTIAL' : existing.status === 'CANCELLED' ? 'CANCELLED' : 'PENDING'
+    const paymentMode = hasPaymentMode ? data.paymentMode : (advanceAmount > 0 ? 'ADVANCE' : null)
+    const paymentRef = hasPaymentMode ? (data.paymentRef || null) : (advanceAmount > 0 ? 'Advance Adj' : null)
 
     await conn.execute(
       `UPDATE purchases SET vendor_id=?, date=?, due_date=?, gst_type=?, bill_no=?, bill_date=?,
         subtotal=?, discount_amount=?, cgst_amount=?, sgst_amount=?, igst_amount=?, tax_amount=?, round_off=?, total_amount=?,
-        paid_amount=?, balance_amount=?, payment_mode=?, notes=?, terms=?, status=?
+        paid_amount=?, balance_amount=?, payment_mode=?, payment_ref=?, notes=?, terms=?, status=?
        WHERE id=? AND organization_id = ?`,
-      [data.vendorId, data.date, data.dueDate || null,
-       gstType, data.billNo || null, data.billDate || null,
+      [data.vendorId, data.date, data.dueDate ? data.dueDate : null,
+       gstType, data.billNo ? data.billNo : null, data.billDate ? data.billDate : null,
        subtotal, totalDiscount, totalCgst, totalSgst, totalIgst, totalCgst + totalSgst + totalIgst, roundOff, finalTotal,
-       paidAmount, balanceAmount, data.paymentMode || null, data.notes || null, data.terms || null, status,
+       paidAmount, balanceAmount, paymentMode ?? null, paymentRef ?? null, data.notes ? data.notes : null, data.terms ? data.terms : null, status,
        id, organizationId]
     )
 
     await insertPurchaseItems(conn, id, data.billNo, itemsWithTotals, gstType, organizationId!)
+
+    // Sync payments table (preserve existing adjusted payments)
+    await conn.execute('DELETE FROM payments WHERE (purchase_id = ? OR reference_id = ?) AND organization_id = ? AND (notes IS NULL OR notes NOT LIKE "%Adjusted%")', [id, id, organizationId])
+    if (hasPaymentMode && directPaidAmount > 0) {
+      const [countResult] = (await conn.execute(
+        `SELECT COUNT(*) as cnt FROM payments WHERE organization_id = ? AND type = 'OUTWARD'`,
+        [organizationId]
+      )) as any[]
+      const nextSeq = Number(countResult[0]?.cnt || 0) + 1
+      const paymentNo = `PAY-OUT-${String(nextSeq).padStart(5, '0')}`
+
+      await conn.execute(
+        `INSERT INTO payments (
+          id, organization_id, payment_no, type, vendor_id, purchase_id,
+          amount, payment_date, payment_mode, reference_no, reference_id, status
+        ) VALUES (?, ?, ?, 'OUTWARD', ?, ?, ?, ?, ?, ?, ?, 'COMPLETED')`,
+        [
+          randomUUID(),
+          organizationId,
+          paymentNo,
+          data.vendorId,
+          id,
+          directPaidAmount,
+          data.date,
+          paymentMode ?? 'CASH',
+          paymentRef || data.billNo,
+          id,
+        ]
+      )
+    }
+
+    if (advanceAmount > 0) {
+      let remainingAdvanceToApply = advanceAmount
+      const [unallocatedPayments] = (await conn.execute(
+        `SELECT * FROM payments WHERE vendor_id = ? AND organization_id = ? AND type = 'OUTWARD' AND purchase_id IS NULL ORDER BY payment_date ASC, created_at ASC`,
+        [data.vendorId, organizationId]
+      )) as any[]
+
+      for (const p of unallocatedPayments as any[]) {
+        if (remainingAdvanceToApply <= 0) break
+        const pAmt = Number(p.amount)
+        if (pAmt <= remainingAdvanceToApply) {
+          await conn.execute('UPDATE payments SET purchase_id = ?, reference_id = ?, notes = ? WHERE id = ?', [id, id, 'Adjusted against Purchase Bill', p.id])
+          remainingAdvanceToApply -= pAmt
+        } else {
+          const allocatedId = randomUUID()
+          const remainderAmt = pAmt - remainingAdvanceToApply
+          await conn.execute('UPDATE payments SET amount = ? WHERE id = ?', [remainderAmt, p.id])
+          await conn.execute(
+            `INSERT INTO payments (
+              id, organization_id, payment_no, type, vendor_id, purchase_id,
+              amount, payment_date, payment_mode, reference_no, reference_id, status, notes
+            ) VALUES (?, ?, ?, 'OUTWARD', ?, ?, ?, ?, ?, ?, ?, 'COMPLETED', ?)`,
+            [
+              allocatedId,
+              organizationId,
+              `${p.payment_no || 'PAY-OUT'}-ADJ`,
+              data.vendorId,
+              id,
+              remainingAdvanceToApply,
+              p.payment_date,
+              p.payment_mode,
+              p.reference_no ? `${p.reference_no} (Advance Adj)` : 'Advance Adj',
+              id,
+              'Adjusted against Purchase Bill'
+            ]
+          )
+          remainingAdvanceToApply = 0
+        }
+      }
+    }
 
     await conn.commit()
     const [rows] = await db.execute(
@@ -217,6 +295,7 @@ export async function DELETE(req: NextRequest, { params }: { params: Promise<{ i
     }
     await conn.execute('DELETE FROM stock_movements WHERE reference_type = ? AND reference_id = ?', ['PURCHASE', id])
     await conn.execute('DELETE FROM purchase_items WHERE purchase_id = ?', [id])
+    await conn.execute('DELETE FROM payments WHERE (purchase_id = ? OR reference_id = ?) AND organization_id = ?', [id, id, organizationId])
     await conn.execute('DELETE FROM purchases WHERE id = ? AND organization_id = ?', [id, organizationId])
     await conn.commit()
     return NextResponse.json({ success: true })

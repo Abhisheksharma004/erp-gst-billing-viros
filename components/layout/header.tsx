@@ -10,6 +10,7 @@ import { getPageTitleFromPath } from '@/lib/permissions'
 import Link from 'next/link'
 import { useState, useRef, useEffect } from 'react'
 import { ThemeModeToggle } from '@/components/layout/theme-mode-toggle'
+import { NotificationsDropdown } from '@/components/layout/notifications-dropdown'
 
 export function Header() {
   const pathname = usePathname()
@@ -63,9 +64,7 @@ export function Header() {
 
       <div className="flex shrink-0 items-center gap-2 md:gap-3">
         <ThemeModeToggle />
-        <Button variant="ghost" size="icon" aria-label="Notifications">
-          <Bell className="h-5 w-5" />
-        </Button>
+        <NotificationsDropdown />
 
         <div className="relative" ref={dropdownRef}>
           <button

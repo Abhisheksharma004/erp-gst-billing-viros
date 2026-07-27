@@ -33,6 +33,16 @@ async function runEnsureInvoiceSchema(): Promise<void> {
     }
   }
 
+  if (!(await hasColumn('invoices', 'payment_ref'))) {
+    try {
+      await db.execute(
+        'ALTER TABLE invoices ADD COLUMN payment_ref VARCHAR(100) NULL AFTER payment_mode'
+      )
+    } catch (e: unknown) {
+      if (!isDuplicateColumnError(e)) throw e
+    }
+  }
+
   invoiceSchemaReady = true
 }
 

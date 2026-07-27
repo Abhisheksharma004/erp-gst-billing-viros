@@ -38,6 +38,13 @@ export async function ensurePurchaseSchema(): Promise<void> {
   } catch {
     // column may already be correct
   }
+  try {
+    await db.execute(
+      'ALTER TABLE purchases ADD COLUMN payment_ref VARCHAR(100) NULL AFTER payment_mode'
+    )
+  } catch {
+    // column may already exist
+  }
   purchaseSchemaReady = true
 }
 

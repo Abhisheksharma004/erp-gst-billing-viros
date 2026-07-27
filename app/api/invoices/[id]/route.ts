@@ -174,23 +174,103 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
     const taxAmount = roundToTwo(totalCgst + totalSgst + totalIgst)
     const totalAmount = roundToNearestRupee(roundToTwo(grandTotal))
 
-    const paidAmount = data.paidAmount ?? Number(existing.paid_amount) ?? 0
+    const hasPaymentMode = Boolean(data.paymentMode && data.paymentMode.trim() !== '')
+    const advanceAmount = Number(data.advanceAmount || 0)
+    const directPaidAmount = hasPaymentMode ? totalAmount : 0
+    let totalPaid = directPaidAmount + advanceAmount
+    if (totalPaid > totalAmount) totalPaid = totalAmount
+
+    const status = totalPaid >= totalAmount ? 'Paid' : totalPaid > 0 ? 'Partial' : 'Due'
+    const paidAmount = totalPaid
     const balanceAmount = roundToTwo(totalAmount - paidAmount)
+    const paymentMode = hasPaymentMode ? data.paymentMode : (advanceAmount > 0 ? 'ADVANCE' : null)
+    const paymentRef = hasPaymentMode ? (data.paymentRef || null) : (advanceAmount > 0 ? 'Advance Adj' : null)
 
     const partyDetailsJson = data.partyDetails ? JSON.stringify(data.partyDetails) : null
 
     await conn.execute(
-      `UPDATE invoices SET customer_id=?, date=?, due_date=?, gst_type=?, place_of_supply=?,
+      `UPDATE invoices SET customer_id=?, date=?, due_date=?, status=?, gst_type=?, place_of_supply=?,
         subtotal=?, discount_amount=?, cgst_amount=?, sgst_amount=?, igst_amount=?, tax_amount=?, total_amount=?,
-        paid_amount=?, balance_amount=?, payment_mode=?, notes=?, terms=?, party_details=?
+        paid_amount=?, balance_amount=?, payment_mode=?, payment_ref=?, notes=?, terms=?, party_details=?
        WHERE id=? AND organization_id = ?`,
-      [data.customerId, data.date, data.dueDate || null, gstType, data.placeOfSupply || null,
+      [data.customerId, data.date, data.dueDate || null, status, gstType, data.placeOfSupply || null,
        roundToTwo(subtotal), roundToTwo(totalDiscount), roundToTwo(totalCgst), roundToTwo(totalSgst), roundToTwo(totalIgst), taxAmount, totalAmount,
-       paidAmount, balanceAmount, data.paymentMode || null, data.notes || null, data.terms || null, partyDetailsJson,
+       paidAmount, balanceAmount, paymentMode ?? null, paymentRef ?? null, data.notes || null, data.terms || null, partyDetailsJson,
        id, organizationId]
     )
 
     await insertInvoiceItems(conn, id, invoiceNo, itemsWithTotals, gstType, organizationId!)
+
+    // Sync payments table (preserve existing adjusted payments)
+    await conn.execute('DELETE FROM payments WHERE (invoice_id = ? OR reference_id = ?) AND organization_id = ? AND (notes IS NULL OR notes NOT LIKE "%Adjusted%")', [id, id, organizationId])
+    if (hasPaymentMode && directPaidAmount > 0) {
+      const [countResult] = (await conn.execute(
+        `SELECT COUNT(*) as cnt FROM payments WHERE organization_id = ? AND type = 'INWARD'`,
+        [organizationId]
+      )) as any[]
+      const nextSeq = Number(countResult[0]?.cnt || 0) + 1
+      const paymentNo = `PAY-IN-${String(nextSeq).padStart(5, '0')}`
+
+      await conn.execute(
+        `INSERT INTO payments (
+          id, organization_id, payment_no, type, customer_id, invoice_id,
+          amount, payment_date, payment_mode, reference_no, reference_id, status
+        ) VALUES (?, ?, ?, 'INWARD', ?, ?, ?, ?, ?, ?, ?, 'COMPLETED')`,
+        [
+          randomUUID(),
+          organizationId,
+          paymentNo,
+          data.customerId,
+          id,
+          directPaidAmount,
+          data.date,
+          data.paymentMode ?? 'CASH',
+          data.paymentRef || invoiceNo,
+          id,
+        ]
+      )
+    }
+
+    if (advanceAmount > 0) {
+      let remainingAdvanceToApply = advanceAmount
+      const [unallocatedPayments] = (await conn.execute(
+        `SELECT * FROM payments WHERE customer_id = ? AND organization_id = ? AND type = 'INWARD' AND invoice_id IS NULL ORDER BY payment_date ASC, created_at ASC`,
+        [data.customerId, organizationId]
+      )) as any[]
+
+      for (const p of unallocatedPayments as any[]) {
+        if (remainingAdvanceToApply <= 0) break
+        const pAmt = Number(p.amount)
+        if (pAmt <= remainingAdvanceToApply) {
+          await conn.execute('UPDATE payments SET invoice_id = ?, reference_id = ?, notes = ? WHERE id = ?', [id, id, 'Adjusted against Invoice', p.id])
+          remainingAdvanceToApply -= pAmt
+        } else {
+          const allocatedId = randomUUID()
+          const remainderAmt = pAmt - remainingAdvanceToApply
+          await conn.execute('UPDATE payments SET amount = ? WHERE id = ?', [remainderAmt, p.id])
+          await conn.execute(
+            `INSERT INTO payments (
+              id, organization_id, payment_no, type, customer_id, invoice_id,
+              amount, payment_date, payment_mode, reference_no, reference_id, status, notes
+            ) VALUES (?, ?, ?, 'INWARD', ?, ?, ?, ?, ?, ?, ?, 'COMPLETED', ?)`,
+            [
+              allocatedId,
+              organizationId,
+              `${p.payment_no || 'PAY-IN'}-ADJ`,
+              data.customerId,
+              id,
+              remainingAdvanceToApply,
+              p.payment_date,
+              p.payment_mode,
+              p.reference_no ? `${p.reference_no} (Advance Adj)` : 'Advance Adj',
+              id,
+              'Adjusted against Invoice'
+            ]
+          )
+          remainingAdvanceToApply = 0
+        }
+      }
+    }
 
     await conn.commit()
     const [rows] = await db.execute(
@@ -232,7 +312,7 @@ export async function DELETE(req: NextRequest, { params }: { params: Promise<{ i
       }
     }
     await conn.execute('DELETE FROM invoice_items WHERE invoice_id = ?', [id])
-    await conn.execute('DELETE FROM payments WHERE reference_id = ? AND type = ?', [id, 'INVOICE'])
+    await conn.execute('DELETE FROM payments WHERE (invoice_id = ? OR reference_id = ?) AND organization_id = ?', [id, id, organizationId])
     await conn.execute('DELETE FROM invoices WHERE id = ? AND organization_id = ?', [id, organizationId])
     await conn.commit()
     return NextResponse.json({ success: true })

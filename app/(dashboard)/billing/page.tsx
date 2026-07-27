@@ -12,6 +12,7 @@ import { Label } from '@/components/ui/label'
 import { Eye, Edit, Trash2, FileText, Calendar } from 'lucide-react'
 import { formatCurrency, formatDate } from '@/lib/utils'
 import { ListPageToolbar } from '@/components/shared/list-page-toolbar'
+import { Badge } from '@/components/ui/badge'
 import { DocumentPdfViewer } from '@/components/shared/document-pdf-viewer'
 import { parseJsonResponse } from '@/lib/fetch-json'
 
@@ -22,6 +23,31 @@ interface Invoice {
   due_date?: string
   customer_name: string
   total_amount: number
+  paid_amount?: number
+  balance_amount?: number
+  payment_mode?: string
+  status?: string
+}
+
+function getInvoiceStatus(inv: Invoice): 'Paid' | 'Partial' | 'Due' {
+  const s = String(inv.status || '').toUpperCase()
+  if (s === 'PAID') return 'Paid'
+  if (s === 'PARTIAL') return 'Partial'
+  const paid = Number(inv.paid_amount || 0)
+  const total = Number(inv.total_amount || 0)
+  if (paid >= total && total > 0) return 'Paid'
+  if (paid > 0) return 'Partial'
+  return 'Due'
+}
+
+function InvoiceStatusBadge({ status }: { status: 'Paid' | 'Partial' | 'Due' }) {
+  if (status === 'Paid') {
+    return <Badge className="bg-emerald-100 text-emerald-800 border-emerald-300 hover:bg-emerald-100">Paid</Badge>
+  }
+  if (status === 'Partial') {
+    return <Badge variant="outline" className="bg-amber-100 text-amber-800 border-amber-300 hover:bg-amber-100">Partial</Badge>
+  }
+  return <Badge variant="outline" className="bg-slate-100 text-slate-700 border-slate-300 hover:bg-slate-100">Due</Badge>
 }
 
 function InvoiceActions({
@@ -221,19 +247,20 @@ export default function BillingPage() {
                 <TableHead>Date</TableHead>
                 <TableHead>Due Date</TableHead>
                 <TableHead className="text-right">Amount</TableHead>
+                <TableHead className="text-center">Status</TableHead>
                 <TableHead className="text-right">Actions</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
               {loading ? (
                 <TableRow>
-                  <TableCell colSpan={6} className="text-center py-12 text-muted-foreground">
+                  <TableCell colSpan={7} className="text-center py-12 text-muted-foreground">
                     Loading...
                   </TableCell>
                 </TableRow>
               ) : invoices.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={6} className="text-center py-12 text-muted-foreground">
+                  <TableCell colSpan={7} className="text-center py-12 text-muted-foreground">
                     No invoices found
                   </TableCell>
                 </TableRow>
@@ -244,7 +271,17 @@ export default function BillingPage() {
                     <TableCell>{inv.customer_name}</TableCell>
                     <TableCell>{formatDate(inv.date)}</TableCell>
                     <TableCell>{inv.due_date ? formatDate(inv.due_date) : '-'}</TableCell>
-                    <TableCell className="text-right font-medium">{formatCurrency(inv.total_amount)}</TableCell>
+                    <TableCell className="text-right font-medium">
+                      <div>{formatCurrency(inv.total_amount)}</div>
+                      {Number(inv.balance_amount || (inv.total_amount - (inv.paid_amount || 0))) > 0 && Number(inv.paid_amount || 0) > 0 && (
+                        <div className="text-[11px] text-amber-600 font-semibold">
+                          Due: {formatCurrency(Number(inv.balance_amount || (inv.total_amount - (inv.paid_amount || 0))))}
+                        </div>
+                      )}
+                    </TableCell>
+                    <TableCell className="text-center">
+                      <InvoiceStatusBadge status={getInvoiceStatus(inv)} />
+                    </TableCell>
                     <TableCell className="text-right">
                       <InvoiceActions
                         id={inv.id}
@@ -309,6 +346,10 @@ export default function BillingPage() {
                         <div className="flex justify-between gap-2">
                           <span className="text-xs text-muted-foreground">Amount</span>
                           <span className="font-semibold text-sm text-primary">{formatCurrency(inv.total_amount)}</span>
+                        </div>
+                        <div className="flex justify-between items-center gap-2">
+                          <span className="text-xs text-muted-foreground">Status</span>
+                          <InvoiceStatusBadge status={getInvoiceStatus(inv)} />
                         </div>
                       </div>
                     </div>

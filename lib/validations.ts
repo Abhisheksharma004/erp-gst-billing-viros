@@ -288,7 +288,10 @@ export const invoiceSchema = z.object({
   dueDate: z.string().or(z.date()).optional(),
   gstType: z.enum(['CGST_SGST', 'IGST', 'EXEMPT']).default('CGST_SGST'),
   placeOfSupply: z.string().optional(),
-  paymentMode: z.enum(['CASH', 'CHEQUE', 'BANK_TRANSFER', 'UPI', 'CARD', 'OTHER']).optional(),
+  paymentMode: z.string().optional().nullable(),
+  paymentRef: z.string().optional().nullable(),
+  advanceAmount: z.number().optional().nullable(),
+  status: z.enum(['Due', 'Paid', 'DUE', 'PAID']).optional(),
   paidAmount: z.number().min(0).default(0),
   notes: z.string().optional(),
   terms: z.string().optional(),
@@ -333,9 +336,9 @@ export const purchaseSchema = z.object({
   gstType: z.enum(['CGST_SGST', 'IGST', 'EXEMPT']).default('CGST_SGST'),
   billNo: z.string().min(1, 'Bill number is required'),
   billDate: z.string().or(z.date()).optional(),
-  paymentMode: z
-    .enum(['CASH', 'CHEQUE', 'BANK_TRANSFER', 'UPI', 'CARD', 'CREDIT', 'OTHER'])
-    .optional(),
+  paymentMode: z.string().optional().nullable(),
+  paymentRef: z.string().optional().nullable(),
+  advanceAmount: z.number().optional().nullable(),
   paidAmount: z.number().min(0).default(0),
   notes: z.string().optional(),
   terms: z.string().optional(),
@@ -446,6 +449,34 @@ export const businessSettingsSchema = z.object({
     .optional(),
 })
 
+export const paymentSchema = z.object({
+  type: z.enum(['INWARD', 'OUTWARD'], {
+    required_error: 'Payment type required (INWARD or OUTWARD)',
+  }),
+  customerId: z.string().optional().nullable(),
+  vendorId: z.string().optional().nullable(),
+  invoiceId: z.string().optional().nullable(),
+  purchaseId: z.string().optional().nullable(),
+  amount: z.number({ required_error: 'Amount is required' }).gt(0, 'Amount must be greater than 0'),
+  paymentDate: requiredDateInput('Payment date is required'),
+  paymentMode: z.string({ required_error: 'Payment mode is required' }).min(1, 'Payment mode is required'),
+  referenceNo: z.string().optional().nullable(),
+  bankName: z.string().optional().nullable(),
+  chequeDate: z.string().optional().nullable(),
+  notes: z.string().optional().nullable(),
+}).refine((data) => {
+  if (data.type === 'INWARD') {
+    return Boolean(data.customerId)
+  }
+  if (data.type === 'OUTWARD') {
+    return Boolean(data.vendorId)
+  }
+  return true
+}, {
+  message: 'Customer is required for Inward payment, Vendor is required for Outward payment',
+  path: ['customerId'],
+})
+
 export type LoginInput = z.infer<typeof loginSchema>
 export type RegisterInput = z.infer<typeof registerSchema>
 export type StaffInput = z.infer<typeof staffSchema>
@@ -460,3 +491,5 @@ export type QuotationInput = z.infer<typeof quotationSchema>
 export type ChallanInput = z.infer<typeof challanSchema>
 export type ReturnableChallanInput = z.infer<typeof returnableChallanSchema>
 export type BusinessSettingsInput = z.infer<typeof businessSettingsSchema>
+export type PaymentInput = z.infer<typeof paymentSchema>
+

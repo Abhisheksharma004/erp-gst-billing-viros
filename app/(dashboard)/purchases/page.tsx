@@ -315,7 +315,12 @@ export default function PurchasesPage() {
                     <TableCell className="max-w-[180px] truncate">{p.vendor_name}</TableCell>
                     <TableCell className="whitespace-nowrap">{formatDate(p.date)}</TableCell>
                     <TableCell className="text-right font-medium whitespace-nowrap">
-                      {formatCurrency(p.total_amount)}
+                      <div>{formatCurrency(p.total_amount)}</div>
+                      {Number(p.balance_amount) > 0 && Number(p.paid_amount) > 0 && (
+                        <div className="text-[11px] text-amber-600 font-semibold">
+                          Due: {formatCurrency(p.balance_amount)}
+                        </div>
+                      )}
                     </TableCell>
                     <TableCell className="text-center">
                       <StatusBadge status={p.status} />

@@ -90,18 +90,29 @@ export async function POST(req: NextRequest) {
     const roundOff = roundToTwo(totalRoundOff)
     const finalTotal = roundToTwo(grandTotal)
 
+    const hasPaymentMode = Boolean(data.paymentMode && data.paymentMode.trim() !== '')
+    const advanceAmount = Number(data.advanceAmount || 0)
+    const directPaidAmount = hasPaymentMode ? finalTotal : 0
+    let totalPaid = directPaidAmount + advanceAmount
+    if (totalPaid > finalTotal) totalPaid = finalTotal
+
+    const status = totalPaid >= finalTotal ? 'PAID' : 'PENDING'
+    const paidAmount = totalPaid
+    const balanceAmount = roundToTwo(finalTotal - paidAmount)
+    const paymentMode = hasPaymentMode ? data.paymentMode : (advanceAmount > 0 ? 'ADVANCE' : null)
+    const paymentRef = hasPaymentMode ? (data.paymentRef || null) : (advanceAmount > 0 ? 'Advance Adj' : null)
+
     const id = randomUUID()
     await conn.execute(
       `INSERT INTO purchases (id, organization_id, vendor_id, date, due_date, gst_type, bill_no, bill_date,
         subtotal, discount_amount, cgst_amount, sgst_amount, igst_amount, tax_amount, round_off, total_amount,
-        paid_amount, balance_amount, payment_mode, notes, terms, status)
-       VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
-      [id, organizationId, data.vendorId, data.date, data.dueDate || null,
-       gstType, data.billNo, data.billDate || null,
+        paid_amount, balance_amount, payment_mode, payment_ref, notes, terms, status)
+       VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+      [id, organizationId, data.vendorId, data.date, data.dueDate ? data.dueDate : null,
+       gstType, data.billNo, data.billDate ? data.billDate : null,
        subtotal, totalDiscount, totalCgst, totalSgst, totalIgst, totalCgst + totalSgst + totalIgst, roundOff, finalTotal,
-       data.paidAmount, finalTotal - data.paidAmount,
-       data.paymentMode || null, data.notes || null, data.terms || null,
-       finalTotal - data.paidAmount <= 0 ? 'PAID' : data.paidAmount > 0 ? 'PARTIAL' : 'PENDING']
+       paidAmount, balanceAmount,
+       paymentMode ?? null, paymentRef ?? null, data.notes ? data.notes : null, data.terms ? data.terms : null, status]
     )
 
     for (const item of itemsWithTotals) {
@@ -129,6 +140,75 @@ export async function POST(req: NextRequest) {
           'INSERT INTO stock_movements (id, product_id, type, quantity, balance_after, reference_type, reference_id, note) VALUES (?,?,?,?,?,?,?,?)',
           [randomUUID(), item.productId, 'IN', item.quantity, stockRow.current_stock, 'PURCHASE', id, data.billNo]
         )
+      }
+    }
+
+    if (hasPaymentMode && directPaidAmount > 0) {
+      const [countResult] = (await conn.execute(
+        `SELECT COUNT(*) as cnt FROM payments WHERE organization_id = ? AND type = 'OUTWARD'`,
+        [organizationId]
+      )) as any[]
+      const nextSeq = Number(countResult[0]?.cnt || 0) + 1
+      const paymentNo = `PAY-OUT-${String(nextSeq).padStart(5, '0')}`
+
+      await conn.execute(
+        `INSERT INTO payments (
+          id, organization_id, payment_no, type, vendor_id, purchase_id,
+          amount, payment_date, payment_mode, reference_no, reference_id, status
+        ) VALUES (?, ?, ?, 'OUTWARD', ?, ?, ?, ?, ?, ?, ?, 'COMPLETED')`,
+        [
+          randomUUID(),
+          organizationId,
+          paymentNo,
+          data.vendorId,
+          id,
+          directPaidAmount,
+          data.date,
+          paymentMode ?? 'CASH',
+          paymentRef || data.billNo,
+          id,
+        ]
+      )
+    }
+
+    if (advanceAmount > 0) {
+      let remainingAdvanceToApply = advanceAmount
+      const [unallocatedPayments] = (await conn.execute(
+        `SELECT * FROM payments WHERE vendor_id = ? AND organization_id = ? AND type = 'OUTWARD' AND purchase_id IS NULL ORDER BY payment_date ASC, created_at ASC`,
+        [data.vendorId, organizationId]
+      )) as any[]
+
+      for (const p of unallocatedPayments as any[]) {
+        if (remainingAdvanceToApply <= 0) break
+        const pAmt = Number(p.amount)
+        if (pAmt <= remainingAdvanceToApply) {
+          await conn.execute('UPDATE payments SET purchase_id = ?, reference_id = ? WHERE id = ?', [id, id, p.id])
+          remainingAdvanceToApply -= pAmt
+        } else {
+          const allocatedId = randomUUID()
+          const remainderAmt = pAmt - remainingAdvanceToApply
+          await conn.execute('UPDATE payments SET amount = ? WHERE id = ?', [remainderAmt, p.id])
+          await conn.execute(
+            `INSERT INTO payments (
+              id, organization_id, payment_no, type, vendor_id, purchase_id,
+              amount, payment_date, payment_mode, reference_no, reference_id, status, notes
+            ) VALUES (?, ?, ?, 'OUTWARD', ?, ?, ?, ?, ?, ?, ?, 'COMPLETED', ?)`,
+            [
+              allocatedId,
+              organizationId,
+              `${p.payment_no || 'PAY-OUT'}-ADJ`,
+              data.vendorId,
+              id,
+              remainingAdvanceToApply,
+              p.payment_date,
+              p.payment_mode,
+              p.reference_no ? `${p.reference_no} (Advance Adj)` : 'Advance Adj',
+              id,
+              'Adjusted against Purchase Bill'
+            ]
+          )
+          remainingAdvanceToApply = 0
+        }
       }
     }
 

@@ -87,11 +87,41 @@ export async function GET(req: NextRequest) {
       chartPurchases = monthlyPurchases
     }
 
+    let paymentWhere = 'organization_id = ?'
+    let paymentParams: any[] = [organizationId]
+
+    if (monthParam && /^\d{1,2}$/.test(monthParam)) {
+      const monthKey = `${year}-${monthParam.padStart(2, '0')}`
+      paymentWhere += " AND DATE_FORMAT(payment_date, '%Y-%m') = ?"
+      paymentParams.push(monthKey)
+    } else {
+      paymentWhere += " AND YEAR(payment_date) = ?"
+      paymentParams.push(year)
+    }
+
+    const [[paymentsSummaryRow]] = await db.execute(
+      `SELECT 
+         COALESCE(SUM(CASE WHEN type = 'INWARD' THEN amount ELSE 0 END), 0) as total_inward,
+         COALESCE(SUM(CASE WHEN type = 'OUTWARD' THEN amount ELSE 0 END), 0) as total_outward
+       FROM payments
+       WHERE ${paymentWhere}`,
+      paymentParams
+    ) as any[][]
+
+    const totalInward = Number(paymentsSummaryRow?.total_inward || 0)
+    const totalOutward = Number(paymentsSummaryRow?.total_outward || 0)
+    const netCashflow = totalInward - totalOutward
+
     return NextResponse.json({
       salesThisMonth: { amount: Number(salesThisMonth.amount), count: Number(salesThisMonth.count) },
       purchasesThisMonth: { amount: Number(purchasesThisMonth.amount), count: Number(purchasesThisMonth.count) },
       pendingQuotations: Number(pendingQuotRow.count),
       lowStockCount: Number(lowStockRow.count),
+      paymentsSummary: {
+        totalInward,
+        totalOutward,
+        netCashflow,
+      },
       chartType,
       chartYear: year,
       chartMonth: monthParam || null,
