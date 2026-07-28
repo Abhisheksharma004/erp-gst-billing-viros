@@ -8,7 +8,7 @@ import { roundToNearestRupee, roundToTwo } from '@/lib/utils'
 import { computeSalesDocumentItemTotals } from '@/lib/sales-document-totals'
 import { randomUUID } from 'crypto'
 import { apiErrorResponse } from '@/lib/api-error'
-import { buildDocumentNumberPrefix, documentSerialSubstringStart, nextDocumentNumber } from '@/lib/document-number'
+import { buildDocumentNumber, buildDocumentNumberLikePattern, fetchMaxDocumentSerial } from '@/lib/document-number'
 import { assertCustomerInOrg } from '@/lib/org-entity'
 
 function computeItemTotals(item: any, gstType: string) {
@@ -82,11 +82,13 @@ export async function POST(req: NextRequest) {
 
     // Generate invoice number
     const [settings] = await conn.execute(
-      'SELECT invoice_prefix FROM business_settings WHERE organization_id = ? LIMIT 1',
+      'SELECT invoice_prefix, document_number_separator, document_number_structure FROM business_settings WHERE organization_id = ? LIMIT 1',
       [organizationId]
     ) as any[]
     const prefix = settings[0]?.invoice_prefix || 'INV'
-    const numberPrefix = buildDocumentNumberPrefix(prefix, data.date)
+    const separator = settings[0]?.document_number_separator ?? '/'
+    const structure = settings[0]?.document_number_structure ?? 'PREFIX_SERIAL_FY'
+    const likePattern = buildDocumentNumberLikePattern(prefix, data.date, separator, structure)
     // Compute totals (match UI)
     let subtotal = 0, totalDiscount = 0, totalCgst = 0, totalSgst = 0, totalIgst = 0, grandTotal = 0
     const itemsWithTotals = data.items.map((item: any) => {
@@ -120,14 +122,8 @@ export async function POST(req: NextRequest) {
     let invoiceNo = ''
     let inserted = false
     for (let attempt = 0; attempt < 10 && !inserted; attempt++) {
-      const [maxRow] = await conn.execute(
-        `SELECT MAX(CAST(SUBSTRING(invoice_no, ?) AS UNSIGNED)) AS maxSerial
-         FROM invoices
-         WHERE organization_id = ? AND invoice_no LIKE ?`,
-        [documentSerialSubstringStart(numberPrefix), organizationId, `${numberPrefix}%`]
-      ) as any[]
-      const maxSerial: number = Number(maxRow[0]?.maxSerial) || 0
-      invoiceNo = `${numberPrefix}${maxSerial + 1 + attempt}`
+      const maxSerial = await fetchMaxDocumentSerial(conn, 'invoices', 'invoice_no', organizationId!, likePattern, separator, structure)
+      invoiceNo = buildDocumentNumber(prefix, maxSerial + 1 + attempt, data.date, separator, structure)
 
       try {
         await conn.execute(

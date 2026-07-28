@@ -5,7 +5,7 @@ import { appendOrgFilter } from '@/lib/tenant'
 import { quotationSchema } from '@/lib/validations'
 import { ensureQuotationSchema } from '@/lib/ensure-quotation-schema'
 import { buildQuotationTotals, insertQuotationItems } from '@/lib/quotation-save'
-import { buildDocumentNumberPrefix, documentSerialSubstringStart, nextDocumentNumber } from '@/lib/document-number'
+import { buildDocumentNumber, buildDocumentNumberLikePattern, fetchMaxDocumentSerial } from '@/lib/document-number'
 import { randomUUID } from 'crypto'
 import { assertCustomerInOrg } from '@/lib/org-entity'
 
@@ -68,11 +68,13 @@ export async function POST(req: NextRequest) {
     await conn.beginTransaction()
 
     const [settings] = await conn.execute(
-      'SELECT quotation_prefix FROM business_settings WHERE organization_id = ? LIMIT 1',
+      'SELECT quotation_prefix, document_number_separator, document_number_structure FROM business_settings WHERE organization_id = ? LIMIT 1',
       [organizationId]
     ) as any[]
     const prefix = settings[0]?.quotation_prefix || 'QT'
-    const numberPrefix = buildDocumentNumberPrefix(prefix, data.date)
+    const separator = settings[0]?.document_number_separator ?? '/'
+    const structure = settings[0]?.document_number_structure ?? 'PREFIX_SERIAL_FY'
+    const likePattern = buildDocumentNumberLikePattern(prefix, data.date, separator, structure)
 
     const gstType = data.gstType || 'CGST_SGST'
     const totals = buildQuotationTotals(data.items, gstType)
@@ -83,13 +85,8 @@ export async function POST(req: NextRequest) {
     let quotationNo = ''
     let inserted = false
     for (let attempt = 0; attempt < 10 && !inserted; attempt++) {
-      const [maxRow] = await conn.execute(
-        `SELECT MAX(CAST(SUBSTRING(quotation_no, ?) AS UNSIGNED)) AS maxSerial
-         FROM quotations WHERE organization_id = ? AND quotation_no LIKE ?`,
-        [documentSerialSubstringStart(numberPrefix), organizationId, `${numberPrefix}%`]
-      ) as any[]
-      const maxSerial: number = Number(maxRow[0]?.maxSerial) || 0
-      quotationNo = `${numberPrefix}${maxSerial + 1 + attempt}`
+      const maxSerial = await fetchMaxDocumentSerial(conn, 'quotations', 'quotation_no', organizationId!, likePattern, separator, structure)
+      quotationNo = buildDocumentNumber(prefix, maxSerial + 1 + attempt, data.date, separator, structure)
 
       try {
         await conn.execute(

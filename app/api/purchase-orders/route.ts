@@ -5,7 +5,7 @@ import { appendOrgFilter } from '@/lib/tenant'
 import { purchaseOrderSchema } from '@/lib/validations'
 import { ensureDocumentTermsColumns } from '@/lib/ensure-purchase-schema'
 import { normalizePurchaseDocumentItem } from '@/lib/purchase-include-pricing'
-import { buildDocumentNumberPrefix, documentSerialSubstringStart, nextDocumentNumber } from '@/lib/document-number'
+import { buildDocumentNumber, buildDocumentNumberLikePattern, fetchMaxDocumentSerial } from '@/lib/document-number'
 import { randomUUID } from 'crypto'
 import { assertVendorInOrg } from '@/lib/org-entity'
 
@@ -70,11 +70,13 @@ export async function POST(req: NextRequest) {
     await conn.beginTransaction()
 
     const [settings] = await conn.execute(
-      'SELECT purchase_order_prefix FROM business_settings WHERE organization_id = ? LIMIT 1',
+      'SELECT purchase_order_prefix, document_number_separator, document_number_structure FROM business_settings WHERE organization_id = ? LIMIT 1',
       [organizationId]
     ) as any[]
     const prefix = settings[0]?.purchase_order_prefix || 'PO'
-    const numberPrefix = buildDocumentNumberPrefix(prefix, data.date)
+    const separator = settings[0]?.document_number_separator ?? '/'
+    const structure = settings[0]?.document_number_structure ?? 'PREFIX_SERIAL_FY'
+    const likePattern = buildDocumentNumberLikePattern(prefix, data.date, separator, structure)
 
     let subtotal = 0, totalDiscount = 0, totalTaxable = 0, totalCgst = 0, totalSgst = 0, totalIgst = 0, grandTotal = 0
     const itemsWithTotals = data.items.map((item: any) => {
@@ -95,13 +97,8 @@ export async function POST(req: NextRequest) {
     let poNo = ''
     let inserted = false
     for (let attempt = 0; attempt < 10 && !inserted; attempt++) {
-      const [maxRow] = await conn.execute(
-        `SELECT MAX(CAST(SUBSTRING(po_no, ?) AS UNSIGNED)) AS maxSerial
-         FROM purchase_orders WHERE organization_id = ? AND po_no LIKE ?`,
-        [documentSerialSubstringStart(numberPrefix), organizationId, `${numberPrefix}%`]
-      ) as any[]
-      const maxSerial: number = Number(maxRow[0]?.maxSerial) || 0
-      poNo = `${numberPrefix}${maxSerial + 1 + attempt}`
+      const maxSerial = await fetchMaxDocumentSerial(conn, 'purchase_orders', 'po_no', organizationId!, likePattern, separator, structure)
+      poNo = buildDocumentNumber(prefix, maxSerial + 1 + attempt, data.date, separator, structure)
 
       try {
         await conn.execute(

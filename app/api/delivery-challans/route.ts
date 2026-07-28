@@ -4,7 +4,7 @@ import { requirePermission } from '@/lib/api-auth'
 import { appendOrgFilter } from '@/lib/tenant'
 import { challanSchema } from '@/lib/validations'
 import { randomUUID } from 'crypto'
-import { buildDocumentNumberPrefix, documentSerialSubstringStart, nextDocumentNumber } from '@/lib/document-number'
+import { buildDocumentNumber, buildDocumentNumberLikePattern, fetchMaxDocumentSerial } from '@/lib/document-number'
 import { ensureDeliveryChallanSchema } from '@/lib/ensure-delivery-challan-schema'
 import { computeSalesDocumentItemTotals } from '@/lib/sales-document-totals'
 import { assertCustomerInOrg } from '@/lib/org-entity'
@@ -54,11 +54,13 @@ export async function POST(req: NextRequest) {
     await conn.beginTransaction()
 
     const [settings] = await conn.execute(
-      'SELECT challan_prefix FROM business_settings WHERE organization_id = ? LIMIT 1',
+      'SELECT challan_prefix, document_number_separator, document_number_structure FROM business_settings WHERE organization_id = ? LIMIT 1',
       [organizationId]
     ) as any[]
     const prefix = settings[0]?.challan_prefix || 'DC'
-    const numberPrefix = buildDocumentNumberPrefix(prefix, data.date)
+    const separator = settings[0]?.document_number_separator ?? '/'
+    const structure = settings[0]?.document_number_structure ?? 'PREFIX_SERIAL_FY'
+    const likePattern = buildDocumentNumberLikePattern(prefix, data.date, separator, structure)
     const partyDetailsJson = data.partyDetails ? JSON.stringify(data.partyDetails) : null
     const id = randomUUID()
 
@@ -66,15 +68,8 @@ export async function POST(req: NextRequest) {
     let challanNo = ''
     let inserted = false
     for (let attempt = 0; attempt < 10 && !inserted; attempt++) {
-      // Use MAX to correctly find the highest serial number
-      const [maxRow] = await conn.execute(
-        `SELECT MAX(CAST(SUBSTRING(challan_no, ?) AS UNSIGNED)) AS maxSerial
-         FROM delivery_challans
-         WHERE organization_id = ? AND challan_no LIKE ?`,
-        [documentSerialSubstringStart(numberPrefix), organizationId, `${numberPrefix}%`]
-      ) as any[]
-      const maxSerial: number = Number(maxRow[0]?.maxSerial) || 0
-      challanNo = `${numberPrefix}${maxSerial + 1 + attempt}`
+      const maxSerial = await fetchMaxDocumentSerial(conn, 'delivery_challans', 'challan_no', organizationId!, likePattern, separator, structure)
+      challanNo = buildDocumentNumber(prefix, maxSerial + 1 + attempt, data.date, separator, structure)
 
       try {
         await conn.execute(

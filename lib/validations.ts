@@ -436,6 +436,10 @@ export const businessSettingsSchema = z.object({
   quotationPrefix: z.string().default('QT'),
   purchaseOrderPrefix: z.string().default('PO'),
   challanPrefix: z.string().default('DC'),
+  documentNumberSeparator: z.string().max(5).default('/'),
+  documentNumberStructure: z
+    .enum(['PREFIX_SERIAL_FY', 'PREFIX_FY_SERIAL', 'FY_PREFIX_SERIAL'])
+    .default('PREFIX_SERIAL_FY'),
   quotationTerms: z.string().optional(),
   salesInvoiceTerms: z.string().optional(),
   purchaseOrderTerms: z.string().optional(),

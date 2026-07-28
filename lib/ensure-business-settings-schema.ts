@@ -46,6 +46,8 @@ export async function ensureBusinessSettingsBankingColumns(): Promise<void> {
       quotation_prefix VARCHAR(10) NOT NULL DEFAULT 'QT',
       purchase_order_prefix VARCHAR(10) NOT NULL DEFAULT 'PO',
       challan_prefix VARCHAR(10) NOT NULL DEFAULT 'DC',
+      document_number_separator VARCHAR(5) NOT NULL DEFAULT '/',
+      document_number_structure VARCHAR(30) NOT NULL DEFAULT 'PREFIX_SERIAL_FY',
       terms_condition TEXT NULL,
       created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
       updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
@@ -81,6 +83,12 @@ export async function ensureBusinessSettingsBankingColumns(): Promise<void> {
   )
   await runAlter(
     `ALTER TABLE business_settings ADD COLUMN sidebar_color VARCHAR(7) NULL DEFAULT '#0f172a' AFTER logo`
+  )
+  await runAlter(
+    `ALTER TABLE business_settings ADD COLUMN document_number_separator VARCHAR(5) NOT NULL DEFAULT '/' AFTER challan_prefix`
+  )
+  await runAlter(
+    `ALTER TABLE business_settings ADD COLUMN document_number_structure VARCHAR(30) NOT NULL DEFAULT 'PREFIX_SERIAL_FY' AFTER document_number_separator`
   )
 
   const documentTermsColumns = [

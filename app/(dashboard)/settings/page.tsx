@@ -22,6 +22,7 @@ import {
   isValidHexColor,
   applyOrgTheme,
 } from '@/lib/theme'
+import { buildDocumentNumber } from '@/lib/document-number'
 
 
 export default function SettingsPage() {
@@ -38,6 +39,8 @@ export default function SettingsPage() {
       quotationPrefix: 'QT',
       purchaseOrderPrefix: 'PO',
       challanPrefix: 'DC',
+      documentNumberSeparator: '/',
+      documentNumberStructure: 'PREFIX_SERIAL_FY',
       sidebarColor: DEFAULT_SIDEBAR_COLOR,
     }
   })
@@ -67,6 +70,8 @@ export default function SettingsPage() {
           quotationPrefix: data.quotation_prefix || data.quotationPrefix || 'QT',
           purchaseOrderPrefix: data.purchase_order_prefix || data.purchaseOrderPrefix || 'PO',
           challanPrefix: data.challan_prefix || data.challanPrefix || 'DC',
+          documentNumberSeparator: data.document_number_separator || data.documentNumberSeparator || '/',
+          documentNumberStructure: data.document_number_structure || data.documentNumberStructure || 'PREFIX_SERIAL_FY',
           quotationTerms: data.quotation_terms || data.quotationTerms || data.terms_condition || data.termsCondition || '',
           salesInvoiceTerms: data.sales_invoice_terms || data.salesInvoiceTerms || data.terms_condition || data.termsCondition || '',
           purchaseOrderTerms: data.purchase_order_terms || data.purchaseOrderTerms || data.terms_condition || data.termsCondition || '',
@@ -340,8 +345,13 @@ export default function SettingsPage() {
         </Card>
 
         <Card>
-          <CardHeader><CardTitle>Document Number Prefixes</CardTitle></CardHeader>
-          <CardContent className="space-y-4">
+          <CardHeader>
+            <CardTitle>Document Numbering & Format Design</CardTitle>
+            <p className="text-sm text-muted-foreground">
+              Customize your document prefixes and format separators (e.g. MV/001/2026/27 or MV-001-2026-27).
+            </p>
+          </CardHeader>
+          <CardContent className="space-y-6">
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-2">
                 <Label>Invoice Prefix</Label>
@@ -358,6 +368,53 @@ export default function SettingsPage() {
               <div className="space-y-2">
                 <Label>Challan Prefix</Label>
                 <Input {...register('challanPrefix')} placeholder="DC" />
+              </div>
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-3 border-t">
+              <div className="space-y-2">
+                <Label className="text-sm font-semibold">Number Format Separator</Label>
+                <Select
+                  value={watchedValues.documentNumberSeparator === '' ? 'NONE' : (watchedValues.documentNumberSeparator ?? '/')}
+                  onValueChange={(v) => setValue('documentNumberSeparator', v === 'NONE' ? '' : v, { shouldDirty: true })}
+                >
+                  <SelectTrigger><SelectValue placeholder="Select separator" /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="/">Slash ( / ) — e.g. MV/001/2026/27</SelectItem>
+                    <SelectItem value="-">Hyphen ( - ) — e.g. MV-001-2026-27</SelectItem>
+                    <SelectItem value=".">Dot ( . ) — e.g. MV.001.2026.27</SelectItem>
+                    <SelectItem value="_">Underscore ( _ ) — e.g. MV_001_2026_27</SelectItem>
+                    <SelectItem value="NONE">None — e.g. MV001202627</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+
+              <div className="space-y-2">
+                <Label className="text-sm font-semibold">Component Order (FY Position)</Label>
+                <Select
+                  value={watchedValues.documentNumberStructure ?? 'PREFIX_SERIAL_FY'}
+                  onValueChange={(v: any) => setValue('documentNumberStructure', v, { shouldDirty: true })}
+                >
+                  <SelectTrigger><SelectValue placeholder="Select component order" /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="PREFIX_SERIAL_FY">Prefix → Serial → FY (MV/001/2026/27)</SelectItem>
+                    <SelectItem value="PREFIX_FY_SERIAL">Prefix → FY → Serial (MV/2026/27/001)</SelectItem>
+                    <SelectItem value="FY_PREFIX_SERIAL">FY → Prefix → Serial (2026/27/MV/001)</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+
+            <div className="p-3 bg-slate-50 dark:bg-slate-900 rounded-md border border-slate-200 dark:border-slate-800">
+              <div className="text-xs text-muted-foreground font-medium mb-1">Live Format Preview</div>
+              <div className="text-sm font-bold font-mono text-emerald-700 dark:text-emerald-400">
+                {buildDocumentNumber(
+                  watchedValues.invoicePrefix || 'INV',
+                  1,
+                  new Date(),
+                  watchedValues.documentNumberSeparator === 'NONE' ? '' : (watchedValues.documentNumberSeparator ?? '/'),
+                  watchedValues.documentNumberStructure ?? 'PREFIX_SERIAL_FY'
+                )}
               </div>
             </div>
           </CardContent>
