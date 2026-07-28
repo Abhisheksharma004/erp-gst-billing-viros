@@ -7,6 +7,7 @@ import {
 import { ensureOrganizationDetailsSchema } from '@/lib/ensure-organization-details-schema'
 import { ensureOrganizationIdSequencesSchema } from '@/lib/ensure-organization-id-sequences'
 import { ensureBusinessSettingsUniquePerOrg, ensureBusinessSettingsBankingColumns } from '@/lib/ensure-business-settings-schema'
+import { ensurePaymentSchema } from '@/lib/ensure-payment-schema'
 import { generateUniqueOrgSlug } from '@/lib/tenant'
 
 let schemaReady = false
@@ -109,10 +110,11 @@ async function columnExists(table: string, column: string): Promise<boolean> {
 
 async function addOrgColumn(table: string, fallbackOrgId: string): Promise<void> {
   const hasCol = await columnExists(table, 'organization_id')
-  if (hasCol) return
-  await runAlter(
-    `ALTER TABLE ${table} ADD COLUMN organization_id VARCHAR(36) NULL AFTER id`
-  )
+  if (!hasCol) {
+    await runAlter(
+      `ALTER TABLE ${table} ADD COLUMN organization_id VARCHAR(36) NULL AFTER id`
+    )
+  }
   await db.execute(`UPDATE ${table} SET organization_id = ? WHERE organization_id IS NULL`, [
     fallbackOrgId,
   ])
@@ -146,6 +148,7 @@ const TENANT_TABLES = [
   'purchases',
   'delivery_challans',
   'returnable_challans',
+  'payments',
   'ledger_entries',
   'roles',
 ] as const
@@ -154,6 +157,7 @@ export async function ensureOrganizationSchema(): Promise<void> {
   if (schemaReady) return
 
   await ensureBusinessSettingsBankingColumns()
+  await ensurePaymentSchema()
 
   await runAlter(`
     CREATE TABLE IF NOT EXISTS organizations (
@@ -185,8 +189,7 @@ export async function ensureOrganizationSchema(): Promise<void> {
   const fallbackOrgId = await bootstrapLegacyOrganizationIfNeeded()
 
   for (const table of TENANT_TABLES) {
-    const hasCol = await columnExists(table, 'organization_id')
-    if (hasCol || !fallbackOrgId) continue
+    if (!fallbackOrgId) continue
     await addOrgColumn(table, fallbackOrgId)
   }
 
