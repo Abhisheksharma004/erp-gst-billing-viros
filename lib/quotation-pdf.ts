@@ -1159,9 +1159,12 @@ function renderSalesDocumentPage(
     totalDiscount += t.discAmt
     totalAmount += t.total
 
+    const { productName, description } = getProductCellParts(item)
+    const productCellText = description ? `${productName}\n${description}` : productName
+
     const row = [
       String(idx + 1),
-      getProductCellParts(item).productName,
+      productCellText,
       formatHsnSac(item.hsn_code, item.sac_code),
       `${qty} ${unit}`,
     ] as string[]
@@ -1200,29 +1203,17 @@ function renderSalesDocumentPage(
       ]
 
   const itemsTableStartY = y
-  const colCount = ITEMS_TABLE_COL_COUNT
   const termsSource = document.terms || settings.termsCondition
-  const useCompactLayout = document.items.length <= 2
   const mainFooterH = getFooterMainH(isIgst, kind, doc, termsSource?.trim() || '', contentW * FOOTER_LEFT_RATIO)
   const footerLayout = computeFooterLayout(doc, pageH, contentW, termsSource, isIgst, kind)
 
-  let spacerHeight = 0
-  const spacerRows: string[][] = []
-  if (useCompactLayout) {
-    const usedHeight = estimateProductsBlockHeight(doc, document.items, contentW)
-    spacerHeight = Math.max(12, footerLayout.totalRowTop - itemsTableStartY - usedHeight - FOOTER_TOTAL_ROW_H)
-    if (spacerHeight > 0) {
-      spacerRows.push(Array(colCount).fill(''))
-    }
-  }
-
-  const totalRowIndex = tableBody.length + spacerRows.length
+  const totalRowIndex = tableBody.length
 
   autoTable(doc, {
     startY: y,
     head: tableHead,
-    body: [...tableBody, ...spacerRows, totalRow],
-    margin: { left: bodyLeft, right: pageW - bodyRight },
+    body: [...tableBody, totalRow],
+    margin: { left: bodyLeft, right: pageW - bodyRight, bottom: MARGIN + 10 },
     tableWidth: contentW,
     styles: {
       fontSize: ITEM_TABLE_FONT_SIZE,
@@ -1250,16 +1241,7 @@ function renderSalesDocumentPage(
 
       if (data.section !== 'body') return
 
-      const isSpacerRow =
-        spacerRows.length > 0 &&
-        data.row.index >= tableBody.length &&
-        data.row.index < totalRowIndex
-      if (isSpacerRow) {
-        data.cell.text = ['']
-        data.cell.styles.lineWidth = TABLE_VERTICAL_BORDER
-        data.cell.styles.minCellHeight = spacerHeight
-        return
-      }
+      data.cell.styles.minCellHeight = 0
 
       const isTotalRow = data.row.index === totalRowIndex
       if (isTotalRow) {
@@ -1291,14 +1273,8 @@ function renderSalesDocumentPage(
         data.cell.styles.valign = 'top'
       }
 
-      if (data.column.index === 1) {
-        const item = document.items[data.row.index]
-        data.cell.text = ['']
-        data.cell.styles.minCellHeight = estimateProductCellHeight(
-          doc,
-          item,
-          data.cell.width
-        )
+      if (data.column.index === 1 && !isTotalRow) {
+        data.cell.styles.valign = 'top'
       }
     },
     didDrawCell: (data) => {
@@ -1340,20 +1316,25 @@ function renderSalesDocumentPage(
       if (data.column.index !== 1 || data.row.index >= tableBody.length) return
 
       const item = document.items[data.row.index]
+      if (!item) return
       const fillColor = data.cell.styles.fillColor
-      if (Array.isArray(fillColor)) {
-        doc.setFillColor(fillColor[0], fillColor[1], fillColor[2])
-        doc.rect(data.cell.x + 0.2, data.cell.y + 0.2, data.cell.width - 0.4, data.cell.height - 0.4, 'F')
-      }
+      const bg = Array.isArray(fillColor) ? (fillColor as [number, number, number]) : [255, 255, 255]
+      doc.setFillColor(bg[0], bg[1], bg[2])
+      doc.rect(data.cell.x + 0.1, data.cell.y + 0.1, data.cell.width - 0.2, data.cell.height - 0.2, 'F')
 
       drawProductCell(doc, item, data.cell.x, data.cell.y, data.cell.width)
     },
   })
 
-  const tableEndY = (doc as jsPDF & { lastAutoTable?: { finalY: number } }).lastAutoTable?.finalY ?? y
+  let tableEndY = (doc as jsPDF & { lastAutoTable?: { finalY: number } }).lastAutoTable?.finalY ?? y
   const taxAmt = Number(document.tax_amount) || 0
 
-  // Always attach footer flush under the Total row (no empty gap / floating horizontal line)
+  // If table finished near the bottom of page and summary block won't fit, shift summary to next page
+  if (tableEndY + mainFooterH + MARGIN > pageH) {
+    doc.addPage()
+    tableEndY = drawDocumentHeader(doc, settings, MARGIN, pageW) + 10
+  }
+
   const mainFooterTop = tableEndY
   const layout: FooterLayout = {
     ...footerLayout,
@@ -1384,11 +1365,11 @@ function renderSalesDocumentPage(
   doc.line(bodyLeft, itemsTableStartY, bodyLeft, layout.footerBottom)
   doc.line(bodyRight, itemsTableStartY, bodyRight, layout.footerBottom)
 
-  drawPageNumber(
-    doc,
-    renderOptions?.pageNumber ?? 1,
-    renderOptions?.totalPages ?? 1
-  )
+  const totalPages = (doc as any).internal.getNumberOfPages()
+  for (let p = 1; p <= totalPages; p++) {
+    doc.setPage(p)
+    drawPageNumber(doc, p, totalPages)
+  }
 }
 
 export function generateQuotationPdfBuffer(

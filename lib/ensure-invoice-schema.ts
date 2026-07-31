@@ -43,6 +43,16 @@ async function runEnsureInvoiceSchema(): Promise<void> {
     }
   }
 
+  if (!(await hasColumn('invoice_items', 'sort_order'))) {
+    try {
+      await db.execute(
+        'ALTER TABLE invoice_items ADD COLUMN sort_order INT NOT NULL DEFAULT 0'
+      )
+    } catch (e: unknown) {
+      if (!isDuplicateColumnError(e)) throw e
+    }
+  }
+
   invoiceSchemaReady = true
 }
 

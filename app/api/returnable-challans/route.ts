@@ -94,7 +94,8 @@ export async function POST(req: NextRequest) {
     }
     if (!inserted) throw new Error('Could not generate a unique challan number after 10 attempts')
 
-    for (const item of data.items) {
+    for (let idx = 0; idx < data.items.length; idx++) {
+      const item = data.items[idx]
       let productName = item.description || 'Item'
       if (item.productId) {
         const [prod] = await conn.execute(
@@ -112,13 +113,14 @@ export async function POST(req: NextRequest) {
       )
       await conn.execute(
         `INSERT INTO returnable_challan_items (
-          id, challan_id, product_id, description, quantity_issued, quantity_returned, rate, discount, gst_rate, gst_amount, amount
-        ) VALUES (?,?,?,?,?,?,?,?,?,?,?)`,
+          id, challan_id, product_id, description, quantity_issued, quantity_returned, rate, discount, gst_rate, gst_amount, amount, sort_order
+        ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?)`,
         [
           randomUUID(), id, item.productId || null,
           item.description || productName,
           item.quantity, 0, rate, discount, gstRate,
           totals.cgst + totals.sgst + totals.igst, totals.total,
+          idx + 1,
         ]
       )
     }

@@ -116,14 +116,15 @@ export async function POST(req: NextRequest) {
     }
     if (!inserted) throw new Error('Could not generate a unique PO number after 10 attempts')
 
-    for (const item of itemsWithTotals) {
+    for (let idx = 0; idx < itemsWithTotals.length; idx++) {
+      const item = itemsWithTotals[idx]
       await conn.execute(
         `INSERT INTO purchase_order_items (id, purchase_order_id, product_id, description, quantity, received_qty,
-          rate, discount, gst_rate, gst_amount, amount)
-         VALUES (?,?,?,?,?,?,?,?,?,?,?)`,
+          rate, discount, gst_rate, gst_amount, amount, sort_order)
+         VALUES (?,?,?,?,?,?,?,?,?,?,?,?)`,
         [randomUUID(), id, item.productId || null, item.description || null,
          item.quantity, 0, item.rate, item.discount || 0, item.gstRate,
-         item.cgst + item.sgst + item.igst, item.total]
+         item.cgst + item.sgst + item.igst, item.total, idx + 1]
       )
     }
 

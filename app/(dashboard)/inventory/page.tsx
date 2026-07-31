@@ -179,7 +179,7 @@ export default function InventoryPage() {
       description: product.description || '',
       sellingPrice: Number(product.selling_price),
       purchasePrice: Number(product.purchase_price),
-      openingStock: product.current_stock,
+      openingStock: Math.max(0, product.current_stock),
       gstRate: Number(product.gst_rate),
       gstType: product.gst_type as 'CGST_SGST' | 'IGST' | 'EXEMPT',
       lowStockAlert: product.low_stock_alert,
@@ -420,7 +420,7 @@ export default function InventoryPage() {
                           : ''
                       }
                     >
-                      {Number(p.current_stock)}
+                      {Math.max(0, Number(p.current_stock))}
                       {p.unit_short_name && (
                         <span className="text-xs text-muted-foreground ml-1">{p.unit_short_name}</span>
                       )}
@@ -534,7 +534,7 @@ export default function InventoryPage() {
                                 : ''
                             }`}
                           >
-                            {Number(p.current_stock)}
+                            {Math.max(0, Number(p.current_stock))}
                             {p.unit_short_name ? ` ${p.unit_short_name}` : ''}
                           </span>
                         </div>
@@ -617,7 +617,7 @@ export default function InventoryPage() {
                 </div>
                 <div>
                   <p className="text-muted-foreground">Stock</p>
-                  <p>{viewing.current_stock}</p>
+                  <p>{Math.max(0, Number(viewing.current_stock ?? 0))}</p>
                 </div>
                 <div>
                   <p className="text-muted-foreground">Status</p>
@@ -703,7 +703,7 @@ export default function InventoryPage() {
               </div>
               <div className="space-y-1">
                 <Label className="text-xs sm:text-sm">{editing ? 'Current Stock' : 'Opening Stock'}</Label>
-                <Input type="number" className="h-9 no-spinner" {...form.register('openingStock', { valueAsNumber: true })} />
+                <Input type="number" min={0} step={1} className="h-9 no-spinner" {...form.register('openingStock', { valueAsNumber: true })} />
                 {form.formState.errors.openingStock && (
                   <p className="text-destructive text-xs">{form.formState.errors.openingStock.message}</p>
                 )}

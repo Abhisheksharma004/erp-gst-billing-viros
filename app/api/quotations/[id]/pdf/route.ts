@@ -46,8 +46,7 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
        FROM quotation_items qi
        LEFT JOIN products p ON qi.product_id = p.id
        LEFT JOIN units u ON p.unit_id = u.id
-       WHERE qi.quotation_id = ?
-       ORDER BY qi.id`,
+       WHERE qi.quotation_id = ?`,
       [id]
     ) as any[]
 

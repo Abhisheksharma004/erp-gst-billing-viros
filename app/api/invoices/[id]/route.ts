@@ -28,21 +28,22 @@ async function insertInvoiceItems(
   gstType: string,
   organizationId: string
 ) {
-  for (const item of itemsWithTotals) {
+  for (let idx = 0; idx < itemsWithTotals.length; idx++) {
+    const item = itemsWithTotals[idx]
     await conn.execute(
       `INSERT INTO invoice_items (id, invoice_id, product_id, description, quantity, rate,
-        discount, gst_rate, cgst_rate, sgst_rate, igst_rate, cgst_amount, sgst_amount, igst_amount, gst_amount, amount)
-       VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+        discount, gst_rate, cgst_rate, sgst_rate, igst_rate, cgst_amount, sgst_amount, igst_amount, gst_amount, amount, sort_order)
+       VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
       [randomUUID(), invoiceId, item.productId || null, item.description || null,
        item.quantity, item.rate, item.discount || 0, item.gstRate,
        gstType === 'CGST_SGST' ? item.gstRate / 2 : 0,
        gstType === 'CGST_SGST' ? item.gstRate / 2 : 0,
        gstType === 'IGST' ? item.gstRate : 0,
-       item.cgst, item.sgst, item.igst, item.cgst + item.sgst + item.igst, item.total]
+       item.cgst, item.sgst, item.igst, item.cgst + item.sgst + item.igst, item.total, idx + 1]
     )
     if (item.productId) {
       await conn.execute(
-        'UPDATE products SET current_stock = current_stock - ? WHERE id = ? AND organization_id = ?',
+        'UPDATE products SET current_stock = GREATEST(0, current_stock - ?) WHERE id = ? AND organization_id = ?',
         [item.quantity, item.productId, organizationId]
       )
       const [[stockRow]] = await conn.execute(
@@ -84,7 +85,7 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
   if (!rows[0]) return NextResponse.json({ error: 'Not found' }, { status: 404 })
 
   const [items] = await db.execute(
-    'SELECT ii.*, p.sku FROM invoice_items ii LEFT JOIN products p ON ii.product_id = p.id WHERE ii.invoice_id = ?',
+    'SELECT ii.*, p.sku FROM invoice_items ii LEFT JOIN products p ON ii.product_id = p.id WHERE ii.invoice_id = ? ORDER BY ii.sort_order ASC, ii.id ASC',
     [id]
   ) as any[]
   const [payments] = await db.execute(

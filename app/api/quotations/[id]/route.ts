@@ -35,7 +35,7 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
   ) as any[]
   if (!rows[0]) return NextResponse.json({ error: 'Not found' }, { status: 404 })
 
-  const [items] = await db.execute('SELECT * FROM quotation_items WHERE quotation_id = ?', [id]) as any[]
+  const [items] = await db.execute('SELECT * FROM quotation_items WHERE quotation_id = ? ORDER BY sort_order ASC, id ASC', [id]) as any[]
   return NextResponse.json({ ...rows[0], items })
 }
 

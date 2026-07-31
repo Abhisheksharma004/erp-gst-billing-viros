@@ -144,21 +144,22 @@ export async function POST(req: NextRequest) {
     }
     if (!inserted) throw new Error('Could not generate a unique invoice number after 10 attempts')
 
-    for (const item of itemsWithTotals) {
+    for (let idx = 0; idx < itemsWithTotals.length; idx++) {
+      const item = itemsWithTotals[idx]
       await conn.execute(
         `INSERT INTO invoice_items (id, invoice_id, product_id, description, quantity, rate,
-          discount, gst_rate, cgst_rate, sgst_rate, igst_rate, cgst_amount, sgst_amount, igst_amount, gst_amount, amount)
-         VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+          discount, gst_rate, cgst_rate, sgst_rate, igst_rate, cgst_amount, sgst_amount, igst_amount, gst_amount, amount, sort_order)
+         VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
         [randomUUID(), id, item.productId || null, item.description || null,
          item.quantity, item.rate, item.discount || 0, item.gstRate,
          gstType === 'CGST_SGST' ? item.gstRate / 2 : 0,
          gstType === 'CGST_SGST' ? item.gstRate / 2 : 0,
          gstType === 'IGST' ? item.gstRate : 0,
-         item.cgst, item.sgst, item.igst, item.cgst + item.sgst + item.igst, item.total]
+         item.cgst, item.sgst, item.igst, item.cgst + item.sgst + item.igst, item.total, idx + 1]
       )
       if (item.productId) {
         await conn.execute(
-          'UPDATE products SET current_stock = current_stock - ? WHERE id = ? AND organization_id = ?',
+          'UPDATE products SET current_stock = GREATEST(0, current_stock - ?) WHERE id = ? AND organization_id = ?',
           [item.quantity, item.productId, organizationId]
         )
         const [[stockRow]] = await conn.execute(

@@ -564,7 +564,7 @@ export function ReturnableChallanForm({ mode, challanId }: ReturnableChallanForm
                           <ul className="absolute z-50 mt-1 max-h-40 w-full overflow-auto rounded-md border bg-popover py-1 text-sm shadow-md">
                             {filteredProducts.map((p) => {
                               const lowAlert = Number(p.low_stock_alert ?? 0)
-                              const stock = Number(p.current_stock ?? 0)
+                              const stock = Math.max(0, Number(p.current_stock ?? 0))
                               const isLowOrOut = stock <= lowAlert
                               return (
                                 <li key={p.id}>

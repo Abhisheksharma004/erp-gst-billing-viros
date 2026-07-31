@@ -164,8 +164,9 @@ const finiteNumber = (min: number, max?: number) =>
 
 const finiteIntMin0 = z.preprocess((val) => {
   if (val === undefined || val === null || val === '') return 0
-  if (typeof val === 'number' && Number.isNaN(val)) return 0
-  return val
+  const n = typeof val === 'number' ? val : Number(val)
+  if (!Number.isFinite(n) || n < 0) return 0
+  return Math.floor(n)
 }, z.number().int().min(0))
 
 export const productSchema = z.object({

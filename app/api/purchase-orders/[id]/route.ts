@@ -44,7 +44,7 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
   ) as any[]
   if (!rows[0]) return NextResponse.json({ error: 'Not found' }, { status: 404 })
 
-  const [items] = await db.execute('SELECT * FROM purchase_order_items WHERE purchase_order_id = ?', [id]) as any[]
+  const [items] = await db.execute('SELECT * FROM purchase_order_items WHERE purchase_order_id = ? ORDER BY sort_order ASC, id ASC', [id]) as any[]
   return NextResponse.json({ ...rows[0], items })
 }
 
@@ -131,11 +131,12 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
 
     await conn.execute('DELETE FROM purchase_order_items WHERE purchase_order_id = ?', [id])
 
-    for (const item of itemsWithTotals) {
+    for (let idx = 0; idx < itemsWithTotals.length; idx++) {
+      const item = itemsWithTotals[idx]
       await conn.execute(
         `INSERT INTO purchase_order_items (id, purchase_order_id, product_id, description, quantity, received_qty,
-          rate, discount, gst_rate, gst_amount, amount)
-         VALUES (?,?,?,?,?,?,?,?,?,?,?)`,
+          rate, discount, gst_rate, gst_amount, amount, sort_order)
+         VALUES (?,?,?,?,?,?,?,?,?,?,?,?)`,
         [
           randomUUID(),
           id,
@@ -148,6 +149,7 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
           item.gstRate,
           item.cgst + item.sgst + item.igst,
           item.total,
+          idx + 1,
         ]
       )
     }

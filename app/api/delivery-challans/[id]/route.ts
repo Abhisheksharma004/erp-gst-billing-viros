@@ -18,7 +18,7 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
   ) as any[]
   if (!rows[0]) return NextResponse.json({ error: 'Not found' }, { status: 404 })
 
-  const [items] = await db.execute('SELECT * FROM challan_items WHERE challan_id = ?', [id]) as any[]
+  const [items] = await db.execute('SELECT * FROM challan_items WHERE challan_id = ? ORDER BY sort_order ASC, id ASC', [id]) as any[]
   return NextResponse.json({ ...rows[0], items })
 }
 
@@ -63,7 +63,8 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
 
     await conn.execute('DELETE FROM challan_items WHERE challan_id = ?', [id])
 
-    for (const item of data.items) {
+    for (let idx = 0; idx < data.items.length; idx++) {
+      const item = data.items[idx]
       let productName = item.description || 'Item'
       if (item.productId) {
         const [prod] = await conn.execute(
@@ -85,7 +86,7 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
         'CGST_SGST'
       )
       await conn.execute(
-        'INSERT INTO challan_items (id, challan_id, product_id, description, quantity, rate, discount, gst_rate, gst_amount, amount) VALUES (?,?,?,?,?,?,?,?,?,?)',
+        'INSERT INTO challan_items (id, challan_id, product_id, description, quantity, rate, discount, gst_rate, gst_amount, amount, sort_order) VALUES (?,?,?,?,?,?,?,?,?,?,?)',
         [
           randomUUID(),
           id,
@@ -97,6 +98,7 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
           gstRate,
           totals.cgst + totals.sgst + totals.igst,
           totals.total,
+          idx + 1,
         ]
       )
     }

@@ -430,9 +430,11 @@ function renderDeliveryChallanPage(
   const tableBody = challan.items.map((item, idx) => {
     const qty = Number(item.quantity) || 0
     totalQty += qty
+    const { productName, description } = getProductCellParts(item)
+    const productCellText = description ? `${productName}\n${description}` : productName
     return [
       String(idx + 1),
-      getProductCellParts(item).productName,
+      productCellText,
       formatHsnSac(item.hsn_code, item.sac_code),
       formatQtyWithUnit(qty, item.unit_short || defaultUnit),
     ] as string[]
@@ -442,29 +444,15 @@ function renderDeliveryChallanPage(
   const termsSource = (challan.terms || settings.termsCondition || '').trim()
   const leftW = contentW * FOOTER_LEFT_RATIO
   const footerH = estimateChallanFooterH(doc, termsSource, leftW)
-  const footerBottom = pageH - MARGIN
-  const footerTop = footerBottom - footerH
-  const totalRowTop = footerTop - FOOTER_TOTAL_ROW_H
-  const useCompactLayout = challan.items.length <= 3
 
-  let spacerHeight = 0
-  const spacerRows: string[][] = []
-  if (useCompactLayout) {
-    const usedHeight = estimateProductsBlockHeight(doc, challan.items, contentW)
-    spacerHeight = Math.max(12, totalRowTop - y - usedHeight - FOOTER_TOTAL_ROW_H)
-    if (spacerHeight > 0) {
-      spacerRows.push(['', '', '', ''])
-    }
-  }
-
-  const totalRowIndex = tableBody.length + spacerRows.length
+  const totalRowIndex = tableBody.length
   const itemsTableStartY = y
 
   autoTable(doc, {
     startY: y,
     head: [['Sr. No.', 'Name of Product / Service', 'HSN / SAC', 'Qty']],
-    body: [...tableBody, ...spacerRows, totalRow],
-    margin: { left: bodyLeft, right: pageW - bodyRight },
+    body: [...tableBody, totalRow],
+    margin: { left: bodyLeft, right: pageW - bodyRight, bottom: MARGIN + 10 },
     tableWidth: contentW - itemsTableBorderAllowance(4),
     styles: {
       fontSize: ITEM_TABLE_FONT_SIZE,
@@ -491,16 +479,7 @@ function renderDeliveryChallanPage(
       }
       if (data.section !== 'body') return
 
-      const isSpacerRow =
-        spacerRows.length > 0 &&
-        data.row.index >= tableBody.length &&
-        data.row.index < totalRowIndex
-      if (isSpacerRow) {
-        data.cell.text = ['']
-        data.cell.styles.lineWidth = TABLE_VERTICAL_BORDER
-        data.cell.styles.minCellHeight = spacerHeight
-        return
-      }
+      data.cell.styles.minCellHeight = 0
 
       const isTotalRow = data.row.index === totalRowIndex
       if (isTotalRow) {
@@ -517,11 +496,6 @@ function renderDeliveryChallanPage(
       }
 
       data.cell.styles.lineWidth = TABLE_VERTICAL_BORDER
-      if (data.column.index === 1) {
-        const item = challan.items[data.row.index]
-        data.cell.text = ['']
-        data.cell.styles.minCellHeight = estimateProductCellHeight(doc, item, data.cell.width)
-      }
     },
     didDrawCell: (data) => {
       if (data.section !== 'body') return
@@ -552,13 +526,20 @@ function renderDeliveryChallanPage(
 
       if (data.column.index !== 1 || data.row.index >= tableBody.length) return
       const item = challan.items[data.row.index]
+      if (!item) return
+      const fillColor = data.cell.styles.fillColor
+      const bg = Array.isArray(fillColor) ? (fillColor as [number, number, number]) : [255, 255, 255]
+      doc.setFillColor(bg[0], bg[1], bg[2])
+      doc.rect(data.cell.x + 0.1, data.cell.y + 0.1, data.cell.width - 0.2, data.cell.height - 0.2, 'F')
       drawProductCell(doc, item, data.cell.x, data.cell.y, data.cell.width)
     },
   })
 
-  const tableEndY = (doc as jsPDF & { lastAutoTable?: { finalY: number } }).lastAutoTable?.finalY ?? y
-  const layoutFooterTop = useCompactLayout ? footerTop : tableEndY
-  const layoutFooterH = footerH
+  let tableEndY = (doc as jsPDF & { lastAutoTable?: { finalY: number } }).lastAutoTable?.finalY ?? y
+  if (tableEndY + footerH + MARGIN > pageH) {
+    doc.addPage()
+    tableEndY = MARGIN + 10
+  }
 
   const footerBottomY = drawChallanFooter(
     doc,
@@ -567,8 +548,8 @@ function renderDeliveryChallanPage(
     contentW,
     settings,
     termsSource,
-    layoutFooterTop,
-    layoutFooterH
+    tableEndY,
+    footerH
   )
 
   doc.setDrawColor(...BORDER)
@@ -576,7 +557,11 @@ function renderDeliveryChallanPage(
   doc.line(bodyLeft, itemsTableStartY, bodyLeft, footerBottomY)
   doc.line(bodyRight, itemsTableStartY, bodyRight, footerBottomY)
 
-  drawPageNumber(doc)
+  const totalPages = (doc as any).internal.getNumberOfPages()
+  for (let p = 1; p <= totalPages; p++) {
+    doc.setPage(p)
+    drawPageNumber(doc, p, totalPages)
+  }
 }
 
 export function generateDeliveryChallanPdfBuffer(

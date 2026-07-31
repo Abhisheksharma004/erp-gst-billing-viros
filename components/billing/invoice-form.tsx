@@ -957,116 +957,116 @@ function isPaymentModeActive(mode?: string | null): boolean {
                     )}
                   </div>
 
-                  <div className="p-4 pt-3 space-y-4">
-                    <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
-                      <div
-                        className="space-y-2 relative"
-                        ref={(el) => { productSearchRefs.current[field.id] = el }}
-                      >
-                        <Label>Product *</Label>
-                        <Input
-                          value={meta.productName}
-                          onChange={(e) => handleProductNameChange(field.id, i, e.target.value)}
-                          onFocus={() => updateItemMeta(field.id, { listOpen: true })}
-                          placeholder="Type product name..."
-                          autoComplete="off"
-                          className="h-9"
-                        />
-                        {meta.listOpen && filteredProducts.length > 0 && (
-                          <ul className="absolute z-50 mt-1 max-h-40 w-full overflow-auto rounded-md border bg-popover py-1 text-sm shadow-md">
-                            {filteredProducts.map((p) => {
-                              const lowAlert = Number(p.low_stock_alert ?? 0)
-                              const stock = Number(p.current_stock ?? 0)
-                              const isLowOrOut = stock <= lowAlert
-                              return (
-                                <li key={p.id}>
-                                  <button
-                                    type="button"
-                                    className="w-full px-3 py-2 text-left hover:bg-accent flex items-center justify-between gap-2"
-                                    onMouseDown={(e) => e.preventDefault()}
-                                    onClick={() => applyProduct(field.id, i, p.id)}
-                                  >
-                                    <span className="font-medium truncate">{p.name}</span>
-                                    <span
-                                      className={cn(
-                                        'shrink-0 text-xs font-semibold tabular-nums',
-                                        isLowOrOut ? 'text-yellow-600' : 'text-green-600'
-                                      )}
+                  <div className="p-4 pt-3">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-12 gap-3 items-start">
+                      <div className="lg:col-span-3 space-y-1.5">
+                        <div
+                          className="space-y-1 relative"
+                          ref={(el) => { productSearchRefs.current[field.id] = el }}
+                        >
+                          <Label className="text-xs">Product *</Label>
+                          <Input
+                            value={meta.productName}
+                            onChange={(e) => handleProductNameChange(field.id, i, e.target.value)}
+                            onFocus={() => updateItemMeta(field.id, { listOpen: true })}
+                            placeholder="Enter Product"
+                            autoComplete="off"
+                            className="h-9 text-xs"
+                          />
+                          {meta.listOpen && filteredProducts.length > 0 && (
+                            <ul className="absolute z-50 mt-1 max-h-40 w-full overflow-auto rounded-md border bg-popover py-1 text-sm shadow-md">
+                              {filteredProducts.map((p) => {
+                                const lowAlert = Number(p.low_stock_alert ?? 0)
+                                const stock = Math.max(0, Number(p.current_stock ?? 0))
+                                const isLowOrOut = stock <= lowAlert
+                                return (
+                                  <li key={p.id}>
+                                    <button
+                                      type="button"
+                                      className="w-full px-3 py-2 text-left hover:bg-accent flex items-center justify-between gap-2"
+                                      onMouseDown={(e) => e.preventDefault()}
+                                      onClick={() => applyProduct(field.id, i, p.id)}
                                     >
-                                      Stock: {stock}
-                                    </span>
-                                  </button>
-                                </li>
-                              )
-                            })}
-                          </ul>
-                        )}
-                        {meta.listOpen && meta.productName.trim() && filteredProducts.length === 0 && (
-                          <p className="text-xs text-muted-foreground">No matching product</p>
-                        )}
-                        {errors.items?.[i]?.productId && (
-                          <p className="text-destructive text-xs">Please select a product from the list</p>
-                        )}
-                      </div>
+                                      <span className="font-medium truncate text-xs">{p.name}</span>
+                                      <span
+                                        className={cn(
+                                          'shrink-0 text-[11px] font-semibold tabular-nums',
+                                          isLowOrOut ? 'text-yellow-600' : 'text-green-600'
+                                        )}
+                                      >
+                                        Stock: {stock}
+                                      </span>
+                                    </button>
+                                  </li>
+                                )
+                              })}
+                            </ul>
+                          )}
+                          {meta.listOpen && meta.productName.trim() && filteredProducts.length === 0 && (
+                            <p className="text-[11px] text-muted-foreground">No matching product</p>
+                          )}
+                          {errors.items?.[i]?.productId && (
+                            <p className="text-destructive text-[11px]">Please select a product from the list</p>
+                          )}
+                        </div>
 
-                      <div className="space-y-2">
-                        <Label>Description</Label>
                         <Textarea
                           rows={2}
-                          className="min-h-[4.5rem] resize-none text-sm"
-                          placeholder="Product description"
+                          className="min-h-[2.5rem] resize-none text-xs rounded-md border"
+                          placeholder="Enter Description"
                           {...register(`items.${i}.description`)}
                         />
                       </div>
 
-                      <div className="space-y-2">
-                        <Label>HSN/SAC</Label>
+                      <div className="lg:col-span-1 space-y-1">
+                        <Label className="text-xs">HSN/SAC</Label>
                         <Input
                           value={meta.hsnSac}
                           onChange={(e) => updateItemMeta(field.id, { hsnSac: e.target.value })}
-                          placeholder="HSN or SAC"
-                          className="h-9 font-mono text-xs"
+                          placeholder="HSN/SAC"
+                          className="h-9 font-mono text-xs px-2"
                         />
                       </div>
-                    </div>
 
-                    <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3 pt-1 border-t border-dashed">
-                      <div className="space-y-2">
+                      <div className="lg:col-span-1 space-y-1">
                         <Label className="text-xs">Qty *</Label>
                         <Input
                           type="number"
                           min="0.001"
                           step="any"
-                          className="h-9 no-spinner"
+                          className="h-9 no-spinner text-xs px-2"
                           {...register(`items.${i}.quantity`, { valueAsNumber: true })}
                         />
                       </div>
-                      <div className="space-y-2">
+
+                      <div className="lg:col-span-1 space-y-1">
                         <Label className="text-xs">Rate *</Label>
                         <Input
                           type="number"
                           min="0"
                           step="0.01"
-                          className="h-9 no-spinner"
+                          className="h-9 no-spinner text-xs px-2"
                           {...register(`items.${i}.rate`, { valueAsNumber: true })}
                         />
                       </div>
-                      <div className="space-y-2">
+
+                      <div className="lg:col-span-2 space-y-1">
                         <Label className="text-xs">Taxable Amt.</Label>
                         <Input
                           readOnly
                           tabIndex={-1}
                           value={formatCurrency(line.taxableGross)}
-                          className={readOnlyInputClass}
+                          className={cn(readOnlyInputClass, 'text-xs px-2')}
                         />
                       </div>
-                      <div className="space-y-2">
+
+                      <div className="lg:col-span-1 space-y-1">
                         <Label className="text-xs">GST %</Label>
                         <Select
                           value={String(item?.gstRate ?? 0)}
                           onValueChange={(v) => setValue(`items.${i}.gstRate`, parseFloat(v))}
                         >
-                          <SelectTrigger className="h-9">
+                          <SelectTrigger className="h-9 text-xs px-2">
                             <SelectValue />
                           </SelectTrigger>
                           <SelectContent>
@@ -1078,14 +1078,15 @@ function isPaymentModeActive(mode?: string | null): boolean {
                           </SelectContent>
                         </Select>
                       </div>
-                      <div className="space-y-2">
+
+                      <div className="lg:col-span-1 space-y-1">
                         <Label className="text-xs">Discount %</Label>
                         <Input
                           type="number"
                           min="0"
                           max="100"
                           step="0.01"
-                          className="h-9 no-spinner"
+                          className="h-9 no-spinner text-xs px-2"
                           value={Number.isFinite(item?.discount) ? item.discount : ''}
                           onChange={(e) => {
                             const raw = e.target.value
@@ -1094,13 +1095,14 @@ function isPaymentModeActive(mode?: string | null): boolean {
                           }}
                         />
                       </div>
-                      <div className="space-y-2">
+
+                      <div className="lg:col-span-2 space-y-1">
                         <Label className="text-xs">Amount</Label>
                         <Input
                           readOnly
                           tabIndex={-1}
                           value={formatCurrency(line.finalAmount)}
-                          className={cn(readOnlyInputClass, 'font-semibold')}
+                          className={cn(readOnlyInputClass, 'font-semibold text-xs px-2')}
                         />
                       </div>
                     </div>

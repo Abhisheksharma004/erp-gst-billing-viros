@@ -29,7 +29,7 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
   ) as any[]
   if (!rows[0]) return NextResponse.json({ error: 'Not found' }, { status: 404 })
 
-  const [items] = await db.execute('SELECT * FROM purchase_items WHERE purchase_id = ?', [id]) as any[]
+  const [items] = await db.execute('SELECT * FROM purchase_items WHERE purchase_id = ? ORDER BY sort_order ASC, id ASC', [id]) as any[]
   return NextResponse.json({ ...rows[0], items })
 }
 
@@ -41,17 +41,18 @@ async function insertPurchaseItems(
   gstType: string,
   organizationId: string
 ) {
-  for (const item of itemsWithTotals) {
+  for (let idx = 0; idx < itemsWithTotals.length; idx++) {
+    const item = itemsWithTotals[idx]
     await conn.execute(
       `INSERT INTO purchase_items (id, purchase_id, product_id, description, quantity, rate,
-        discount, gst_rate, cgst_rate, sgst_rate, igst_rate, cgst_amount, sgst_amount, igst_amount, gst_amount, amount)
-       VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+        discount, gst_rate, cgst_rate, sgst_rate, igst_rate, cgst_amount, sgst_amount, igst_amount, gst_amount, amount, sort_order)
+       VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
       [randomUUID(), purchaseId, item.productId || null, item.description || null,
        item.quantity, item.rate, item.discount || 0, item.gstRate,
        gstType === 'CGST_SGST' ? item.gstRate / 2 : 0,
        gstType === 'CGST_SGST' ? item.gstRate / 2 : 0,
        gstType === 'IGST' ? item.gstRate : 0,
-       item.cgst, item.sgst, item.igst, item.cgst + item.sgst + item.igst, item.total]
+       item.cgst, item.sgst, item.igst, item.cgst + item.sgst + item.igst, item.total, idx + 1]
     )
     if (item.productId) {
       await conn.execute(
@@ -123,7 +124,7 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
     for (const item of oldItems as any[]) {
       if (item.product_id) {
         await conn.execute(
-          'UPDATE products SET current_stock = current_stock - ? WHERE id = ? AND organization_id = ?',
+          'UPDATE products SET current_stock = GREATEST(0, current_stock - ?) WHERE id = ? AND organization_id = ?',
           [item.quantity, item.product_id, organizationId]
         )
       }
@@ -288,7 +289,7 @@ export async function DELETE(req: NextRequest, { params }: { params: Promise<{ i
     for (const item of items as any[]) {
       if (item.product_id) {
         await conn.execute(
-          'UPDATE products SET current_stock = current_stock - ? WHERE id = ? AND organization_id = ?',
+          'UPDATE products SET current_stock = GREATEST(0, current_stock - ?) WHERE id = ? AND organization_id = ?',
           [item.quantity, item.product_id, organizationId]
         )
       }

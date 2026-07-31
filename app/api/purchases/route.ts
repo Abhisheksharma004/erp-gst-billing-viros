@@ -115,17 +115,18 @@ export async function POST(req: NextRequest) {
        paymentMode ?? null, paymentRef ?? null, data.notes ? data.notes : null, data.terms ? data.terms : null, status]
     )
 
-    for (const item of itemsWithTotals) {
+    for (let idx = 0; idx < itemsWithTotals.length; idx++) {
+      const item = itemsWithTotals[idx]
       await conn.execute(
         `INSERT INTO purchase_items (id, purchase_id, product_id, description, quantity, rate,
-          discount, gst_rate, cgst_rate, sgst_rate, igst_rate, cgst_amount, sgst_amount, igst_amount, gst_amount, amount)
-         VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
+          discount, gst_rate, cgst_rate, sgst_rate, igst_rate, cgst_amount, sgst_amount, igst_amount, gst_amount, amount, sort_order)
+         VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
         [randomUUID(), id, item.productId || null, item.description || null,
          item.quantity, item.rate, item.discount || 0, item.gstRate,
          gstType === 'CGST_SGST' ? item.gstRate / 2 : 0,
          gstType === 'CGST_SGST' ? item.gstRate / 2 : 0,
          gstType === 'IGST' ? item.gstRate : 0,
-         item.cgst, item.sgst, item.igst, item.cgst + item.sgst + item.igst, item.total]
+         item.cgst, item.sgst, item.igst, item.cgst + item.sgst + item.igst, item.total, idx + 1]
       )
       if (item.productId) {
         await conn.execute(

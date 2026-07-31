@@ -57,11 +57,12 @@ export async function insertQuotationItems(
   quotationId: string,
   itemsWithTotals: any[]
 ) {
-  for (const item of itemsWithTotals) {
+  for (let idx = 0; idx < itemsWithTotals.length; idx++) {
+    const item = itemsWithTotals[idx]
     await conn.execute(
       `INSERT INTO quotation_items (id, quotation_id, product_id, description, quantity, rate,
-        discount, gst_rate, gst_amount, amount)
-       VALUES (?,?,?,?,?,?,?,?,?,?)`,
+        discount, gst_rate, gst_amount, amount, sort_order)
+       VALUES (?,?,?,?,?,?,?,?,?,?,?)`,
       [
         randomUUID(),
         quotationId,
@@ -73,6 +74,7 @@ export async function insertQuotationItems(
         item.gstRate,
         item.cgst + item.sgst + item.igst,
         item.total,
+        idx + 1,
       ]
     )
   }

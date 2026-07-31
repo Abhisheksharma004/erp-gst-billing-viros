@@ -865,105 +865,107 @@ export function PurchaseForm({ purchaseId }: { purchaseId?: string }) {
                       </Button>
                     )}
                   </div>
-                  <div className="p-4 pt-3 space-y-4">
-                    <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
-                      <div
-                        className="space-y-2 relative"
-                        ref={(el) => { productSearchRefs.current[field.id] = el }}
-                      >
-                        <Label>Product *</Label>
-                        <Input
-                          value={meta.productName}
-                          onChange={(e) => handleProductNameChange(field.id, i, e.target.value)}
-                          onFocus={() => updateItemMeta(field.id, { listOpen: true })}
-                          placeholder="Type product name..."
-                          autoComplete="off"
-                          className="h-9"
-                        />
-                        {meta.listOpen && filteredProducts.length > 0 && (
-                          <ul className="absolute z-50 mt-1 max-h-40 w-full overflow-auto rounded-md border bg-popover py-1 text-sm shadow-md">
-                            {filteredProducts.map((p) => (
-                              <li key={p.id}>
-                                <button
-                                  type="button"
-                                  className="w-full px-3 py-2 text-left hover:bg-accent font-medium"
-                                  onMouseDown={(e) => e.preventDefault()}
-                                  onClick={() => applyProduct(field.id, i, p.id)}
-                                >
-                                  {p.name}
-                                </button>
-                              </li>
-                            ))}
-                          </ul>
-                        )}
-                        {errors.items?.[i]?.productId && (
-                          <p className="text-destructive text-xs">Please select a product from the list</p>
-                        )}
-                      </div>
-                      <div className="space-y-2">
-                        <Label>Description</Label>
+                  <div className="p-4 pt-3">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-12 gap-3 items-start">
+                      <div className="lg:col-span-3 space-y-1.5">
+                        <div
+                          className="space-y-1 relative"
+                          ref={(el) => { productSearchRefs.current[field.id] = el }}
+                        >
+                          <Label className="text-xs">Product *</Label>
+                          <Input
+                            value={meta.productName}
+                            onChange={(e) => handleProductNameChange(field.id, i, e.target.value)}
+                            onFocus={() => updateItemMeta(field.id, { listOpen: true })}
+                            placeholder="Enter Product"
+                            autoComplete="off"
+                            className="h-9 text-xs"
+                          />
+                          {meta.listOpen && filteredProducts.length > 0 && (
+                            <ul className="absolute z-50 mt-1 max-h-40 w-full overflow-auto rounded-md border bg-popover py-1 text-sm shadow-md">
+                              {filteredProducts.map((p) => (
+                                <li key={p.id}>
+                                  <button
+                                    type="button"
+                                    className="w-full px-3 py-2 text-left hover:bg-accent font-medium text-xs"
+                                    onMouseDown={(e) => e.preventDefault()}
+                                    onClick={() => applyProduct(field.id, i, p.id)}
+                                  >
+                                    {p.name}
+                                  </button>
+                                </li>
+                              ))}
+                            </ul>
+                          )}
+                          {errors.items?.[i]?.productId && (
+                            <p className="text-destructive text-[11px]">Please select a product from the list</p>
+                          )}
+                        </div>
+
                         <Textarea
                           rows={2}
-                          className="min-h-[4.5rem] resize-none text-sm"
-                          placeholder="Product description"
+                          className="min-h-[2.5rem] resize-none text-xs rounded-md border"
+                          placeholder="Enter Description"
                           {...register(`items.${i}.description`)}
                         />
                       </div>
-                      <div className="space-y-2">
-                        <Label>HSN/SAC</Label>
+
+                      <div className="lg:col-span-1 space-y-1">
+                        <Label className="text-xs">HSN/SAC</Label>
                         <Input
                           value={meta.hsnSac}
                           onChange={(e) => updateItemMeta(field.id, { hsnSac: e.target.value })}
-                          placeholder="HSN or SAC"
-                          className="h-9 font-mono text-xs"
+                          placeholder="HSN/SAC"
+                          className="h-9 font-mono text-xs px-2"
                         />
                       </div>
-                    </div>
 
-                    <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-7 gap-3 pt-1 border-t border-dashed">
-                      <div className="space-y-2">
+                      <div className="lg:col-span-1 space-y-1">
                         <Label className="text-xs">Qty *</Label>
                         <Input
                           type="number"
                           min="0.001"
                           step="any"
-                          className="h-9 no-spinner"
+                          className="h-9 no-spinner text-xs px-2"
                           {...register(`items.${i}.quantity`, { valueAsNumber: true })}
                         />
                       </div>
-                      <div className="space-y-2">
+
+                      <div className="lg:col-span-1 space-y-1">
                         <Label className="text-xs">Rate *</Label>
                         <Input
                           type="number"
                           min="0"
                           step="0.01"
-                          className="h-9 no-spinner"
+                          className="h-9 no-spinner text-xs px-2"
                           {...register(`items.${i}.rate`, { valueAsNumber: true })}
                         />
                       </div>
-                      <div className="space-y-2">
+
+                      <div className="lg:col-span-2 space-y-1">
                         <Label className="text-xs">Taxable Amt.</Label>
                         <div className="relative">
-                          <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-muted-foreground text-sm pointer-events-none">
+                          <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-muted-foreground text-xs pointer-events-none font-medium">
                             ₹
                           </span>
                           <Input
                             type="number"
                             min="0"
                             step="0.01"
-                            className="h-9 no-spinner pl-7"
+                            className="h-9 no-spinner pl-7 pr-2 text-xs"
                             value={Number.isFinite(taxableDisplay) ? taxableDisplay : ''}
                             onChange={(e) => handleTaxableEdit(field.id, i, e.target.value)}
                           />
                         </div>
                       </div>
-                      <div className="space-y-2">
+
+                      <div className="lg:col-span-1 space-y-1">
                         <Label className="text-xs">GST %</Label>
                         <Select
                           value={String(item?.gstRate ?? 0)}
                           onValueChange={(v) => setValue(`items.${i}.gstRate`, parseFloat(v))}
                         >
-                          <SelectTrigger className="h-9">
+                          <SelectTrigger className="h-9 text-xs px-2">
                             <SelectValue />
                           </SelectTrigger>
                           <SelectContent>
@@ -975,12 +977,13 @@ export function PurchaseForm({ purchaseId }: { purchaseId?: string }) {
                           </SelectContent>
                         </Select>
                       </div>
-                      <div className="space-y-2">
-                        <Label className="text-xs">Discount</Label>
+
+                      <div className="lg:col-span-1 space-y-1">
+                        <Label className="text-xs">Discount %</Label>
                         <Input
                           type="text"
                           inputMode="decimal"
-                          className="h-9"
+                          className="h-9 text-xs px-2"
                           value={
                             meta.discountDraft !== undefined
                               ? meta.discountDraft
@@ -1004,57 +1007,17 @@ export function PurchaseForm({ purchaseId }: { purchaseId?: string }) {
                           }}
                         />
                       </div>
-                      <div className="space-y-2">
-                        <Label className="text-xs">Round off Amt.</Label>
-                        <div className="relative">
-                          <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-muted-foreground text-sm pointer-events-none">
-                            ₹
-                          </span>
-                          <Input
-                            type="text"
-                            inputMode="decimal"
-                            className="h-9 pl-7"
-                            placeholder="0"
-                            value={
-                              meta.roundOffDraft !== undefined
-                                ? meta.roundOffDraft
-                                : formatRoundOffInputValue(item?.roundOff)
-                            }
-                            onChange={(e) => {
-                              const raw = sanitizeSignedDecimalInput(e.target.value)
-                              const num = parseRoundOffInput(raw)
-                              updateItemMeta(field.id, {
-                                roundOffDraft: raw,
-                                amountTouched: false,
-                              })
-                              setValue(`items.${i}.roundOff`, num, {
-                                shouldDirty: true,
-                                shouldValidate: true,
-                              })
-                            }}
-                            onBlur={() => {
-                              const raw = meta.roundOffDraft
-                              updateItemMeta(field.id, { roundOffDraft: undefined })
-                              if (raw !== undefined) {
-                                setValue(`items.${i}.roundOff`, parseRoundOffInput(raw), {
-                                  shouldDirty: true,
-                                })
-                              }
-                            }}
-                          />
-                        </div>
-                      </div>
-                      <div className="space-y-2">
+                      <div className="lg:col-span-2 space-y-1">
                         <Label className="text-xs">Amount</Label>
                         <div className="relative">
-                          <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-muted-foreground text-sm pointer-events-none">
+                          <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-muted-foreground text-xs pointer-events-none font-medium">
                             ₹
                           </span>
                           <Input
                             type="number"
                             min="0"
                             step="0.01"
-                            className="h-9 no-spinner pl-7 font-semibold"
+                            className="h-9 no-spinner pl-7 pr-2 font-semibold text-xs"
                             value={Number.isFinite(amountDisplay) ? amountDisplay : ''}
                             onChange={(e) => handleAmountEdit(field.id, e.target.value)}
                           />

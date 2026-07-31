@@ -49,7 +49,7 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
        LEFT JOIN products p ON ii.product_id = p.id
        LEFT JOIN units u ON p.unit_id = u.id
        WHERE ii.invoice_id = ?
-       ORDER BY ii.id`,
+       ORDER BY ii.sort_order ASC, ii.id ASC`,
       [id]
     ) as any[]
 

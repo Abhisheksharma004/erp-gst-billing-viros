@@ -22,5 +22,11 @@ export async function ensureProductsDiscountColumn(): Promise<void> {
       /Duplicate column/i.test(msg)
     if (!isDuplicate) throw e
   }
+  try {
+    await db.execute('UPDATE products SET current_stock = 0 WHERE current_stock < 0')
+    await db.execute('UPDATE products SET opening_stock = 0 WHERE opening_stock < 0')
+  } catch (e: unknown) {
+    console.warn('Failed to sanitize negative product stock:', e)
+  }
   discountColumnReady = true
 }

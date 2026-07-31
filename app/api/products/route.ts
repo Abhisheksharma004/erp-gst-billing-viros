@@ -67,7 +67,7 @@ export async function POST(req: NextRequest) {
       [id, organizationId, data.name, data.sku || null, data.barcode || null, data.hsnCode || null, data.sacCode || null,
        data.description || null, data.categoryId || null, data.brandId || null, data.unitId || null,
        data.purchasePrice, data.sellingPrice, data.mrp ?? null, data.gstRate, data.gstType,
-       data.openingStock, data.openingStock, data.lowStockAlert, data.discount ?? null, data.isActive ? 1 : 0]
+       Math.max(0, data.openingStock), Math.max(0, data.openingStock), Math.max(0, data.lowStockAlert), data.discount ?? null, data.isActive ? 1 : 0]
     )
     const [rows] = await db.execute(
       `SELECT p.*, c.name as category_name, b.name as brand_name, u.name as unit_name

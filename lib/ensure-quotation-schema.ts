@@ -53,12 +53,14 @@ async function runEnsureQuotationSchema(): Promise<void> {
     }
   }
 
-  try {
-    await db.execute(
-      'ALTER TABLE quotation_items MODIFY COLUMN discount DECIMAL(10,2) NOT NULL DEFAULT 0'
-    )
-  } catch {
-    // column may already be correct
+  if (!(await hasColumn('quotation_items', 'sort_order'))) {
+    try {
+      await db.execute(
+        'ALTER TABLE quotation_items ADD COLUMN sort_order INT NOT NULL DEFAULT 0'
+      )
+    } catch (e: unknown) {
+      if (!isDuplicateColumnError(e)) throw e
+    }
   }
 
   quotationSchemaReady = true

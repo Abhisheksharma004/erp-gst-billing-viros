@@ -52,6 +52,16 @@ export async function ensureReturnableChallanSchema(): Promise<void> {
       'ALTER TABLE returnable_challan_items ADD COLUMN discount DECIMAL(5,2) NOT NULL DEFAULT 0 AFTER rate'
     )
   }
+  if (!(await hasColumn('returnable_challan_items', 'sort_order'))) {
+    await addColumn(
+      'ALTER TABLE returnable_challan_items ADD COLUMN sort_order INT NOT NULL DEFAULT 0'
+    )
+  }
+  if (!(await hasColumn('challan_items', 'sort_order'))) {
+    await addColumn(
+      'ALTER TABLE challan_items ADD COLUMN sort_order INT NOT NULL DEFAULT 0'
+    )
+  }
 
   schemaReady = true
 }

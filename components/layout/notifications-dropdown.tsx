@@ -153,7 +153,7 @@ export function NotificationsDropdown() {
 
                       <div className="flex items-center justify-between text-xs">
                         <span className="text-muted-foreground">
-                          Available: <strong className={isZero ? 'text-rose-600 font-bold' : 'text-amber-600 font-bold'}>{item.current_stock} {item.unit_name || 'units'}</strong>
+                          Available: <strong className={isZero ? 'text-rose-600 font-bold' : 'text-amber-600 font-bold'}>{Math.max(0, Number(item.current_stock ?? 0))} {item.unit_name || 'units'}</strong>
                         </span>
                         <span className="text-xs text-muted-foreground">
                           Alert Level: {item.low_stock_alert}

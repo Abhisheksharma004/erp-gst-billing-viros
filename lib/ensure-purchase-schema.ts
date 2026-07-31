@@ -40,7 +40,14 @@ export async function ensurePurchaseSchema(): Promise<void> {
   }
   try {
     await db.execute(
-      'ALTER TABLE purchases ADD COLUMN payment_ref VARCHAR(100) NULL AFTER payment_mode'
+      'ALTER TABLE purchase_items ADD COLUMN sort_order INT NOT NULL DEFAULT 0'
+    )
+  } catch {
+    // column may already exist
+  }
+  try {
+    await db.execute(
+      'ALTER TABLE purchase_order_items ADD COLUMN sort_order INT NOT NULL DEFAULT 0'
     )
   } catch {
     // column may already exist
