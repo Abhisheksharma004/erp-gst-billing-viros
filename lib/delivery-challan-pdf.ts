@@ -308,13 +308,13 @@ function drawChallanFooter(
   return footerTop + footerH
 }
 
-function drawPageNumber(doc: jsPDF): void {
+function drawPageNumber(doc: jsPDF, pageNumber: number, totalPages: number): void {
   const pageW = doc.internal.pageSize.getWidth()
   const pageH = doc.internal.pageSize.getHeight()
   doc.setFont('helvetica', 'normal')
   doc.setFontSize(7)
   doc.setTextColor(...TEXT)
-  doc.text('Page 1 of 1', pageW - MARGIN, pageH - 3.5, { align: 'right' })
+  doc.text(`Page ${pageNumber} of ${totalPages}`, pageW - MARGIN, pageH - 3.5, { align: 'right' })
 }
 
 function renderDeliveryChallanPage(
