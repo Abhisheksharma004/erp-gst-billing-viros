@@ -272,13 +272,25 @@ export default function ReportsPage() {
         Voucher: '-',
         'Bill No. / Payment ID': '-',
         'Mode of payment / Ref No': 'Closing Bal.',
-        Credit: 0,
-        Debit: `${formatCurrency(Math.abs(bal))} ${drCr}`,
-        Balance: '-',
       })
     }
 
-    const filename = `${reportType}_${from}_to_${to}.xls`
+    const sanitizeFilename = (str: string) =>
+      str
+        .trim()
+        .replace(/[^a-zA-Z0-9_-]/g, '_')
+        .replace(/_+/g, '_')
+
+    const todayStr = new Date().toISOString().split('T')[0]
+    const party = selectedPartyName()
+
+    let filename = ''
+    if (partyId && partyId !== 'ALL' && party && party !== 'All Parties' && party !== 'ALL') {
+      filename = `${sanitizeFilename(party)}_Ledger_${todayStr}.xls`
+    } else {
+      filename = `${sanitizeFilename(selectedReportLabel())}_ALL_${todayStr}.xls`
+    }
+
     exportToExcel(excelExportRows, filename, selectedReportLabel())
   }
 

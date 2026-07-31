@@ -38,119 +38,84 @@ export function generateReportPdf(options: ReportPdfOptions) {
   const margin = 12
   const contentW = pageW - margin * 2 // 273mm
 
-  // Theme Colors
-  const headerBg: [number, number, number] = [15, 23, 42] // Slate 900
-  const accentColor: [number, number, number] = [37, 99, 235] // Blue 600
-  const badgeBg: [number, number, number] = [29, 78, 216] // Dark Blue 700
+  // Colors matching diagram
+  const primaryBlue: [number, number, number] = [37, 99, 235] // Vibrant Blue
+  const subBlue: [number, number, number] = [96, 165, 250] // Light Blue
 
-  // 1. Sleek Header Bar
-  doc.setFillColor(...headerBg)
-  doc.rect(margin, margin, contentW, 16, 'F')
-
-  // Left: Company Name & Subtitle
+  // 1. Centered Header Title & Subtitle
   doc.setFont('helvetica', 'bold')
-  doc.setFontSize(13)
-  doc.setTextColor(255, 255, 255)
-  doc.text(companyName.toUpperCase(), margin + 5, margin + 7)
+  doc.setFontSize(18)
+  doc.setTextColor(...primaryBlue)
+  doc.text(reportTitle, pageW / 2, 14, { align: 'center' })
 
-  doc.setFont('helvetica', 'normal')
-  doc.setFontSize(8)
-  doc.setTextColor(148, 163, 184) // Slate 400
-  doc.text('STATEMENT OF ACCOUNTS & FINANCIAL REPORTS', margin + 5, margin + 12)
-
-  // Right: Attractive Report Title Badge
-  const titleText = reportTitle.toUpperCase()
   doc.setFont('helvetica', 'bold')
-  doc.setFontSize(10)
-  const titleWidth = doc.getTextWidth(titleText) + 12
-  const badgeX = margin + contentW - titleWidth - 5
-  const badgeY = margin + 3.5
-
-  doc.setFillColor(...badgeBg)
-  doc.roundedRect(badgeX, badgeY, titleWidth, 9, 2, 2, 'F')
-
-  doc.setTextColor(255, 255, 255)
-  doc.text(titleText, badgeX + 6, badgeY + 6)
-
-  // 2. Metadata Info Cards (3 Columns)
-  let currentY = margin + 20
-
-  // Card 1: Date Range
-  const colW = (contentW - 8) / 3
-  doc.setFillColor(248, 250, 252) // Slate 50
-  doc.setDrawColor(226, 232, 240) // Slate 200
-  doc.roundedRect(margin, currentY, colW, 11, 1.5, 1.5, 'FD')
-
-  doc.setFontSize(7)
-  doc.setFont('helvetica', 'bold')
-  doc.setTextColor(100, 116, 139)
-  doc.text('DATE RANGE', margin + 4, currentY + 4.5)
-
   doc.setFontSize(8.5)
-  doc.setFont('helvetica', 'bold')
-  doc.setTextColor(15, 23, 42)
-  doc.text(`${formatDate(from)} to ${formatDate(to)}`, margin + 4, currentY + 8.5)
+  doc.setTextColor(...subBlue)
+  doc.text('STATEMENT OF ACCOUNTS & FINANCIAL REPORT', pageW / 2, 19, { align: 'center' })
 
-  // Card 2: Party Name
-  const card2X = margin + colW + 4
-  doc.roundedRect(card2X, currentY, colW, 11, 1.5, 1.5, 'FD')
+  // 2. Left Metadata Info Section
+  let partyLabel = 'Party Name'
+  if (reportType === 'customer-ledger' || reportType === 'sales-summary' || reportType === 'gst-sales') {
+    partyLabel = 'Customer Name'
+  } else if (reportType === 'vendor-ledger' || reportType === 'purchase-summary' || reportType === 'gst-purchase') {
+    partyLabel = 'Vendor Name'
+  }
 
-  doc.setFontSize(7)
-  doc.setFont('helvetica', 'bold')
-  doc.setTextColor(100, 116, 139)
-  doc.text('PARTY DETAILS', card2X + 4, currentY + 4.5)
-
-  doc.setFontSize(8.5)
-  doc.setFont('helvetica', 'bold')
-  doc.setTextColor(15, 23, 42)
-  const partyTruncated = partyName.length > 38 ? partyName.substring(0, 36) + '...' : partyName
-  doc.text(partyTruncated, card2X + 4, currentY + 8.5)
-
-  // Card 3: Generation Date
-  const card3X = margin + (colW + 4) * 2
-  doc.roundedRect(card3X, currentY, colW, 11, 1.5, 1.5, 'FD')
-
-  doc.setFontSize(7)
-  doc.setFont('helvetica', 'bold')
-  doc.setTextColor(100, 116, 139)
-  doc.text('GENERATED ON', card3X + 4, currentY + 4.5)
-
-  doc.setFontSize(8.5)
-  doc.setFont('helvetica', 'normal')
-  doc.setTextColor(15, 23, 42)
+  const displayParty = (!partyName || partyName === 'All Parties' || partyName === 'ALL') ? 'ALL' : partyName
   const nowStr = `${new Date().toLocaleDateString('en-IN')} ${new Date().toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' })}`
-  doc.text(nowStr, card3X + 4, currentY + 8.5)
 
-  currentY += 15
+  let leftY = 27
+  doc.setFont('helvetica', 'bold')
+  doc.setFontSize(9.5)
+  doc.setTextColor(30, 41, 59)
 
-  // 3. KPI Summary Bar (Clean ASCII text - no garbled symbols)
+  doc.text(`${partyLabel}:-  ${displayParty}`, margin, leftY)
+  leftY += 6.5
+  doc.text(`Date Range:-  ${formatDate(from)} to ${formatDate(to)}`, margin, leftY)
+  leftY += 6.5
+  doc.text(`GENERATED ON:-  ${nowStr}`, margin, leftY)
+
+  // 3. Right Summary Metrics Info Section
+  const rightX = margin + 175
+  let rightY = 27
+
   if (summary) {
-    doc.setFillColor(241, 245, 249)
-    doc.setDrawColor(203, 213, 225)
-    doc.roundedRect(margin, currentY, contentW, 9, 1.5, 1.5, 'FD')
-
-    doc.setFontSize(8)
     doc.setFont('helvetica', 'bold')
+    doc.setFontSize(9.5)
     doc.setTextColor(30, 41, 59)
 
-    let summaryText = ''
-    if (reportType === 'sales-summary' || reportType === 'gst-sales') {
-      summaryText = `Total Sales: Rs. ${formatAmount(summary.total_sales)}   |   Taxable: Rs. ${formatAmount(summary.total_taxable)}   |   Total Tax: Rs. ${formatAmount(summary.total_tax)}   |   Received: Rs. ${formatAmount(summary.total_received)}   |   Outstanding: Rs. ${formatAmount(summary.total_outstanding)}`
-    } else if (reportType === 'purchase-summary' || reportType === 'gst-purchase') {
-      summaryText = `Total Purchases: Rs. ${formatAmount(summary.total_purchases)}   |   Taxable: Rs. ${formatAmount(summary.total_taxable)}   |   Total Tax: Rs. ${formatAmount(summary.total_tax)}   |   Paid: Rs. ${formatAmount(summary.total_paid)}   |   Outstanding: Rs. ${formatAmount(summary.total_outstanding)}`
-    } else if (reportType === 'customer-ledger' || reportType === 'vendor-ledger') {
+    if (reportType === 'customer-ledger') {
       const bal = Number(summary.closing_balance || 0)
-      const drCr = reportType === 'customer-ledger' ? (bal >= 0 ? 'Dr' : 'Cr') : (bal >= 0 ? 'Cr' : 'Dr')
-      summaryText = `Total Debit: Rs. ${formatAmount(summary.total_debit)}   |   Total Credit: Rs. ${formatAmount(summary.total_credit)}   |   Closing Balance: Rs. ${formatAmount(Math.abs(bal))} ${drCr}`
+      const drCr = bal >= 0 ? 'Dr' : 'Cr'
+      doc.text(`Total Debit:-  ${formatAmount(summary.total_debit)}`, rightX, rightY)
+      rightY += 6.5
+      doc.text(`Total Credit:-  ${formatAmount(summary.total_credit)}`, rightX, rightY)
+      rightY += 6.5
+      doc.text(`Closing Balance:-  ${formatAmount(Math.abs(bal))} ${drCr}`, rightX, rightY)
+    } else if (reportType === 'vendor-ledger') {
+      const bal = Number(summary.closing_balance || 0)
+      const drCr = bal >= 0 ? 'Cr' : 'Dr'
+      doc.text(`Total Credit:-  ${formatAmount(summary.total_credit)}`, rightX, rightY)
+      rightY += 6.5
+      doc.text(`Total Debit:-  ${formatAmount(summary.total_debit)}`, rightX, rightY)
+      rightY += 6.5
+      doc.text(`Closing Balance:-  ${formatAmount(Math.abs(bal))} ${drCr}`, rightX, rightY)
+    } else if (reportType === 'sales-summary' || reportType === 'gst-sales') {
+      doc.text(`Total Sales:-  ${formatAmount(summary.total_sales)}`, rightX, rightY)
+      rightY += 6.5
+      doc.text(`Taxable Value:-  ${formatAmount(summary.total_taxable)}`, rightX, rightY)
+      rightY += 6.5
+      doc.text(`Total Tax:-  ${formatAmount(summary.total_tax)}`, rightX, rightY)
+    } else if (reportType === 'purchase-summary' || reportType === 'gst-purchase') {
+      doc.text(`Total Purchases:-  ${formatAmount(summary.total_purchases)}`, rightX, rightY)
+      rightY += 6.5
+      doc.text(`Taxable Value:-  ${formatAmount(summary.total_taxable)}`, rightX, rightY)
+      rightY += 6.5
+      doc.text(`Total Tax:-  ${formatAmount(summary.total_tax)}`, rightX, rightY)
     }
-
-    if (summaryText) {
-      doc.text(summaryText, margin + 4, currentY + 5.8)
-    }
-    currentY += 12
-  } else {
-    currentY += 2
   }
+
+  const startY = 45
 
   // 4. Define Table Columns & Rows based on reportType
   let head: string[][] = []
@@ -272,7 +237,7 @@ export function generateReportPdf(options: ReportPdfOptions) {
 
   // 5. Generate AutoTable in Landscape
   autoTable(doc, {
-    startY: currentY,
+    startY,
     head,
     body,
     foot,
@@ -285,7 +250,7 @@ export function generateReportPdf(options: ReportPdfOptions) {
       overflow: 'linebreak',
     },
     headStyles: {
-      fillColor: accentColor,
+      fillColor: primaryBlue,
       textColor: [255, 255, 255],
       fontStyle: 'bold',
       halign: 'left',
@@ -330,6 +295,20 @@ export function generateReportPdf(options: ReportPdfOptions) {
   })
 
   // 6. Save PDF
-  const sanitizeName = reportTitle.toLowerCase().replace(/[^a-z0-9]/g, '-')
-  doc.save(`${sanitizeName}_${from}_to_${to}.pdf`)
+  const sanitizeFilename = (str: string) =>
+    str
+      .trim()
+      .replace(/[^a-zA-Z0-9_-]/g, '_')
+      .replace(/_+/g, '_')
+
+  const todayStr = new Date().toISOString().split('T')[0]
+  let pdfFilename = ''
+
+  if (partyName && partyName !== 'All Parties' && partyName !== 'ALL') {
+    pdfFilename = `${sanitizeFilename(partyName)}_Ledger_${todayStr}.pdf`
+  } else {
+    pdfFilename = `${sanitizeFilename(reportTitle)}_ALL_${todayStr}.pdf`
+  }
+
+  doc.save(pdfFilename)
 }
