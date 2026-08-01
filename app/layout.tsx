@@ -7,8 +7,16 @@ import { Toaster } from '@/components/ui/toaster'
 const inter = Inter({ subsets: ['latin'] })
 
 export const metadata: Metadata = {
-  title: 'Viros GST Billing - ERP Software',
-  description: 'Complete GST ERP Software for Indian Businesses',
+  title: 'Viros GST Billing | Complete GST ERP for Indian Businesses',
+  description: 'Complete GST ERP Software for Indian Businesses - Invoicing, Inventory, Purchases & GST Reporting',
+  icons: {
+    icon: [
+      { url: '/logo.png', type: 'image/png' },
+      { url: '/favicon.ico', type: 'image/x-icon' },
+    ],
+    shortcut: '/logo.png',
+    apple: '/logo.png',
+  },
 }
 
 export default function RootLayout({

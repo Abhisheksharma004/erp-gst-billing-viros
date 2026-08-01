@@ -87,7 +87,7 @@ function LoginForm() {
   }
 
   return (
-    <AuthCard title="Welcome">
+    <AuthCard title="Login" subtitle="Sign in to your organization account">
       <form
         method="post"
         action="/login"
@@ -97,54 +97,72 @@ function LoginForm() {
           void form.handleSubmit(onSubmit)(e)
         }}
       >
-        <CardContent className="space-y-4">
+        <CardContent className="space-y-4 px-6 pt-4 pb-2">
           {message && <ConsoleMessage type={message.type} text={message.text} />}
 
-          <div className="space-y-2">
-            <Label htmlFor="email">Email</Label>
+          <div className="space-y-1.5">
+            <Label htmlFor="email" className="text-sm font-semibold text-slate-700">
+              Email Address
+            </Label>
             <Input
               id="email"
               type="email"
               autoComplete="username"
               placeholder="Enter your email"
+              className="h-11 bg-white/80 border-slate-300 focus-visible:ring-blue-600 font-medium"
               {...form.register('email', {
                 onChange: () => clearMessage(),
               })}
             />
             {form.formState.errors.email && (
-              <p className="text-destructive text-sm">{form.formState.errors.email.message}</p>
+              <p className="text-destructive text-xs font-medium">{form.formState.errors.email.message}</p>
             )}
           </div>
 
-          <div className="space-y-2">
-            <Label htmlFor="password">Password</Label>
+          <div className="space-y-1.5">
+            <Label htmlFor="password" className="text-sm font-semibold text-slate-700">
+              Password
+            </Label>
             <div className="relative">
               <Input
                 id="password"
                 type={showPassword ? 'text' : 'password'}
                 autoComplete="current-password"
                 placeholder="••••••••"
-                className="pr-10"
+                className="h-11 pr-10 bg-white/80 border-slate-300 focus-visible:ring-blue-600 font-medium"
                 {...form.register('password', {
                   onChange: () => clearMessage(),
                 })}
               />
               <button
                 type="button"
-                className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+                className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-700 p-1 transition-colors"
                 onClick={() => setShowPassword(!showPassword)}
+                aria-label={showPassword ? 'Hide password' : 'Show password'}
               >
                 {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
               </button>
             </div>
             {form.formState.errors.password && (
-              <p className="text-destructive text-sm">{form.formState.errors.password.message}</p>
+              <p className="text-destructive text-xs font-medium">{form.formState.errors.password.message}</p>
             )}
+            <div className="flex justify-end pt-1">
+              <Link
+                href="/forgot-password"
+                className="text-xs font-semibold text-blue-600 hover:text-blue-700 hover:underline"
+              >
+                Forgot your password?
+              </Link>
+            </div>
           </div>
         </CardContent>
 
-        <CardFooter className="flex flex-col gap-3">
-          <Button type="submit" className="w-full" disabled={loading}>
+        <CardFooter className="flex flex-col gap-3 px-6 pb-6 pt-3">
+          <Button
+            type="submit"
+            className="w-full h-11 text-base font-semibold bg-blue-600 hover:bg-blue-700 text-white shadow-md shadow-blue-600/25 transition-all hover:shadow-lg"
+            disabled={loading}
+          >
             {loading ? (
               <>
                 <Loader2 className="w-4 h-4 mr-2 animate-spin" />
@@ -154,11 +172,9 @@ function LoginForm() {
               'Sign In'
             )}
           </Button>
-          <Link href="/forgot-password" className="text-sm text-primary hover:underline">
-            Forgot your password?
-          </Link>
         </CardFooter>
       </form>
     </AuthCard>
   )
 }
+
