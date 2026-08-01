@@ -10,6 +10,7 @@ import { getPageTitleFromPath } from '@/lib/permissions'
 import Link from 'next/link'
 import { useState, useRef, useEffect } from 'react'
 import { ThemeModeToggle } from '@/components/layout/theme-mode-toggle'
+import { FinancialYearSelector } from '@/components/layout/financial-year-selector'
 import { NotificationsDropdown } from '@/components/layout/notifications-dropdown'
 
 export function Header() {
@@ -63,6 +64,7 @@ export function Header() {
       </div>
 
       <div className="flex shrink-0 items-center gap-2 md:gap-3">
+        <FinancialYearSelector />
         <ThemeModeToggle />
         <NotificationsDropdown />
 
@@ -81,10 +83,14 @@ export function Header() {
           </button>
 
           {dropdownOpen && (
-            <div className="absolute right-0 mt-2 w-48 rounded-md border border-border bg-popover shadow-lg z-50">
-              <div className="p-2 border-b border-border">
-                <p className="text-sm font-medium text-popover-foreground">{session?.user?.name}</p>
-                <p className="text-xs text-muted-foreground">{session?.user?.email}</p>
+            <div className="absolute right-0 mt-2 w-60 sm:w-64 rounded-xl border border-border bg-popover shadow-xl z-50 p-1">
+              <div className="px-3 py-2.5 border-b border-border min-w-0">
+                <p className="text-sm font-semibold text-popover-foreground truncate" title={session?.user?.name || ''}>
+                  {session?.user?.name}
+                </p>
+                <p className="text-xs text-muted-foreground truncate mt-0.5" title={session?.user?.email || ''}>
+                  {session?.user?.email}
+                </p>
               </div>
               <div className="p-1">
                 <Link

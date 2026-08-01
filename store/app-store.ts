@@ -3,16 +3,27 @@ import { persist } from 'zustand/middleware'
 
 export type ColorMode = 'light' | 'dark'
 
+export function getDefaultFinancialYear(): string {
+  const now = new Date()
+  const year = now.getFullYear()
+  const month = now.getMonth()
+  const startYear = month >= 3 ? year : year - 1
+  const nextYearShort = String((startYear + 1) % 100).padStart(2, '0')
+  return `FY ${startYear}-${nextYearShort}`
+}
+
 interface AppState {
   sidebarOpen: boolean
   mobileSidebarOpen: boolean
   colorMode: ColorMode
+  financialYear: string
   pageCountLabel: string | null
   setSidebarOpen: (open: boolean) => void
   setMobileSidebarOpen: (open: boolean) => void
   toggleSidebar: () => void
   setColorMode: (mode: ColorMode) => void
   toggleColorMode: () => void
+  setFinancialYear: (fy: string) => void
   setPageCountLabel: (label: string | null) => void
   clearPageCountLabel: () => void
 }
@@ -23,6 +34,7 @@ export const useAppStore = create<AppState>()(
       sidebarOpen: true,
       mobileSidebarOpen: false,
       colorMode: 'light',
+      financialYear: getDefaultFinancialYear(),
       pageCountLabel: null,
       setSidebarOpen: (open) => set({ sidebarOpen: open }),
       setMobileSidebarOpen: (open) => set({ mobileSidebarOpen: open }),
@@ -30,6 +42,7 @@ export const useAppStore = create<AppState>()(
       setColorMode: (mode) => set({ colorMode: mode }),
       toggleColorMode: () =>
         set((state) => ({ colorMode: state.colorMode === 'dark' ? 'light' : 'dark' })),
+      setFinancialYear: (fy) => set({ financialYear: fy }),
       setPageCountLabel: (label) => set({ pageCountLabel: label }),
       clearPageCountLabel: () => set({ pageCountLabel: null }),
     }),
@@ -38,6 +51,7 @@ export const useAppStore = create<AppState>()(
       partialize: (state) => ({
         sidebarOpen: state.sidebarOpen,
         colorMode: state.colorMode,
+        financialYear: state.financialYear,
       }),
     }
   )
