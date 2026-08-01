@@ -7,6 +7,7 @@ import { Label } from '@/components/ui/label'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
+import { SearchablePartySelect } from '@/components/ui/searchable-party-select'
 import { FileSpreadsheet, FileText, Search, TrendingUp, Receipt, Wallet, Scale } from 'lucide-react'
 import { formatCurrency, formatDate, cn } from '@/lib/utils'
 import { usePageCount } from '@/hooks/use-page-count'
@@ -852,38 +853,28 @@ export default function ReportsPage() {
             {isCustomerReport && (
               <div className="space-y-1.5 min-w-0">
                 <Label className="text-xs">Filter Customer</Label>
-                <Select value={partyId} onValueChange={setPartyId}>
-                  <SelectTrigger className="h-9 w-full text-xs">
-                    <SelectValue placeholder="All Customers" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="ALL" className="text-xs">All Customers</SelectItem>
-                    {customers.map((c) => (
-                      <SelectItem key={c.id} value={c.id} className="text-xs">
-                        {c.name}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+                <SearchablePartySelect
+                  value={partyId}
+                  onValueChange={setPartyId}
+                  options={customers}
+                  placeholder="All Customers"
+                  allOptionLabel="All Customers"
+                  className="h-9 w-full text-xs"
+                />
               </div>
             )}
 
             {isVendorReport && (
               <div className="space-y-1.5 min-w-0">
                 <Label className="text-xs">Filter Vendor</Label>
-                <Select value={partyId} onValueChange={setPartyId}>
-                  <SelectTrigger className="h-9 w-full text-xs">
-                    <SelectValue placeholder="All Vendors" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="ALL" className="text-xs">All Vendors</SelectItem>
-                    {vendors.map((v) => (
-                      <SelectItem key={v.id} value={v.id} className="text-xs">
-                        {v.name}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+                <SearchablePartySelect
+                  value={partyId}
+                  onValueChange={setPartyId}
+                  options={vendors}
+                  placeholder="All Vendors"
+                  allOptionLabel="All Vendors"
+                  className="h-9 w-full text-xs"
+                />
               </div>
             )}
 

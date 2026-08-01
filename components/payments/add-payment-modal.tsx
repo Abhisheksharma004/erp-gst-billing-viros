@@ -20,6 +20,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select'
+import { SearchablePartySelect } from '@/components/ui/searchable-party-select'
 import { ArrowLeftRight, Loader2, Calendar, CreditCard, Building } from 'lucide-react'
 import { useToast } from '@/hooks/use-toast'
 
@@ -299,24 +300,13 @@ export function AddPaymentModal({
                 Loading {type === 'INWARD' ? 'customers' : 'vendors'}...
               </div>
             ) : (
-              <Select value={selectedPartyId} onValueChange={setSelectedPartyId}>
-                <SelectTrigger className="w-full">
-                  <SelectValue placeholder={`-- Choose ${type === 'INWARD' ? 'Customer' : 'Vendor'} --`} />
-                </SelectTrigger>
-                <SelectContent className="max-h-60">
-                  {parties.length === 0 ? (
-                    <div className="p-2 text-xs text-muted-foreground text-center">
-                      No {type === 'INWARD' ? 'customers' : 'vendors'} found
-                    </div>
-                  ) : (
-                    parties.map((party) => (
-                      <SelectItem key={party.id} value={party.id}>
-                        {party.name} {party.gstin ? `(${party.gstin})` : ''}
-                      </SelectItem>
-                    ))
-                  )}
-                </SelectContent>
-              </Select>
+              <SearchablePartySelect
+                value={selectedPartyId}
+                onValueChange={setSelectedPartyId}
+                options={parties}
+                placeholder={`-- Choose ${type === 'INWARD' ? 'Customer' : 'Vendor'} --`}
+                className="h-10 w-full"
+              />
             )}
 
             {/* Outstanding Due Banner */}

@@ -34,6 +34,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select'
+import { SearchablePartySelect } from '@/components/ui/searchable-party-select'
 import {
   Table,
   TableBody,
@@ -461,25 +462,17 @@ export function PaymentList({
               </SelectContent>
             </Select>
 
-            <Select
+            <SearchablePartySelect
               value={selectedPartyId}
               onValueChange={(val) => {
                 setSelectedPartyId(val)
                 setPage(1)
               }}
-            >
-              <SelectTrigger className="w-[160px] sm:w-[200px] h-8 text-xs">
-                <SelectValue placeholder={`All ${partyType === 'CUSTOMER' ? 'Customers' : 'Vendors'}`} />
-              </SelectTrigger>
-              <SelectContent className="max-h-60">
-                <SelectItem value="ALL">All {partyType === 'CUSTOMER' ? 'Customers' : 'Vendors'}</SelectItem>
-                {partyOptions.map((party) => (
-                  <SelectItem key={party.id} value={party.id}>
-                    {party.name}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
+              options={partyOptions}
+              placeholder={`All ${partyType === 'CUSTOMER' ? 'Customers' : 'Vendors'}`}
+              allOptionLabel={`All ${partyType === 'CUSTOMER' ? 'Customers' : 'Vendors'}`}
+              className="w-[160px] sm:w-[200px] h-8 text-xs"
+            />
           </div>
 
           {/* Date Filters & View Mode Toggle */}
