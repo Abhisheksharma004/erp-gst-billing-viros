@@ -440,8 +440,8 @@ export function PaymentList({
         {/* Second Row: Party-Wise Due Filter & Date Range */}
         <div className="flex flex-col lg:flex-row items-start lg:items-center justify-between gap-3 pt-3 border-t">
           {/* Party Wise Filter */}
-          <div className="flex items-center gap-2 flex-wrap text-xs w-full lg:w-auto">
-            <span className="font-semibold text-muted-foreground flex items-center gap-1 whitespace-nowrap">
+          <div className="flex items-center gap-2 flex-wrap sm:flex-nowrap text-xs w-full lg:w-auto">
+            <span className="font-semibold text-muted-foreground flex items-center gap-1 whitespace-nowrap shrink-0">
               <Users className="h-3.5 w-3.5" />
               Party Wise Filter:
             </span>
@@ -453,7 +453,7 @@ export function PaymentList({
                 setPage(1)
               }}
             >
-              <SelectTrigger className="w-[110px] h-8 text-xs">
+              <SelectTrigger className="w-[110px] h-8 text-xs shrink-0">
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
@@ -471,7 +471,8 @@ export function PaymentList({
               options={partyOptions}
               placeholder={`All ${partyType === 'CUSTOMER' ? 'Customers' : 'Vendors'}`}
               allOptionLabel={`All ${partyType === 'CUSTOMER' ? 'Customers' : 'Vendors'}`}
-              className="w-[160px] sm:w-[200px] h-8 text-xs"
+              containerClassName="w-[180px] sm:w-[220px] shrink-0"
+              className="h-8 text-xs"
             />
           </div>
 

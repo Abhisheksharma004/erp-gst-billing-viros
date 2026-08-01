@@ -130,81 +130,81 @@ export default function ReportsPage() {
   const exportExcel = async () => {
     const { exportToExcel } = await import('@/lib/excel-export')
     
-    // Construct rows with From Date and To Date header info
-    const metaHeaderRow = {
-      'Report Type': selectedReportLabel(),
-      'From Date': formatDate(from),
-      'To Date': formatDate(to),
-      'Party Name': selectedPartyName(),
-      'Generated Date': formatDate(new Date().toISOString().split('T')[0]),
+    // Metadata info for header block
+    const meta = {
+      reportTitle: selectedReportLabel(),
+      fromDate: showDateRange ? formatDate(from) : undefined,
+      toDate: showDateRange ? formatDate(to) : undefined,
+      partyName: selectedPartyName(),
+      generatedDate: formatDate(new Date().toISOString().split('T')[0]),
     }
 
     const dataRows = data.map((row: any) => {
       if (reportType === 'sales-summary') {
         return {
           Date: formatDate(row.date),
-          'Invoice Number': row.invoiceNo,
-          'Customer Name': row.customerName || row.customer?.name,
-          'Taxable Amount': Number(row.taxableAmount || 0),
-          'Tax Amount': Number(row.taxAmount || 0),
-          'Total Amount': Number(row.totalAmount || 0),
+          'Invoice Number': row.invoiceNo || row.invoice_number,
+          'Customer Name': row.customerName || row.customer?.name || '-',
+          'Taxable Amount': Number(row.taxableAmount || row.taxable_amount || 0),
+          'Tax Amount': Number(row.taxAmount || row.tax_amount || 0),
+          'Total Amount': Number(row.totalAmount || row.total_amount || 0),
         }
       }
       if (reportType === 'gst-sales') {
         return {
-          'Invoice No': row.invoiceNo,
-          Customer: row.customerName || row.customer?.name,
-          GSTIN: row.gstin || row.customer?.gstin || '-',
           Date: formatDate(row.date),
-          'Taxable Amount': Number(row.taxableAmount || 0),
-          CGST: Number(row.cgstAmount || 0),
-          SGST: Number(row.sgstAmount || 0),
-          IGST: Number(row.igstAmount || 0),
-          'Total Tax': Number(row.taxAmount || 0),
-          'Total Amount': Number(row.totalAmount || 0),
+          'Invoice No': row.invoiceNo || row.invoice_number,
+          Customer: row.customerName || row.customer?.name || '-',
+          GSTIN: row.gstin || row.customer?.gstin || '-',
+          'Taxable Amount': Number(row.taxableAmount || row.taxable_amount || 0),
+          CGST: Number(row.cgstAmount || row.cgst_amount || 0),
+          SGST: Number(row.sgstAmount || row.sgst_amount || 0),
+          IGST: Number(row.igstAmount || row.igst_amount || 0),
+          'Total Tax': Number(row.taxAmount || row.tax_amount || 0),
+          'Total Amount': Number(row.totalAmount || row.total_amount || 0),
         }
       }
       if (reportType === 'purchase-summary') {
         return {
-          'Bill No': row.purchaseNo,
-          Vendor: row.vendorName || row.vendor?.name,
           Date: formatDate(row.date),
-          'Taxable Amount': Number(row.taxableAmount || 0),
-          'Tax Amount': Number(row.taxAmount || 0),
-          'Total Amount': Number(row.totalAmount || 0),
-          Paid: Number(row.paidAmount || 0),
-          Balance: Number(row.balanceAmount || 0),
+          'Bill No': row.purchaseNo || row.purchase_number,
+          Vendor: row.vendorName || row.vendor?.name || '-',
+          'Taxable Amount': Number(row.taxableAmount || row.taxable_amount || 0),
+          'Tax Amount': Number(row.taxAmount || row.tax_amount || 0),
+          'Total Amount': Number(row.totalAmount || row.total_amount || 0),
+          Paid: Number(row.paidAmount || row.paid_amount || 0),
+          Balance: Number(row.balanceAmount || row.balance_amount || 0),
         }
       }
       if (reportType === 'gst-purchase') {
         return {
-          'Bill No': row.purchaseNo,
-          Vendor: row.vendorName || row.vendor?.name,
-          GSTIN: row.gstin || row.vendor?.gstin || '-',
           Date: formatDate(row.date),
-          'Taxable Amount': Number(row.taxableAmount || 0),
-          CGST: Number(row.cgstAmount || 0),
-          SGST: Number(row.sgstAmount || 0),
-          IGST: Number(row.igstAmount || 0),
-          'Total Tax': Number(row.taxAmount || 0),
-          'Total Amount': Number(row.totalAmount || 0),
+          'Bill No': row.purchaseNo || row.purchase_number,
+          Vendor: row.vendorName || row.vendor?.name || '-',
+          GSTIN: row.gstin || row.vendor?.gstin || '-',
+          'Taxable Amount': Number(row.taxableAmount || row.taxable_amount || 0),
+          CGST: Number(row.cgstAmount || row.cgst_amount || 0),
+          SGST: Number(row.sgstAmount || row.sgst_amount || 0),
+          IGST: Number(row.igstAmount || row.igst_amount || 0),
+          'Total Tax': Number(row.taxAmount || row.tax_amount || 0),
+          'Total Amount': Number(row.totalAmount || row.total_amount || 0),
         }
       }
       if (reportType === 'stock-report' || reportType === 'low-stock') {
         return {
           Product: row.name,
           Description: row.description || '-',
-          HSN: row.hsn,
-          Stock: Number(row.currentStock),
+          'HSN/SAC': row.hsn || '-',
+          'Current Stock': Number(row.currentStock || 0),
         }
       }
       if (reportType === 'customer-ledger') {
         return {
           Date: formatDate(row.date),
-          'Party Name': row.partyName,
-          Voucher: row.voucherType,
-          'Invoice No. / Payment ID': row.refNo,
-          'Mode of payment / Ref No': row.description,
+          'Party Name': row.partyName || '-',
+          Voucher: row.voucherType || '-',
+          'Invoice No. / Payment ID': row.refNo || '-',
+          'Mode of payment / Ref No': row.description || '-',
           Debit: Number(row.debit || 0),
           Credit: Number(row.credit || 0),
           Balance: Number(row.balance || 0),
@@ -213,10 +213,10 @@ export default function ReportsPage() {
       if (reportType === 'vendor-ledger') {
         return {
           Date: formatDate(row.date),
-          'Party Name': row.partyName,
-          Voucher: row.voucherType,
-          'Bill No. / Payment ID': row.refNo,
-          'Mode of payment / Ref No': row.description,
+          'Party Name': row.partyName || '-',
+          Voucher: row.voucherType || '-',
+          'Bill No. / Payment ID': row.refNo || '-',
+          'Mode of payment / Ref No': row.description || '-',
           Credit: Number(row.credit || 0),
           Debit: Number(row.debit || 0),
           Balance: Number(row.balance || 0),
@@ -225,11 +225,7 @@ export default function ReportsPage() {
       return row
     })
 
-    // Prepend metadata info row & summary row to excel export
-    const excelExportRows: Record<string, unknown>[] = [
-      metaHeaderRow,
-      ...dataRows,
-    ]
+    const excelExportRows: Record<string, unknown>[] = [...dataRows]
 
     if (summary && reportType === 'customer-ledger') {
       const bal = Number(summary.closing_balance || 0)
@@ -252,7 +248,7 @@ export default function ReportsPage() {
         'Mode of payment / Ref No': 'Closing Bal.',
         Debit: 0,
         Credit: `${formatCurrency(Math.abs(bal))} ${drCr}`,
-        Balance: '-',
+        Balance: Number(bal),
       })
     } else if (summary && reportType === 'vendor-ledger') {
       const bal = Number(summary.closing_balance || 0)
@@ -273,6 +269,9 @@ export default function ReportsPage() {
         Voucher: '-',
         'Bill No. / Payment ID': '-',
         'Mode of payment / Ref No': 'Closing Bal.',
+        Credit: `${formatCurrency(Math.abs(bal))} ${drCr}`,
+        Debit: 0,
+        Balance: Number(bal),
       })
     }
 
@@ -292,7 +291,7 @@ export default function ReportsPage() {
       filename = `${sanitizeFilename(selectedReportLabel())}_ALL_${todayStr}.xls`
     }
 
-    exportToExcel(excelExportRows, filename, selectedReportLabel())
+    exportToExcel(excelExportRows, filename, selectedReportLabel(), meta)
   }
 
   const exportPdf = async () => {
@@ -484,8 +483,8 @@ export default function ReportsPage() {
             </TableRow>
           </TableHeader>
           <TableBody>
-            {data.map((row: any) => (
-              <TableRow key={row.id} className="text-xs">
+            {data.map((row: any, idx: number) => (
+              <TableRow key={row.id || idx} className={cn('text-xs', idx % 2 === 1 && 'bg-slate-50/80 dark:bg-slate-900/40')}>
                 <TableCell>{formatDate(row.date)}</TableCell>
                 <TableCell className="font-medium font-mono">{row.invoiceNo}</TableCell>
                 <TableCell>{row.customerName || row.customer?.name}</TableCell>
@@ -523,8 +522,8 @@ export default function ReportsPage() {
             </TableRow>
           </TableHeader>
           <TableBody>
-            {data.map((row: any) => (
-              <TableRow key={row.id} className="text-xs">
+            {data.map((row: any, idx: number) => (
+              <TableRow key={row.id || idx} className={cn('text-xs', idx % 2 === 1 && 'bg-slate-50/80 dark:bg-slate-900/40')}>
                 <TableCell>{formatDate(row.date)}</TableCell>
                 <TableCell className="font-medium font-mono">{row.invoiceNo}</TableCell>
                 <TableCell>{row.customerName || row.customer?.name}</TableCell>
@@ -569,8 +568,8 @@ export default function ReportsPage() {
             </TableRow>
           </TableHeader>
           <TableBody>
-            {data.map((row: any) => (
-              <TableRow key={row.id} className="text-xs">
+            {data.map((row: any, idx: number) => (
+              <TableRow key={row.id || idx} className={cn('text-xs', idx % 2 === 1 && 'bg-slate-50/80 dark:bg-slate-900/40')}>
                 <TableCell>{formatDate(row.date)}</TableCell>
                 <TableCell className="font-medium font-mono">{row.purchaseNo}</TableCell>
                 <TableCell>{row.vendorName || row.vendor?.name}</TableCell>
@@ -614,8 +613,8 @@ export default function ReportsPage() {
             </TableRow>
           </TableHeader>
           <TableBody>
-            {data.map((row: any) => (
-              <TableRow key={row.id} className="text-xs">
+            {data.map((row: any, idx: number) => (
+              <TableRow key={row.id || idx} className={cn('text-xs', idx % 2 === 1 && 'bg-slate-50/80 dark:bg-slate-900/40')}>
                 <TableCell>{formatDate(row.date)}</TableCell>
                 <TableCell className="font-medium font-mono">{row.purchaseNo}</TableCell>
                 <TableCell>{row.vendorName || row.vendor?.name}</TableCell>
@@ -656,11 +655,11 @@ export default function ReportsPage() {
             </TableRow>
           </TableHeader>
           <TableBody>
-            {data.map((row: any) => {
+            {data.map((row: any, idx: number) => {
               const lowAlert = Number(row.lowStockAlert ?? 10)
               const isLow = Number(row.currentStock) <= lowAlert
               return (
-                <TableRow key={row.id} className="text-xs">
+                <TableRow key={row.id || idx} className={cn('text-xs', idx % 2 === 1 && 'bg-slate-50/80 dark:bg-slate-900/40')}>
                   <TableCell className="font-medium">{row.name}</TableCell>
                   <TableCell className="max-w-xs truncate" title={row.description}>
                     {row.description || '-'}
@@ -696,7 +695,7 @@ export default function ReportsPage() {
           </TableHeader>
           <TableBody>
             {data.map((row: any, idx: number) => (
-              <TableRow key={row.id || idx} className="text-xs">
+              <TableRow key={row.id || idx} className={cn('text-xs', idx % 2 === 1 && 'bg-slate-50/80 dark:bg-slate-900/40')}>
                 <TableCell>{formatDate(row.date)}</TableCell>
                 <TableCell className="font-medium">{row.partyName}</TableCell>
                 <TableCell>{row.voucherType}</TableCell>
@@ -768,7 +767,7 @@ export default function ReportsPage() {
           </TableHeader>
           <TableBody>
             {data.map((row: any, idx: number) => (
-              <TableRow key={row.id || idx} className="text-xs">
+              <TableRow key={row.id || idx} className={cn('text-xs', idx % 2 === 1 && 'bg-slate-50/80 dark:bg-slate-900/40')}>
                 <TableCell>{formatDate(row.date)}</TableCell>
                 <TableCell className="font-medium">{row.partyName}</TableCell>
                 <TableCell>{row.voucherType}</TableCell>

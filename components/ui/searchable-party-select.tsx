@@ -18,6 +18,7 @@ interface SearchablePartySelectProps {
   placeholder?: string
   allOptionLabel?: string // e.g. "All Customers" or "All Vendors"
   className?: string
+  containerClassName?: string
   disabled?: boolean
 }
 
@@ -28,6 +29,7 @@ export function SearchablePartySelect({
   placeholder = 'Select party...',
   allOptionLabel,
   className,
+  containerClassName,
   disabled = false,
 }: SearchablePartySelectProps) {
   const [isOpen, setIsOpen] = useState(false)
@@ -149,7 +151,7 @@ export function SearchablePartySelect({
   }
 
   return (
-    <div ref={containerRef} className="relative w-full">
+    <div ref={containerRef} className={cn('relative', containerClassName || 'w-full')}>
       {/* Input container */}
       <div className="relative flex items-center">
         <input
