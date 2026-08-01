@@ -11,6 +11,7 @@ import { ensurePaymentSchema } from '@/lib/ensure-payment-schema'
 import { generateUniqueOrgSlug } from '@/lib/tenant'
 
 let schemaReady = false
+let schemaPromise: Promise<void> | null = null
 
 async function getAnyOrganizationId(): Promise<string | null> {
   const [rows] = (await db.execute(
@@ -47,24 +48,38 @@ async function bootstrapLegacyOrganizationIfNeeded(): Promise<string | null> {
   return orgId
 }
 
-async function runAlter(sql: string): Promise<void> {
-  try {
-    await db.execute(sql)
-  } catch (e: unknown) {
-    const err = e as { code?: string; errno?: number; message?: string }
-    const msg = String(err?.message ?? '')
-    const isDuplicate =
-      err?.code === 'ER_DUP_FIELDNAME' ||
-      err?.errno === 1060 ||
-      /duplicate column name/i.test(msg)
-    const isDuplicateKey =
-      err?.errno === 1061 ||
-      /duplicate key name/i.test(msg)
-    const isExists =
-      err?.code === 'ER_TABLE_EXISTS_ERROR' ||
-      err?.errno === 1050 ||
-      /already exists/i.test(msg)
-    if (!isDuplicate && !isDuplicateKey && !isExists) throw e
+async function runAlter(sql: string, retries = 3): Promise<void> {
+  for (let attempt = 1; attempt <= retries; attempt++) {
+    try {
+      await db.execute(sql)
+      return
+    } catch (e: unknown) {
+      const err = e as { code?: string; errno?: number; message?: string }
+      const msg = String(err?.message ?? '')
+      const isDuplicate =
+        err?.code === 'ER_DUP_FIELDNAME' ||
+        err?.errno === 1060 ||
+        /duplicate column name/i.test(msg)
+      const isDuplicateKey =
+        err?.errno === 1061 ||
+        /duplicate key name/i.test(msg)
+      const isExists =
+        err?.code === 'ER_TABLE_EXISTS_ERROR' ||
+        err?.errno === 1050 ||
+        /already exists/i.test(msg)
+      const isDeadlock =
+        err?.code === 'ER_LOCK_DEADLOCK' ||
+        err?.errno === 1213 ||
+        /deadlock/i.test(msg)
+
+      if (isDuplicate || isDuplicateKey || isExists) return
+
+      if (isDeadlock && attempt < retries) {
+        await new Promise((resolve) => setTimeout(resolve, attempt * 150))
+        continue
+      }
+      throw e
+    }
   }
 }
 
@@ -114,24 +129,29 @@ async function addOrgColumn(table: string, fallbackOrgId: string): Promise<void>
     await runAlter(
       `ALTER TABLE ${table} ADD COLUMN organization_id VARCHAR(36) NULL AFTER id`
     )
+    await db.execute(`UPDATE ${table} SET organization_id = ? WHERE organization_id IS NULL`, [
+      fallbackOrgId,
+    ])
+    await runAlter(
+      `ALTER TABLE ${table} MODIFY COLUMN organization_id VARCHAR(36) NOT NULL`
+    )
   }
-  await db.execute(`UPDATE ${table} SET organization_id = ? WHERE organization_id IS NULL`, [
-    fallbackOrgId,
-  ])
-  await runAlter(
-    `ALTER TABLE ${table} MODIFY COLUMN organization_id VARCHAR(36) NOT NULL`
-  )
-  await runAlter(
-    `ALTER TABLE ${table} ADD INDEX idx_${table}_organization_id (organization_id)`
-  )
+
+  const hasIndex = await indexExists(table, `idx_${table}_organization_id`)
+  if (!hasIndex) {
+    await runAlter(
+      `ALTER TABLE ${table} ADD INDEX idx_${table}_organization_id (organization_id)`
+    )
+  }
 
   if (table === 'categories') {
-    // Remove any existing unique indexes on the plain `name` column so we can
-    // enforce per-organization uniqueness instead.
-    await dropUniqueIndexesOnColumn(table, 'name')
-    await runAlter(
-      `ALTER TABLE categories ADD UNIQUE KEY uq_categories_org_name (organization_id, name)`
-    )
+    const hasCatOrgUnique = await indexExists('categories', 'uq_categories_org_name')
+    if (!hasCatOrgUnique) {
+      await dropUniqueIndexesOnColumn(table, 'name')
+      await runAlter(
+        `ALTER TABLE categories ADD UNIQUE KEY uq_categories_org_name (organization_id, name)`
+      )
+    }
   }
 }
 
@@ -153,9 +173,7 @@ const TENANT_TABLES = [
   'roles',
 ] as const
 
-export async function ensureOrganizationSchema(): Promise<void> {
-  if (schemaReady) return
-
+async function doEnsureOrganizationSchema(): Promise<void> {
   await ensureBusinessSettingsBankingColumns()
   await ensurePaymentSchema()
 
@@ -220,7 +238,6 @@ export async function ensureOrganizationSchema(): Promise<void> {
   if (Number(memberCount[0]?.cnt) === 0) {
     const targetOrgId = (await getAnyOrganizationId()) ?? fallbackOrgId
     if (!targetOrgId) {
-      schemaReady = true
       return
     }
 
@@ -242,6 +259,21 @@ export async function ensureOrganizationSchema(): Promise<void> {
   await ensureOrganizationIdSequencesSchema()
   await ensureBusinessSettingsUniquePerOrg()
   await ensureOrganizationDetailsSchema()
+}
 
-  schemaReady = true
+export async function ensureOrganizationSchema(): Promise<void> {
+  if (schemaReady) return
+  if (schemaPromise) return schemaPromise
+
+  schemaPromise = (async () => {
+    try {
+      await doEnsureOrganizationSchema()
+      schemaReady = true
+    } catch (err) {
+      schemaPromise = null
+      throw err
+    }
+  })()
+
+  return schemaPromise
 }
