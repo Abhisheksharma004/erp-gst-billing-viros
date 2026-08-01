@@ -35,6 +35,7 @@ import {
   SelectValue,
 } from '@/components/ui/select'
 import { SearchablePartySelect } from '@/components/ui/searchable-party-select'
+import { DocumentPdfViewer } from '@/components/shared/document-pdf-viewer'
 import {
   Table,
   TableBody,
@@ -111,6 +112,30 @@ export function PaymentList({
   const [isViewModalOpen, setIsViewModalOpen] = useState(false)
   const [paymentToDelete, setPaymentToDelete] = useState<any | null>(null)
   const [isDeleting, setIsDeleting] = useState(false)
+
+  // Document PDF Viewer modal state
+  const [pdfViewerOpen, setPdfViewerOpen] = useState(false)
+  const [pdfViewerUrl, setPdfViewerUrl] = useState<string | null>(null)
+  const [pdfViewerTitle, setPdfViewerTitle] = useState('Document')
+  const [pdfViewerFilename, setPdfViewerFilename] = useState('document.pdf')
+  const [enableCopies, setEnableCopies] = useState(false)
+
+  const handleOpenLinkedPdf = (type: 'INWARD' | 'OUTWARD', docId: string, docNo: string) => {
+    const displayNo = docNo || 'document'
+    const safeName = displayNo.replace(/[/\\?%*:|"<>]/g, '-')
+    if (type === 'INWARD') {
+      setPdfViewerTitle(`Sales Invoice ${displayNo}`)
+      setPdfViewerFilename(`${safeName}.pdf`)
+      setPdfViewerUrl(`/api/invoices/${docId}/pdf`)
+      setEnableCopies(true)
+    } else {
+      setPdfViewerTitle(`Purchase Bill ${displayNo}`)
+      setPdfViewerFilename(`${safeName}.pdf`)
+      setPdfViewerUrl(`/api/purchases/${docId}/pdf`)
+      setEnableCopies(false)
+    }
+    setPdfViewerOpen(true)
+  }
 
   // Fetch Party Options when partyType changes
   useEffect(() => {
@@ -309,12 +334,19 @@ export function PaymentList({
                   <span className="text-muted-foreground">Linked Document:</span>
                   {linkedNo ? (
                     <div className="flex items-center gap-1">
-                      <Link
-                        href={isInward ? `/billing/${p.invoice_id}` : `/purchases/${p.purchase_id}`}
-                        className="font-mono text-xs font-medium text-blue-600 hover:underline flex items-center gap-0.5"
-                      >
-                        {linkedNo} <ExternalLink className="h-3 w-3" />
-                      </Link>
+                      {((isInward && p.invoice_id) || (!isInward && p.purchase_id)) ? (
+                        <button
+                          type="button"
+                          onClick={() => handleOpenLinkedPdf(isInward ? 'INWARD' : 'OUTWARD', (isInward ? p.invoice_id : p.purchase_id)!, linkedNo)}
+                          className="font-mono text-xs font-semibold text-blue-600 dark:text-blue-400 hover:underline flex items-center gap-0.5 cursor-pointer text-left"
+                          title={`View ${isInward ? 'Sales Invoice' : 'Purchase Bill'} PDF (${linkedNo})`}
+                        >
+                          <span>{linkedNo}</span>
+                          <FileText className="h-3 w-3" />
+                        </button>
+                      ) : (
+                        <span className="font-mono text-xs font-medium text-muted-foreground">{linkedNo}</span>
+                      )}
                       {(p.notes?.includes('Adjusted') || p.reference_no?.includes('Advance Adj') || p.payment_no?.includes('-ADJ')) && (
                         <Badge variant="outline" className="bg-amber-50 text-amber-700 border-amber-300 text-[10px] py-0 px-1 font-semibold">
                           Adjusted
@@ -618,14 +650,15 @@ export function PaymentList({
                         {linkedNo ? (
                           isInward && p.invoice_id ? (
                             <div className="flex flex-col gap-1 items-start">
-                              <Link
-                                href={`/billing/${p.invoice_id}`}
-                                className="font-mono bg-emerald-50 text-emerald-700 hover:bg-emerald-100 dark:bg-emerald-950 dark:text-emerald-300 dark:hover:bg-emerald-900 border border-emerald-200 dark:border-emerald-800 px-2 py-0.5 rounded text-xs inline-flex items-center gap-1 font-semibold transition-colors hover:underline"
-                                title={`View Sales Invoice ${linkedNo}`}
+                              <button
+                                type="button"
+                                onClick={() => handleOpenLinkedPdf('INWARD', p.invoice_id!, linkedNo)}
+                                className="font-mono bg-emerald-50 text-emerald-700 hover:bg-emerald-100 dark:bg-emerald-950 dark:text-emerald-300 dark:hover:bg-emerald-900 border border-emerald-200 dark:border-emerald-800 px-2 py-0.5 rounded text-xs inline-flex items-center gap-1 font-semibold transition-colors hover:underline text-left cursor-pointer"
+                                title={`View Sales Invoice PDF (${linkedNo})`}
                               >
                                 <span>{linkedNo}</span>
-                                <ExternalLink className="h-3 w-3" />
-                              </Link>
+                                <FileText className="h-3 w-3" />
+                              </button>
                               {(p.notes?.includes('Adjusted') || p.reference_no?.includes('Advance Adj') || p.payment_no?.includes('-ADJ')) && (
                                 <Badge variant="outline" className="bg-amber-50 text-amber-700 border-amber-300 text-[10px] py-0 px-1.5 font-semibold">
                                   Adjusted
@@ -634,14 +667,15 @@ export function PaymentList({
                             </div>
                           ) : !isInward && p.purchase_id ? (
                             <div className="flex flex-col gap-1 items-start">
-                              <Link
-                                href={`/purchases/${p.purchase_id}`}
-                                className="font-mono bg-blue-50 text-blue-700 hover:bg-blue-100 dark:bg-blue-950 dark:text-blue-300 dark:hover:bg-blue-900 border border-blue-200 dark:border-blue-800 px-2 py-0.5 rounded text-xs inline-flex items-center gap-1 font-semibold transition-colors hover:underline"
-                                title={`View Purchase Bill ${linkedNo}`}
+                              <button
+                                type="button"
+                                onClick={() => handleOpenLinkedPdf('OUTWARD', p.purchase_id!, linkedNo)}
+                                className="font-mono bg-blue-50 text-blue-700 hover:bg-blue-100 dark:bg-blue-950 dark:text-blue-300 dark:hover:bg-blue-900 border border-blue-200 dark:border-blue-800 px-2 py-0.5 rounded text-xs inline-flex items-center gap-1 font-semibold transition-colors hover:underline text-left cursor-pointer"
+                                title={`View Purchase Bill PDF (${linkedNo})`}
                               >
                                 <span>{linkedNo}</span>
-                                <ExternalLink className="h-3 w-3" />
-                              </Link>
+                                <FileText className="h-3 w-3" />
+                              </button>
                               {(p.notes?.includes('Adjusted') || p.reference_no?.includes('Advance Adj') || p.payment_no?.includes('-ADJ')) && (
                                 <Badge variant="outline" className="bg-amber-50 text-amber-700 border-amber-300 text-[10px] py-0 px-1.5 font-semibold">
                                   Adjusted
@@ -803,21 +837,31 @@ export function PaymentList({
                 <div className="flex justify-between py-1 border-b items-center">
                   <span className="text-muted-foreground">Linked Document:</span>
                   {selectedPayment.type === 'INWARD' && selectedPayment.invoice_id ? (
-                    <Link
-                      href={`/billing/${selectedPayment.invoice_id}`}
-                      className="font-mono font-semibold text-emerald-600 hover:underline flex items-center gap-1"
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setIsViewModalOpen(false)
+                        handleOpenLinkedPdf('INWARD', selectedPayment.invoice_id!, selectedPayment.linked_invoice_no || 'Invoice')
+                      }}
+                      className="font-mono font-semibold text-emerald-600 hover:underline flex items-center gap-1 text-left cursor-pointer"
+                      title={`View Sales Invoice PDF (${selectedPayment.linked_invoice_no})`}
                     >
                       <span>{selectedPayment.linked_invoice_no}</span>
-                      <ExternalLink className="h-3 w-3" />
-                    </Link>
+                      <FileText className="h-3.5 w-3.5" />
+                    </button>
                   ) : selectedPayment.type === 'OUTWARD' && selectedPayment.purchase_id ? (
-                    <Link
-                      href={`/purchases/${selectedPayment.purchase_id}`}
-                      className="font-mono font-semibold text-blue-600 hover:underline flex items-center gap-1"
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setIsViewModalOpen(false)
+                        handleOpenLinkedPdf('OUTWARD', selectedPayment.purchase_id!, selectedPayment.linked_bill_no || 'Bill')
+                      }}
+                      className="font-mono font-semibold text-blue-600 hover:underline flex items-center gap-1 text-left cursor-pointer"
+                      title={`View Purchase Bill PDF (${selectedPayment.linked_bill_no})`}
                     >
                       <span>{selectedPayment.linked_bill_no}</span>
-                      <ExternalLink className="h-3 w-3" />
-                    </Link>
+                      <FileText className="h-3.5 w-3.5" />
+                    </button>
                   ) : (
                     <span className="font-mono text-muted-foreground italic">
                       {selectedPayment.type === 'INWARD'
@@ -867,6 +911,16 @@ export function PaymentList({
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {/* Linked Document PDF Viewer Modal */}
+      <DocumentPdfViewer
+        open={pdfViewerOpen}
+        onOpenChange={setPdfViewerOpen}
+        pdfApiUrl={pdfViewerUrl}
+        title={pdfViewerTitle}
+        filename={pdfViewerFilename}
+        enableInvoiceCopies={enableCopies}
+      />
     </div>
   )
 }
