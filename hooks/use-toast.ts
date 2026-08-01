@@ -4,7 +4,7 @@ import * as React from "react"
 import type { ToastActionElement, ToastProps } from "@/components/ui/toast"
 
 /** How long success/error toasts stay visible before auto-dismiss. */
-export const TOAST_VISIBLE_MS = 1000
+export const TOAST_VISIBLE_MS = 2500
 
 const TOAST_LIMIT = 1
 const TOAST_REMOVE_DELAY = 300
