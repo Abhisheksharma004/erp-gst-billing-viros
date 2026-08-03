@@ -4,10 +4,13 @@ import { requirePermission } from '@/lib/api-auth'
 import { appendOrgFilter } from '@/lib/tenant'
 
 function mapInvoiceRow(row: Record<string, unknown>) {
+  const date = row.date
+  const dueDate = row.due_date || date
   return {
     id: row.id,
     invoiceNo: row.invoice_no,
-    date: row.date,
+    date,
+    dueDate,
     status: row.status,
     taxableAmount: Number(row.subtotal || 0),
     taxAmount: Number(row.tax_amount || 0),
@@ -24,10 +27,13 @@ function mapInvoiceRow(row: Record<string, unknown>) {
 }
 
 function mapPurchaseRow(row: Record<string, unknown>) {
+  const date = row.date
+  const dueDate = row.due_date || date
   return {
     id: row.id,
     purchaseNo: row.bill_no || '-',
-    date: row.date,
+    date,
+    dueDate,
     status: row.status,
     taxableAmount: Number(row.subtotal || 0),
     taxAmount: Number(row.tax_amount || 0),
@@ -74,24 +80,29 @@ export async function GET(req: NextRequest) {
 
   // Quick Party Options endpoint for filter dropdowns
   if (type === 'options' || type === 'party-options') {
-    const [customers] = await db.execute(
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const [customers] = (await db.execute(
       'SELECT id, name FROM customers WHERE organization_id = ? AND is_active = 1 ORDER BY name ASC',
       [organizationId]
-    ) as any[]
-    const [vendors] = await db.execute(
+    )) as any[]
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const [vendors] = (await db.execute(
       'SELECT id, name FROM vendors WHERE organization_id = ? AND is_active = 1 ORDER BY name ASC',
       [organizationId]
-    ) as any[]
+    )) as any[]
     return NextResponse.json({ customers, vendors })
   }
 
   const salesTypes = ['sales-summary', 'gst-sales', 'sales']
   const purchaseTypes = ['purchase-summary', 'gst-purchase', 'purchases']
+  const pendingCustomerTypes = ['pending-customer-invoices', 'pending-customer']
+  const pendingVendorTypes = ['pending-vendor-invoices', 'pending-vendor']
   const stockTypes = ['stock-report', 'stock']
   const lowStockTypes = ['low-stock']
 
-  if (salesTypes.includes(type)) {
-    const conditions: string[] = []
+  if (pendingCustomerTypes.includes(type)) {
+    const conditions: string[] = ['i.balance_amount > 0', "i.status != 'CANCELLED'"]
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const params: any[] = []
     appendOrgFilter(conditions, params, organizationId!, 'i')
     if (partyId && partyId !== 'ALL') {
@@ -108,22 +119,19 @@ export async function GET(req: NextRequest) {
     }
     const where = 'WHERE ' + conditions.join(' AND ')
 
-    const [rows] = await db.execute(
-      `SELECT i.id, i.invoice_no, i.date, i.status, i.subtotal, i.tax_amount, i.total_amount, i.paid_amount, i.balance_amount,
+    const [rows] = (await db.execute(
+      `SELECT i.id, i.invoice_no, i.date, i.due_date, i.status, i.subtotal, i.tax_amount, i.total_amount, i.paid_amount, i.balance_amount,
               i.cgst_amount, i.sgst_amount, i.igst_amount, c.name AS customer_name, c.gstin AS customer_gstin
        FROM invoices i
        LEFT JOIN customers c ON i.customer_id = c.id
        ${where}
-       ORDER BY i.date ASC, i.invoice_no ASC
+       ORDER BY COALESCE(i.due_date, i.date) ASC, i.invoice_no ASC
        ${sqlLimitClause(limit)}`,
       params
-    ) as [Record<string, unknown>[], unknown]
+    )) as [Record<string, unknown>[], unknown]
 
-    const [summaryRows] = await db.execute(
+    const [summaryRows] = (await db.execute(
       `SELECT COALESCE(SUM(i.subtotal), 0) AS total_taxable,
-              COALESCE(SUM(i.cgst_amount), 0) AS total_cgst,
-              COALESCE(SUM(i.sgst_amount), 0) AS total_sgst,
-              COALESCE(SUM(i.igst_amount), 0) AS total_igst,
               COALESCE(SUM(i.tax_amount), 0) AS total_tax,
               COALESCE(SUM(i.total_amount), 0) AS total_sales,
               COALESCE(SUM(i.paid_amount), 0) AS total_received,
@@ -132,13 +140,14 @@ export async function GET(req: NextRequest) {
        FROM invoices i
        ${where}`,
       params
-    ) as [Record<string, unknown>[], unknown]
+    )) as [Record<string, unknown>[], unknown]
 
     return NextResponse.json({ data: rows.map(mapInvoiceRow), summary: summaryRows[0] || null })
   }
 
-  if (purchaseTypes.includes(type)) {
-    const conditions: string[] = []
+  if (pendingVendorTypes.includes(type)) {
+    const conditions: string[] = ['p.balance_amount > 0', "p.status != 'CANCELLED'"]
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const params: any[] = []
     appendOrgFilter(conditions, params, organizationId!, 'p')
     if (partyId && partyId !== 'ALL') {
@@ -155,8 +164,101 @@ export async function GET(req: NextRequest) {
     }
     const where = 'WHERE ' + conditions.join(' AND ')
 
-    const [rows] = await db.execute(
-      `SELECT p.id, p.bill_no, p.date, p.status, p.subtotal, p.tax_amount, p.total_amount, p.paid_amount, p.balance_amount,
+    const [rows] = (await db.execute(
+      `SELECT p.id, p.bill_no, p.date, p.due_date, p.status, p.subtotal, p.tax_amount, p.total_amount, p.paid_amount, p.balance_amount,
+              p.cgst_amount, p.sgst_amount, p.igst_amount, v.name AS vendor_name, v.gstin AS vendor_gstin
+       FROM purchases p
+       LEFT JOIN vendors v ON p.vendor_id = v.id
+       ${where}
+       ORDER BY COALESCE(p.due_date, p.date) ASC, p.id ASC
+       ${sqlLimitClause(limit)}`,
+      params
+    )) as [Record<string, unknown>[], unknown]
+
+    const [summaryRows] = (await db.execute(
+      `SELECT COALESCE(SUM(p.subtotal), 0) AS total_taxable,
+              COALESCE(SUM(p.tax_amount), 0) AS total_tax,
+              COALESCE(SUM(p.total_amount), 0) AS total_purchases,
+              COALESCE(SUM(p.paid_amount), 0) AS total_paid,
+              COALESCE(SUM(p.balance_amount), 0) AS total_outstanding,
+              COUNT(*) AS total_count
+       FROM purchases p
+       ${where}`,
+      params
+    )) as [Record<string, unknown>[], unknown]
+
+    return NextResponse.json({ data: rows.map(mapPurchaseRow), summary: summaryRows[0] || null })
+  }
+
+  if (salesTypes.includes(type)) {
+    const conditions: string[] = []
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const params: any[] = []
+    appendOrgFilter(conditions, params, organizationId!, 'i')
+    if (partyId && partyId !== 'ALL') {
+      conditions.push('i.customer_id = ?')
+      params.push(partyId)
+    }
+    if (fromDate) {
+      conditions.push('DATE(i.date) >= ?')
+      params.push(fromDate)
+    }
+    if (toDate) {
+      conditions.push('DATE(i.date) <= ?')
+      params.push(toDate)
+    }
+    const where = 'WHERE ' + conditions.join(' AND ')
+
+    const [rows] = (await db.execute(
+      `SELECT i.id, i.invoice_no, i.date, i.due_date, i.status, i.subtotal, i.tax_amount, i.total_amount, i.paid_amount, i.balance_amount,
+              i.cgst_amount, i.sgst_amount, i.igst_amount, c.name AS customer_name, c.gstin AS customer_gstin
+       FROM invoices i
+       LEFT JOIN customers c ON i.customer_id = c.id
+       ${where}
+       ORDER BY i.date ASC, i.invoice_no ASC
+       ${sqlLimitClause(limit)}`,
+      params
+    )) as [Record<string, unknown>[], unknown]
+
+    const [summaryRows] = (await db.execute(
+      `SELECT COALESCE(SUM(i.subtotal), 0) AS total_taxable,
+              COALESCE(SUM(i.cgst_amount), 0) AS total_cgst,
+              COALESCE(SUM(i.sgst_amount), 0) AS total_sgst,
+              COALESCE(SUM(i.igst_amount), 0) AS total_igst,
+              COALESCE(SUM(i.tax_amount), 0) AS total_tax,
+              COALESCE(SUM(i.total_amount), 0) AS total_sales,
+              COALESCE(SUM(i.paid_amount), 0) AS total_received,
+              COALESCE(SUM(i.balance_amount), 0) AS total_outstanding,
+              COUNT(*) AS total_count
+       FROM invoices i
+       ${where}`,
+      params
+    )) as [Record<string, unknown>[], unknown]
+
+    return NextResponse.json({ data: rows.map(mapInvoiceRow), summary: summaryRows[0] || null })
+  }
+
+  if (purchaseTypes.includes(type)) {
+    const conditions: string[] = []
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const params: any[] = []
+    appendOrgFilter(conditions, params, organizationId!, 'p')
+    if (partyId && partyId !== 'ALL') {
+      conditions.push('p.vendor_id = ?')
+      params.push(partyId)
+    }
+    if (fromDate) {
+      conditions.push('DATE(p.date) >= ?')
+      params.push(fromDate)
+    }
+    if (toDate) {
+      conditions.push('DATE(p.date) <= ?')
+      params.push(toDate)
+    }
+    const where = 'WHERE ' + conditions.join(' AND ')
+
+    const [rows] = (await db.execute(
+      `SELECT p.id, p.bill_no, p.date, p.due_date, p.status, p.subtotal, p.tax_amount, p.total_amount, p.paid_amount, p.balance_amount,
               p.cgst_amount, p.sgst_amount, p.igst_amount, v.name AS vendor_name, v.gstin AS vendor_gstin
        FROM purchases p
        LEFT JOIN vendors v ON p.vendor_id = v.id
@@ -164,9 +266,9 @@ export async function GET(req: NextRequest) {
        ORDER BY p.date DESC, p.id DESC
        ${sqlLimitClause(limit)}`,
       params
-    ) as [Record<string, unknown>[], unknown]
+    )) as [Record<string, unknown>[], unknown]
 
-    const [summaryRows] = await db.execute(
+    const [summaryRows] = (await db.execute(
       `SELECT COALESCE(SUM(p.subtotal), 0) AS total_taxable,
               COALESCE(SUM(p.cgst_amount), 0) AS total_cgst,
               COALESCE(SUM(p.sgst_amount), 0) AS total_sgst,
@@ -179,13 +281,14 @@ export async function GET(req: NextRequest) {
        FROM purchases p
        ${where}`,
       params
-    ) as [Record<string, unknown>[], unknown]
+    )) as [Record<string, unknown>[], unknown]
 
     return NextResponse.json({ data: rows.map(mapPurchaseRow), summary: summaryRows[0] || null })
   }
 
   if (stockTypes.includes(type) || lowStockTypes.includes(type)) {
     const conditions: string[] = ['p.is_active = 1']
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const params: any[] = []
     appendOrgFilter(conditions, params, organizationId!, 'p')
     if (lowStockTypes.includes(type)) {
@@ -193,20 +296,21 @@ export async function GET(req: NextRequest) {
     }
     const where = 'WHERE ' + conditions.join(' AND ')
 
-    const [rows] = await db.execute(
+    const [rows] = (await db.execute(
       `SELECT p.id, p.name, p.description, p.hsn_code, p.sac_code, p.current_stock, p.low_stock_alert
        FROM products p
        ${where}
        ORDER BY p.name ASC
        ${sqlLimitClause(limit)}`,
       params
-    ) as [Record<string, unknown>[], unknown]
+    )) as [Record<string, unknown>[], unknown]
 
     return NextResponse.json({ data: rows.map(mapProductRow) })
   }
 
   if (type === 'customer-ledger') {
     const invCond: string[] = []
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const invParams: any[] = []
     appendOrgFilter(invCond, invParams, organizationId!, 'i')
     if (partyId && partyId !== 'ALL') {
@@ -223,7 +327,7 @@ export async function GET(req: NextRequest) {
     }
     const invWhere = 'WHERE ' + invCond.join(' AND ')
 
-    const [invoices] = await db.execute(
+    const [invoices] = (await db.execute(
       `SELECT i.id, i.date, i.invoice_no AS refNo, 'Invoice' AS voucherType,
               '-' AS modeOrRef,
               i.total_amount AS debit, 0 AS credit, c.name AS partyName
@@ -231,9 +335,10 @@ export async function GET(req: NextRequest) {
        LEFT JOIN customers c ON i.customer_id = c.id
        ${invWhere}`,
       invParams
-    ) as [Record<string, unknown>[], unknown]
+    )) as [Record<string, unknown>[], unknown]
 
     const payCond: string[] = ["p.type = 'INWARD'"]
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const payParams: any[] = []
     appendOrgFilter(payCond, payParams, organizationId!, 'p')
     if (partyId && partyId !== 'ALL') {
@@ -250,7 +355,7 @@ export async function GET(req: NextRequest) {
     }
     const payWhere = 'WHERE ' + payCond.join(' AND ')
 
-    const [payments] = await db.execute(
+    const [payments] = (await db.execute(
       `SELECT p.id, p.payment_date AS date,
               COALESCE(p.payment_no, p.reference_no, CONCAT('PAY-', LEFT(p.id, 8))) AS refNo,
               'Payment' AS voucherType,
@@ -260,8 +365,9 @@ export async function GET(req: NextRequest) {
        LEFT JOIN customers c ON p.customer_id = c.id
        ${payWhere}`,
       payParams
-    ) as [Record<string, unknown>[], unknown]
+    )) as [Record<string, unknown>[], unknown]
 
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const combined = [...invoices, ...payments].sort((a: any, b: any) => {
       const dA = new Date(a.date).getTime()
       const dB = new Date(b.date).getTime()
@@ -272,6 +378,7 @@ export async function GET(req: NextRequest) {
     let totalDebit = 0
     let totalCredit = 0
 
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const formattedData = combined.map((row: any) => {
       const debit = Number(row.debit || 0)
       const credit = Number(row.credit || 0)
@@ -316,6 +423,7 @@ export async function GET(req: NextRequest) {
 
   if (type === 'vendor-ledger') {
     const purCond: string[] = []
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const purParams: any[] = []
     appendOrgFilter(purCond, purParams, organizationId!, 'p')
     if (partyId && partyId !== 'ALL') {
@@ -332,7 +440,7 @@ export async function GET(req: NextRequest) {
     }
     const purWhere = 'WHERE ' + purCond.join(' AND ')
 
-    const [purchases] = await db.execute(
+    const [purchases] = (await db.execute(
       `SELECT p.id, p.date, COALESCE(p.bill_no, 'PURCHASE') AS refNo, 'Purchase' AS voucherType,
               '-' AS modeOrRef,
               0 AS debit, p.total_amount AS credit, v.name AS partyName
@@ -340,9 +448,10 @@ export async function GET(req: NextRequest) {
        LEFT JOIN vendors v ON p.vendor_id = v.id
        ${purWhere}`,
       purParams
-    ) as [Record<string, unknown>[], unknown]
+    )) as [Record<string, unknown>[], unknown]
 
     const payCond: string[] = ["pm.type = 'OUTWARD'"]
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const payParams: any[] = []
     appendOrgFilter(payCond, payParams, organizationId!, 'pm')
     if (partyId && partyId !== 'ALL') {
@@ -359,7 +468,7 @@ export async function GET(req: NextRequest) {
     }
     const payWhere = 'WHERE ' + payCond.join(' AND ')
 
-    const [payments] = await db.execute(
+    const [payments] = (await db.execute(
       `SELECT pm.id, pm.payment_date AS date,
               COALESCE(pm.payment_no, pm.reference_no, CONCAT('PAY-', LEFT(pm.id, 8))) AS refNo,
               'Payment' AS voucherType,
@@ -369,8 +478,9 @@ export async function GET(req: NextRequest) {
        LEFT JOIN vendors v ON pm.vendor_id = v.id
        ${payWhere}`,
       payParams
-    ) as [Record<string, unknown>[], unknown]
+    )) as [Record<string, unknown>[], unknown]
 
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const combined = [...purchases, ...payments].sort((a: any, b: any) => {
       const dA = new Date(a.date).getTime()
       const dB = new Date(b.date).getTime()
@@ -381,6 +491,7 @@ export async function GET(req: NextRequest) {
     let totalDebit = 0
     let totalCredit = 0
 
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const formattedData = combined.map((row: any) => {
       const debit = Number(row.debit || 0)
       const credit = Number(row.credit || 0)

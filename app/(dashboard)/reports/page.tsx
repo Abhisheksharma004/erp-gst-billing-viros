@@ -16,6 +16,8 @@ import { useToast } from '@/hooks/use-toast'
 const REPORT_TYPES = [
   { value: 'sales-summary', label: 'Sales Summary' },
   { value: 'purchase-summary', label: 'Purchase Summary' },
+  { value: 'pending-customer-invoices', label: 'Pending Customer Invoices' },
+  { value: 'pending-vendor-invoices', label: 'Pending Vendor Invoices' },
   { value: 'gst-sales', label: 'GST Sales Register' },
   { value: 'gst-purchase', label: 'GST Purchase Register' },
   { value: 'stock-report', label: 'Stock Report' },
@@ -49,7 +51,9 @@ export default function ReportsPage() {
   const [partyId, setPartyId] = useState('ALL')
   const [customers, setCustomers] = useState<{ id: string; name: string }[]>([])
   const [vendors, setVendors] = useState<{ id: string; name: string }[]>([])
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const [data, setData] = useState<any[]>([])
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const [summary, setSummary] = useState<Record<string, any> | null>(null)
   const [loading, setLoading] = useState(false)
   const [hasRun, setHasRun] = useState(false)
@@ -76,8 +80,8 @@ export default function ReportsPage() {
     resetReportResults()
   }
 
-  const isCustomerReport = ['sales-summary', 'gst-sales', 'customer-ledger'].includes(reportType)
-  const isVendorReport = ['purchase-summary', 'gst-purchase', 'vendor-ledger'].includes(reportType)
+  const isCustomerReport = ['sales-summary', 'gst-sales', 'customer-ledger', 'pending-customer-invoices'].includes(reportType)
+  const isVendorReport = ['purchase-summary', 'gst-purchase', 'vendor-ledger', 'pending-vendor-invoices'].includes(reportType)
   const showDateRange = !['stock-report', 'low-stock'].includes(reportType)
 
   const selectedPartyName = () => {
@@ -129,7 +133,7 @@ export default function ReportsPage() {
 
   const exportExcel = async () => {
     const { exportToExcel } = await import('@/lib/excel-export')
-    
+
     // Metadata info for header block
     const meta = {
       reportTitle: selectedReportLabel(),
@@ -139,6 +143,7 @@ export default function ReportsPage() {
       generatedDate: formatDate(new Date().toISOString().split('T')[0]),
     }
 
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const dataRows = data.map((row: any) => {
       if (reportType === 'sales-summary') {
         return {
@@ -148,6 +153,36 @@ export default function ReportsPage() {
           'Taxable Amount': Number(row.taxableAmount || row.taxable_amount || 0),
           'Tax Amount': Number(row.taxAmount || row.tax_amount || 0),
           'Total Amount': Number(row.totalAmount || row.total_amount || 0),
+        }
+      }
+      if (reportType === 'pending-customer-invoices') {
+        const due = row.dueDate ? formatDate(row.dueDate) : formatDate(row.date)
+        const diffTime = new Date().getTime() - new Date(row.dueDate || row.date).getTime()
+        const daysOverdue = Math.max(0, Math.floor(diffTime / 86400000))
+        return {
+          Date: formatDate(row.date),
+          'Due Date': due,
+          'Invoice No': row.invoiceNo || row.invoice_number,
+          Customer: row.customerName || row.customer?.name || '-',
+          'Total Amount': Number(row.totalAmount || row.total_amount || 0),
+          'Paid Amount': Number(row.paidAmount || row.paid_amount || 0),
+          'Pending Balance': Number(row.balanceAmount || row.balance_amount || 0),
+          Status: daysOverdue > 0 ? `${daysOverdue} Days Overdue` : 'Due',
+        }
+      }
+      if (reportType === 'pending-vendor-invoices') {
+        const due = row.dueDate ? formatDate(row.dueDate) : formatDate(row.date)
+        const diffTime = new Date().getTime() - new Date(row.dueDate || row.date).getTime()
+        const daysOverdue = Math.max(0, Math.floor(diffTime / 86400000))
+        return {
+          Date: formatDate(row.date),
+          'Due Date': due,
+          'Bill No': row.purchaseNo || row.purchase_number,
+          Vendor: row.vendorName || row.vendor?.name || '-',
+          'Total Amount': Number(row.totalAmount || row.total_amount || 0),
+          'Paid Amount': Number(row.paidAmount || row.paid_amount || 0),
+          'Pending Balance': Number(row.balanceAmount || row.balance_amount || 0),
+          Status: daysOverdue > 0 ? `${daysOverdue} Days Overdue` : 'Due',
         }
       }
       if (reportType === 'gst-sales') {
@@ -362,6 +397,56 @@ export default function ReportsPage() {
       )
     }
 
+    if (reportType === 'pending-customer-invoices') {
+      return (
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-4">
+          <Card className="p-3 shadow-none bg-blue-50/50 border-blue-200 dark:bg-blue-950/20 dark:border-blue-900">
+            <div className="flex items-center justify-between">
+              <span className="text-xs font-medium text-blue-700 dark:text-blue-300">Pending Invoices</span>
+              <TrendingUp className="w-4 h-4 text-blue-600 dark:text-blue-400" />
+            </div>
+            <p className="text-lg font-bold text-blue-900 dark:text-blue-100 mt-1">
+              {summary.total_count || 0}
+            </p>
+            <span className="text-[11px] text-blue-600 dark:text-blue-400">Unpaid / Partial Invoices</span>
+          </Card>
+
+          <Card className="p-3 shadow-none bg-indigo-50/50 border-indigo-200 dark:bg-indigo-950/20 dark:border-indigo-900">
+            <div className="flex items-center justify-between">
+              <span className="text-xs font-medium text-indigo-700 dark:text-indigo-300">Total Invoice Value</span>
+              <Receipt className="w-4 h-4 text-indigo-600 dark:text-indigo-400" />
+            </div>
+            <p className="text-lg font-bold text-indigo-900 dark:text-indigo-100 mt-1">
+              {formatCurrency(Number(summary.total_sales || 0))}
+            </p>
+            <span className="text-[11px] text-indigo-600 dark:text-indigo-400">Gross Billed Value</span>
+          </Card>
+
+          <Card className="p-3 shadow-none bg-green-50/50 border-green-200 dark:bg-green-950/20 dark:border-green-900">
+            <div className="flex items-center justify-between">
+              <span className="text-xs font-medium text-green-700 dark:text-green-300">Amount Received</span>
+              <Wallet className="w-4 h-4 text-green-600 dark:text-green-400" />
+            </div>
+            <p className="text-lg font-bold text-green-900 dark:text-green-100 mt-1">
+              {formatCurrency(Number(summary.total_received || 0))}
+            </p>
+            <span className="text-[11px] text-green-600 dark:text-green-400">Partial Payments Collected</span>
+          </Card>
+
+          <Card className="p-3 shadow-none bg-amber-50/50 border-amber-200 dark:bg-amber-950/20 dark:border-amber-900">
+            <div className="flex items-center justify-between">
+              <span className="text-xs font-medium text-amber-700 dark:text-amber-300">Pending Balance</span>
+              <Scale className="w-4 h-4 text-amber-600 dark:text-amber-400" />
+            </div>
+            <p className="text-lg font-bold text-amber-900 dark:text-amber-100 mt-1">
+              {formatCurrency(Number(summary.total_outstanding || 0))}
+            </p>
+            <span className="text-[11px] text-amber-600 dark:text-amber-400">Total Outstanding Receivable</span>
+          </Card>
+        </div>
+      )
+    }
+
     if (reportType === 'purchase-summary' || reportType === 'gst-purchase') {
       return (
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-4">
@@ -409,6 +494,56 @@ export default function ReportsPage() {
               {formatCurrency(Number(summary.total_outstanding || 0))}
             </p>
             <span className="text-[11px] text-amber-600 dark:text-amber-400">Payable Balance</span>
+          </Card>
+        </div>
+      )
+    }
+
+    if (reportType === 'pending-vendor-invoices') {
+      return (
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-4">
+          <Card className="p-3 shadow-none bg-purple-50/50 border-purple-200 dark:bg-purple-950/20 dark:border-purple-900">
+            <div className="flex items-center justify-between">
+              <span className="text-xs font-medium text-purple-700 dark:text-purple-300">Pending Bills</span>
+              <TrendingUp className="w-4 h-4 text-purple-600 dark:text-purple-400" />
+            </div>
+            <p className="text-lg font-bold text-purple-900 dark:text-purple-100 mt-1">
+              {summary.total_count || 0}
+            </p>
+            <span className="text-[11px] text-purple-600 dark:text-purple-400">Unpaid / Partial Bills</span>
+          </Card>
+
+          <Card className="p-3 shadow-none bg-indigo-50/50 border-indigo-200 dark:bg-indigo-950/20 dark:border-indigo-900">
+            <div className="flex items-center justify-between">
+              <span className="text-xs font-medium text-indigo-700 dark:text-indigo-300">Total Bill Value</span>
+              <Receipt className="w-4 h-4 text-indigo-600 dark:text-indigo-400" />
+            </div>
+            <p className="text-lg font-bold text-indigo-900 dark:text-indigo-100 mt-1">
+              {formatCurrency(Number(summary.total_purchases || 0))}
+            </p>
+            <span className="text-[11px] text-indigo-600 dark:text-indigo-400">Gross Purchased Value</span>
+          </Card>
+
+          <Card className="p-3 shadow-none bg-green-50/50 border-green-200 dark:bg-green-950/20 dark:border-green-900">
+            <div className="flex items-center justify-between">
+              <span className="text-xs font-medium text-green-700 dark:text-green-300">Amount Paid</span>
+              <Wallet className="w-4 h-4 text-green-600 dark:text-green-400" />
+            </div>
+            <p className="text-lg font-bold text-green-900 dark:text-green-100 mt-1">
+              {formatCurrency(Number(summary.total_paid || 0))}
+            </p>
+            <span className="text-[11px] text-green-600 dark:text-green-400">Partial Payments Outflow</span>
+          </Card>
+
+          <Card className="p-3 shadow-none bg-amber-50/50 border-amber-200 dark:bg-amber-950/20 dark:border-amber-900">
+            <div className="flex items-center justify-between">
+              <span className="text-xs font-medium text-amber-700 dark:text-amber-300">Pending Balance</span>
+              <Scale className="w-4 h-4 text-amber-600 dark:text-amber-400" />
+            </div>
+            <p className="text-lg font-bold text-amber-900 dark:text-amber-100 mt-1">
+              {formatCurrency(Number(summary.total_outstanding || 0))}
+            </p>
+            <span className="text-[11px] text-amber-600 dark:text-amber-400">Total Outstanding Payable</span>
           </Card>
         </div>
       )
@@ -483,6 +618,7 @@ export default function ReportsPage() {
             </TableRow>
           </TableHeader>
           <TableBody>
+            {/* eslint-disable-next-line @typescript-eslint/no-explicit-any */}
             {data.map((row: any, idx: number) => (
               <TableRow key={row.id || idx} className={cn('text-xs', idx % 2 === 1 && 'bg-slate-50/80 dark:bg-slate-900/40')}>
                 <TableCell>{formatDate(row.date)}</TableCell>
@@ -499,6 +635,122 @@ export default function ReportsPage() {
               </TableCell>
               <TableCell className="text-right">{formatCurrency(totalAmount)}</TableCell>
             </TableRow>
+          </TableBody>
+        </Table>
+      )
+    }
+
+    if (reportType === 'pending-customer-invoices') {
+      return (
+        <Table>
+          <TableHeader>
+            <TableRow>
+              <TableHead className="text-xs">Date</TableHead>
+              <TableHead className="text-xs">Due Date</TableHead>
+              <TableHead className="text-xs">Invoice No</TableHead>
+              <TableHead className="text-xs">Customer Name</TableHead>
+              <TableHead className="text-xs text-right">Total Amount</TableHead>
+              <TableHead className="text-xs text-right">Paid Amount</TableHead>
+              <TableHead className="text-xs text-right">Pending Balance</TableHead>
+              <TableHead className="text-xs text-center">Status / Overdue</TableHead>
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            {/* eslint-disable-next-line @typescript-eslint/no-explicit-any */}
+            {data.map((row: any, idx: number) => {
+              const dueStr = row.dueDate ? formatDate(row.dueDate) : formatDate(row.date)
+              const diffTime = new Date().getTime() - new Date(row.dueDate || row.date).getTime()
+              const daysOverdue = Math.max(0, Math.floor(diffTime / 86400000))
+              return (
+                <TableRow key={row.id || idx} className={cn('text-xs', idx % 2 === 1 && 'bg-slate-50/80 dark:bg-slate-900/40')}>
+                  <TableCell>{formatDate(row.date)}</TableCell>
+                  <TableCell>{dueStr}</TableCell>
+                  <TableCell className="font-medium font-mono">{row.invoiceNo}</TableCell>
+                  <TableCell className="font-medium">{row.customerName || row.customer?.name}</TableCell>
+                  <TableCell className="text-right">{formatCurrency(row.totalAmount)}</TableCell>
+                  <TableCell className="text-right text-green-600">{formatCurrency(row.paidAmount)}</TableCell>
+                  <TableCell className="text-right font-semibold text-amber-600">{formatCurrency(row.balanceAmount)}</TableCell>
+                  <TableCell className="text-center">
+                    {daysOverdue > 0 ? (
+                      <span className="inline-flex items-center rounded-full bg-red-100 dark:bg-red-950 px-2 py-0.5 text-[11px] font-medium text-red-800 dark:text-red-300">
+                        {daysOverdue} Days Overdue
+                      </span>
+                    ) : (
+                      <span className="inline-flex items-center rounded-full bg-blue-100 dark:bg-blue-950 px-2 py-0.5 text-[11px] font-medium text-blue-800 dark:text-blue-300">
+                        Due
+                      </span>
+                    )}
+                  </TableCell>
+                </TableRow>
+              )
+            })}
+            {summary && (
+              <TableRow className="bg-muted/40 font-semibold text-xs border-t-2">
+                <TableCell colSpan={4} className="text-right">Total Pending ({data.length} Invoice(s))</TableCell>
+                <TableCell className="text-right">{formatCurrency(summary.total_sales)}</TableCell>
+                <TableCell className="text-right text-green-600">{formatCurrency(summary.total_received)}</TableCell>
+                <TableCell className="text-right text-amber-600 font-bold">{formatCurrency(summary.total_outstanding)}</TableCell>
+                <TableCell />
+              </TableRow>
+            )}
+          </TableBody>
+        </Table>
+      )
+    }
+
+    if (reportType === 'pending-vendor-invoices') {
+      return (
+        <Table>
+          <TableHeader>
+            <TableRow>
+              <TableHead className="text-xs">Date</TableHead>
+              <TableHead className="text-xs">Due Date</TableHead>
+              <TableHead className="text-xs">Bill No</TableHead>
+              <TableHead className="text-xs">Vendor Name</TableHead>
+              <TableHead className="text-xs text-right">Total Amount</TableHead>
+              <TableHead className="text-xs text-right">Paid Amount</TableHead>
+              <TableHead className="text-xs text-right">Pending Balance</TableHead>
+              <TableHead className="text-xs text-center">Status / Overdue</TableHead>
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            {/* eslint-disable-next-line @typescript-eslint/no-explicit-any */}
+            {data.map((row: any, idx: number) => {
+              const dueStr = row.dueDate ? formatDate(row.dueDate) : formatDate(row.date)
+              const diffTime = new Date().getTime() - new Date(row.dueDate || row.date).getTime()
+              const daysOverdue = Math.max(0, Math.floor(diffTime / 86400000))
+              return (
+                <TableRow key={row.id || idx} className={cn('text-xs', idx % 2 === 1 && 'bg-slate-50/80 dark:bg-slate-900/40')}>
+                  <TableCell>{formatDate(row.date)}</TableCell>
+                  <TableCell>{dueStr}</TableCell>
+                  <TableCell className="font-medium font-mono">{row.purchaseNo}</TableCell>
+                  <TableCell className="font-medium">{row.vendorName || row.vendor?.name}</TableCell>
+                  <TableCell className="text-right">{formatCurrency(row.totalAmount)}</TableCell>
+                  <TableCell className="text-right text-green-600">{formatCurrency(row.paidAmount)}</TableCell>
+                  <TableCell className="text-right font-semibold text-amber-600">{formatCurrency(row.balanceAmount)}</TableCell>
+                  <TableCell className="text-center">
+                    {daysOverdue > 0 ? (
+                      <span className="inline-flex items-center rounded-full bg-red-100 dark:bg-red-950 px-2 py-0.5 text-[11px] font-medium text-red-800 dark:text-red-300">
+                        {daysOverdue} Days Overdue
+                      </span>
+                    ) : (
+                      <span className="inline-flex items-center rounded-full bg-blue-100 dark:bg-blue-950 px-2 py-0.5 text-[11px] font-medium text-blue-800 dark:text-blue-300">
+                        Due
+                      </span>
+                    )}
+                  </TableCell>
+                </TableRow>
+              )
+            })}
+            {summary && (
+              <TableRow className="bg-muted/40 font-semibold text-xs border-t-2">
+                <TableCell colSpan={4} className="text-right">Total Pending ({data.length} Bill(s))</TableCell>
+                <TableCell className="text-right">{formatCurrency(summary.total_purchases)}</TableCell>
+                <TableCell className="text-right text-green-600">{formatCurrency(summary.total_paid)}</TableCell>
+                <TableCell className="text-right text-amber-600 font-bold">{formatCurrency(summary.total_outstanding)}</TableCell>
+                <TableCell />
+              </TableRow>
+            )}
           </TableBody>
         </Table>
       )
@@ -522,6 +774,7 @@ export default function ReportsPage() {
             </TableRow>
           </TableHeader>
           <TableBody>
+            {/* eslint-disable-next-line @typescript-eslint/no-explicit-any */}
             {data.map((row: any, idx: number) => (
               <TableRow key={row.id || idx} className={cn('text-xs', idx % 2 === 1 && 'bg-slate-50/80 dark:bg-slate-900/40')}>
                 <TableCell>{formatDate(row.date)}</TableCell>
@@ -568,6 +821,7 @@ export default function ReportsPage() {
             </TableRow>
           </TableHeader>
           <TableBody>
+            {/* eslint-disable-next-line @typescript-eslint/no-explicit-any */}
             {data.map((row: any, idx: number) => (
               <TableRow key={row.id || idx} className={cn('text-xs', idx % 2 === 1 && 'bg-slate-50/80 dark:bg-slate-900/40')}>
                 <TableCell>{formatDate(row.date)}</TableCell>
@@ -613,6 +867,7 @@ export default function ReportsPage() {
             </TableRow>
           </TableHeader>
           <TableBody>
+            {/* eslint-disable-next-line @typescript-eslint/no-explicit-any */}
             {data.map((row: any, idx: number) => (
               <TableRow key={row.id || idx} className={cn('text-xs', idx % 2 === 1 && 'bg-slate-50/80 dark:bg-slate-900/40')}>
                 <TableCell>{formatDate(row.date)}</TableCell>
@@ -655,6 +910,7 @@ export default function ReportsPage() {
             </TableRow>
           </TableHeader>
           <TableBody>
+            {/* eslint-disable-next-line @typescript-eslint/no-explicit-any */}
             {data.map((row: any, idx: number) => {
               const lowAlert = Number(row.lowStockAlert ?? 10)
               const isLow = Number(row.currentStock) <= lowAlert
@@ -694,6 +950,7 @@ export default function ReportsPage() {
             </TableRow>
           </TableHeader>
           <TableBody>
+            {/* eslint-disable-next-line @typescript-eslint/no-explicit-any */}
             {data.map((row: any, idx: number) => (
               <TableRow key={row.id || idx} className={cn('text-xs', idx % 2 === 1 && 'bg-slate-50/80 dark:bg-slate-900/40')}>
                 <TableCell>{formatDate(row.date)}</TableCell>
@@ -766,6 +1023,7 @@ export default function ReportsPage() {
             </TableRow>
           </TableHeader>
           <TableBody>
+            {/* eslint-disable-next-line @typescript-eslint/no-explicit-any */}
             {data.map((row: any, idx: number) => (
               <TableRow key={row.id || idx} className={cn('text-xs', idx % 2 === 1 && 'bg-slate-50/80 dark:bg-slate-900/40')}>
                 <TableCell>{formatDate(row.date)}</TableCell>

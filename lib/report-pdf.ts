@@ -9,7 +9,9 @@ export interface ReportPdfOptions {
   to: string
   partyName?: string
   companyName?: string
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   data: any[]
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   summary?: Record<string, any> | null
 }
 
@@ -26,7 +28,6 @@ export function generateReportPdf(options: ReportPdfOptions) {
     from,
     to,
     partyName = 'All Parties',
-    companyName = 'ERP GST Billing',
     data,
     summary,
   } = options
@@ -55,13 +56,23 @@ export function generateReportPdf(options: ReportPdfOptions) {
 
   // 2. Left Metadata Info Section
   let partyLabel = 'Party Name'
-  if (reportType === 'customer-ledger' || reportType === 'sales-summary' || reportType === 'gst-sales') {
+  if (
+    reportType === 'customer-ledger' ||
+    reportType === 'sales-summary' ||
+    reportType === 'gst-sales' ||
+    reportType === 'pending-customer-invoices'
+  ) {
     partyLabel = 'Customer Name'
-  } else if (reportType === 'vendor-ledger' || reportType === 'purchase-summary' || reportType === 'gst-purchase') {
+  } else if (
+    reportType === 'vendor-ledger' ||
+    reportType === 'purchase-summary' ||
+    reportType === 'gst-purchase' ||
+    reportType === 'pending-vendor-invoices'
+  ) {
     partyLabel = 'Vendor Name'
   }
 
-  const displayParty = (!partyName || partyName === 'All Parties' || partyName === 'ALL') ? 'ALL' : partyName
+  const displayParty = !partyName || partyName === 'All Parties' || partyName === 'ALL' ? 'ALL' : partyName
   const nowStr = `${new Date().toLocaleDateString('en-IN')} ${new Date().toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' })}`
 
   let leftY = 27
@@ -112,6 +123,18 @@ export function generateReportPdf(options: ReportPdfOptions) {
       doc.text(`Taxable Value:-  ${formatAmount(summary.total_taxable)}`, rightX, rightY)
       rightY += 6.5
       doc.text(`Total Tax:-  ${formatAmount(summary.total_tax)}`, rightX, rightY)
+    } else if (reportType === 'pending-customer-invoices') {
+      doc.text(`Pending Invoices:-  ${summary.total_count || 0}`, rightX, rightY)
+      rightY += 6.5
+      doc.text(`Total Amount:-  ${formatAmount(summary.total_sales)}`, rightX, rightY)
+      rightY += 6.5
+      doc.text(`Pending Balance:-  ${formatAmount(summary.total_outstanding)}`, rightX, rightY)
+    } else if (reportType === 'pending-vendor-invoices') {
+      doc.text(`Pending Bills:-  ${summary.total_count || 0}`, rightX, rightY)
+      rightY += 6.5
+      doc.text(`Total Amount:-  ${formatAmount(summary.total_purchases)}`, rightX, rightY)
+      rightY += 6.5
+      doc.text(`Pending Balance:-  ${formatAmount(summary.total_outstanding)}`, rightX, rightY)
     }
   }
 
@@ -183,6 +206,48 @@ export function generateReportPdf(options: ReportPdfOptions) {
     ])
     if (summary) {
       foot = [['Total', '', `${data.length} Record(s)`, '', formatAmount(summary.total_taxable), formatAmount(summary.total_cgst), formatAmount(summary.total_sgst), formatAmount(summary.total_igst), formatAmount(summary.total_tax), formatAmount(summary.total_purchases)]]
+    }
+  } else if (reportType === 'pending-customer-invoices') {
+    head = [['Date', 'Due Date', 'Invoice No', 'Customer Name', 'Total Amount (Rs.)', 'Paid Amount (Rs.)', 'Pending Balance (Rs.)', 'Status']]
+    body = data.map((r) => {
+      const due = r.dueDate ? formatDate(r.dueDate) : formatDate(r.date)
+      const diffTime = new Date().getTime() - new Date(r.dueDate || r.date).getTime()
+      const daysOverdue = Math.max(0, Math.floor(diffTime / 86400000))
+      const statusText = daysOverdue > 0 ? `${daysOverdue} Days Overdue` : 'Due'
+      return [
+        formatDate(r.date),
+        due,
+        r.invoiceNo || '-',
+        r.customerName || r.customer?.name || '-',
+        formatAmount(r.totalAmount),
+        formatAmount(r.paidAmount),
+        formatAmount(r.balanceAmount),
+        statusText,
+      ]
+    })
+    if (summary) {
+      foot = [['Total Pending', '', `${data.length} Invoice(s)`, '', formatAmount(summary.total_sales), formatAmount(summary.total_received), formatAmount(summary.total_outstanding), '']]
+    }
+  } else if (reportType === 'pending-vendor-invoices') {
+    head = [['Date', 'Due Date', 'Bill No', 'Vendor Name', 'Total Amount (Rs.)', 'Paid Amount (Rs.)', 'Pending Balance (Rs.)', 'Status']]
+    body = data.map((r) => {
+      const due = r.dueDate ? formatDate(r.dueDate) : formatDate(r.date)
+      const diffTime = new Date().getTime() - new Date(r.dueDate || r.date).getTime()
+      const daysOverdue = Math.max(0, Math.floor(diffTime / 86400000))
+      const statusText = daysOverdue > 0 ? `${daysOverdue} Days Overdue` : 'Due'
+      return [
+        formatDate(r.date),
+        due,
+        r.purchaseNo || '-',
+        r.vendorName || r.vendor?.name || '-',
+        formatAmount(r.totalAmount),
+        formatAmount(r.paidAmount),
+        formatAmount(r.balanceAmount),
+        statusText,
+      ]
+    })
+    if (summary) {
+      foot = [['Total Pending', '', `${data.length} Bill(s)`, '', formatAmount(summary.total_purchases), formatAmount(summary.total_paid), formatAmount(summary.total_outstanding), '']]
     }
   } else if (reportType === 'customer-ledger') {
     head = [['Date', 'Party Name', 'Voucher', 'Invoice No. / Payment ID', 'Mode of payment / Ref No', 'Debit (Rs.)', 'Credit (Rs.)', 'Balance (Rs.)']]
@@ -264,6 +329,7 @@ export function generateReportPdf(options: ReportPdfOptions) {
       fillColor: [248, 250, 252],
     },
     didDrawPage: (dataArg) => {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
       const totalPages = (doc as any).internal.getNumberOfPages()
       const currentPage = dataArg.pageNumber
 
