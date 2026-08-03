@@ -99,11 +99,28 @@ export async function DELETE(req: NextRequest, { params }: { params: Promise<{ i
   const { id } = await params
   const { error, organizationId } = await requirePermission('inventory', 'delete')
   if (error) return error
-  const [existing] = await db.execute(
-    'SELECT id FROM products WHERE id = ? AND organization_id = ?',
+
+  const [existingRows] = (await db.execute(
+    'SELECT * FROM products WHERE id = ? AND organization_id = ?',
     [id, organizationId]
-  ) as any[]
-  if (!existing[0]) return NextResponse.json({ error: 'Not found' }, { status: 404 })
+  )) as any[]
+  if (!existingRows[0]) return NextResponse.json({ error: 'Not found' }, { status: 404 })
+
+  const product = existingRows[0]
+
+  // Archive product record to Recovery before deletion
+  try {
+    const { archiveDeletedRecord } = await import('@/lib/recovery')
+    await archiveDeletedRecord({
+      organizationId: organizationId!,
+      entityType: 'PRODUCT',
+      recordId: id,
+      referenceNo: product.name || product.sku || `PROD-${id.slice(0, 8)}`,
+      recordData: product,
+    })
+  } catch (archiveErr) {
+    console.error('Failed to archive product to recovery:', archiveErr)
+  }
 
   try {
     await db.execute('DELETE FROM stock_movements WHERE product_id = ?', [id])
@@ -113,12 +130,19 @@ export async function DELETE(req: NextRequest, { params }: { params: Promise<{ i
   }
 
   try {
-    await db.execute('DELETE FROM products WHERE id = ? AND organization_id = ?', [id, organizationId])
+    await db.execute('DELETE FROM products WHERE id = ? AND organization_id = ?', [
+      id,
+      organizationId,
+    ])
     return NextResponse.json({ success: true })
   } catch (err: unknown) {
     const e = err as { code?: string; errno?: number }
     // Product is referenced by invoices/orders/etc. — keep row, mark inactive instead.
-    if (e?.code === 'ER_ROW_IS_REFERENCED_2' || e?.code === 'ER_ROW_IS_REFERENCED' || e?.errno === 1451) {
+    if (
+      e?.code === 'ER_ROW_IS_REFERENCED_2' ||
+      e?.code === 'ER_ROW_IS_REFERENCED' ||
+      e?.errno === 1451
+    ) {
       await db.execute(
         'UPDATE products SET is_active = 0 WHERE id = ? AND organization_id = ?',
         [id, organizationId]

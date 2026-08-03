@@ -278,14 +278,35 @@ export async function DELETE(req: NextRequest, { params }: { params: Promise<{ i
 
   const conn = await db.getConnection()
   try {
-    const [existing] = await conn.execute(
-      'SELECT id FROM purchases WHERE id = ? AND organization_id = ?',
+    const [existingRows] = (await conn.execute(
+      'SELECT p.*, v.name AS vendor_name FROM purchases p LEFT JOIN vendors v ON p.vendor_id = v.id WHERE p.id = ? AND p.organization_id = ?',
       [id, organizationId]
-    ) as any[]
-    if (!existing[0]) return NextResponse.json({ error: 'Not found' }, { status: 404 })
+    )) as any[]
+    if (!existingRows[0]) return NextResponse.json({ error: 'Not found' }, { status: 404 })
+
+    const fullPurchase = existingRows[0]
+    const [items] = (await conn.execute('SELECT * FROM purchase_items WHERE purchase_id = ?', [
+      id,
+    ])) as any[]
+
+    // Archive purchase record to Recovery before deletion
+    try {
+      const { archiveDeletedRecord } = await import('@/lib/recovery')
+      await archiveDeletedRecord({
+        organizationId: organizationId!,
+        entityType: 'PURCHASE',
+        recordId: id,
+        referenceNo: fullPurchase.bill_no || `BILL-${id.slice(0, 8)}`,
+        recordData: {
+          purchase: fullPurchase,
+          items,
+        },
+      })
+    } catch (archiveErr) {
+      console.error('Failed to archive purchase bill to recovery:', archiveErr)
+    }
 
     await conn.beginTransaction()
-    const [items] = await conn.execute('SELECT * FROM purchase_items WHERE purchase_id = ?', [id]) as any[]
     for (const item of items as any[]) {
       if (item.product_id) {
         await conn.execute(
@@ -294,14 +315,24 @@ export async function DELETE(req: NextRequest, { params }: { params: Promise<{ i
         )
       }
     }
-    await conn.execute('DELETE FROM stock_movements WHERE reference_type = ? AND reference_id = ?', ['PURCHASE', id])
+    await conn.execute('DELETE FROM stock_movements WHERE reference_type = ? AND reference_id = ?', [
+      'PURCHASE',
+      id,
+    ])
     await conn.execute('DELETE FROM purchase_items WHERE purchase_id = ?', [id])
-    await conn.execute('DELETE FROM payments WHERE (purchase_id = ? OR reference_id = ?) AND organization_id = ?', [id, id, organizationId])
-    await conn.execute('DELETE FROM purchases WHERE id = ? AND organization_id = ?', [id, organizationId])
+    await conn.execute(
+      'DELETE FROM payments WHERE (purchase_id = ? OR reference_id = ?) AND organization_id = ?',
+      [id, id, organizationId]
+    )
+    await conn.execute('DELETE FROM purchases WHERE id = ? AND organization_id = ?', [
+      id,
+      organizationId,
+    ])
     await conn.commit()
     return NextResponse.json({ success: true })
-  } catch {
+  } catch (err) {
     await conn.rollback()
+    console.error('Delete purchase error:', err)
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 })
   } finally {
     conn.release()

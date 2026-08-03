@@ -296,14 +296,35 @@ export async function DELETE(req: NextRequest, { params }: { params: Promise<{ i
 
   const conn = await db.getConnection()
   try {
-    const [existing] = await conn.execute(
-      'SELECT id FROM invoices WHERE id = ? AND organization_id = ?',
+    const [existingRows] = (await conn.execute(
+      'SELECT i.*, c.name AS customer_name FROM invoices i LEFT JOIN customers c ON i.customer_id = c.id WHERE i.id = ? AND i.organization_id = ?',
       [id, organizationId]
-    ) as any[]
-    if (!existing[0]) return NextResponse.json({ error: 'Not found' }, { status: 404 })
+    )) as any[]
+    if (!existingRows[0]) return NextResponse.json({ error: 'Not found' }, { status: 404 })
+
+    const fullInvoice = existingRows[0]
+    const [items] = (await conn.execute('SELECT * FROM invoice_items WHERE invoice_id = ?', [
+      id,
+    ])) as any[]
+
+    // Archive invoice record to Recovery before deletion
+    try {
+      const { archiveDeletedRecord } = await import('@/lib/recovery')
+      await archiveDeletedRecord({
+        organizationId: organizationId!,
+        entityType: 'INVOICE',
+        recordId: id,
+        referenceNo: fullInvoice.invoice_no || `INV-${id.slice(0, 8)}`,
+        recordData: {
+          invoice: fullInvoice,
+          items,
+        },
+      })
+    } catch (archiveErr) {
+      console.error('Failed to archive invoice to recovery:', archiveErr)
+    }
 
     await conn.beginTransaction()
-    const [items] = await conn.execute('SELECT * FROM invoice_items WHERE invoice_id = ?', [id]) as any[]
     for (const item of items as any[]) {
       if (item.product_id) {
         await conn.execute(
@@ -313,12 +334,19 @@ export async function DELETE(req: NextRequest, { params }: { params: Promise<{ i
       }
     }
     await conn.execute('DELETE FROM invoice_items WHERE invoice_id = ?', [id])
-    await conn.execute('DELETE FROM payments WHERE (invoice_id = ? OR reference_id = ?) AND organization_id = ?', [id, id, organizationId])
-    await conn.execute('DELETE FROM invoices WHERE id = ? AND organization_id = ?', [id, organizationId])
+    await conn.execute(
+      'DELETE FROM payments WHERE (invoice_id = ? OR reference_id = ?) AND organization_id = ?',
+      [id, id, organizationId]
+    )
+    await conn.execute('DELETE FROM invoices WHERE id = ? AND organization_id = ?', [
+      id,
+      organizationId,
+    ])
     await conn.commit()
     return NextResponse.json({ success: true })
-  } catch {
+  } catch (err) {
     await conn.rollback()
+    console.error('Delete invoice error:', err)
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 })
   } finally {
     conn.release()

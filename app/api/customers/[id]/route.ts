@@ -92,17 +92,41 @@ export async function DELETE(req: NextRequest, { params }: { params: Promise<{ i
   const { error, organizationId } = await requirePermission('customers', 'delete')
   if (error) return error
 
-  const [existing] = await db.execute(
-    'SELECT id FROM customers WHERE id = ? AND organization_id = ?',
+  const [existingRows] = (await db.execute(
+    'SELECT * FROM customers WHERE id = ? AND organization_id = ?',
     [id, organizationId]
-  ) as any[]
-  if (!existing[0]) return NextResponse.json({ error: 'Not found'}, { status: 404 })
+  )) as any[]
+  if (!existingRows[0]) return NextResponse.json({ error: 'Not found' }, { status: 404 })
 
-  const [rows] = await db.execute(
+  const customer = existingRows[0]
+
+  const [rows] = (await db.execute(
     'SELECT COUNT(*) as cnt FROM invoices WHERE customer_id = ? AND organization_id = ?',
     [id, organizationId]
-  ) as any[]
-  if (rows[0].cnt > 0) return NextResponse.json({ error: 'Cannot delete customer with existing invoices' }, { status: 400 })
-  await db.execute('DELETE FROM customers WHERE id = ? AND organization_id = ?', [id, organizationId])
+  )) as any[]
+  if (rows[0].cnt > 0)
+    return NextResponse.json(
+      { error: 'Cannot delete customer with existing invoices' },
+      { status: 400 }
+    )
+
+  // Archive customer record to Recovery before deletion
+  try {
+    const { archiveDeletedRecord } = await import('@/lib/recovery')
+    await archiveDeletedRecord({
+      organizationId: organizationId!,
+      entityType: 'CUSTOMER',
+      recordId: id,
+      referenceNo: customer.name || `CUST-${id.slice(0, 8)}`,
+      recordData: customer,
+    })
+  } catch (archiveErr) {
+    console.error('Failed to archive customer to recovery:', archiveErr)
+  }
+
+  await db.execute('DELETE FROM customers WHERE id = ? AND organization_id = ?', [
+    id,
+    organizationId,
+  ])
   return NextResponse.json({ success: true })
 }

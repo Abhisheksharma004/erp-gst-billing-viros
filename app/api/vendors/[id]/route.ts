@@ -89,17 +89,41 @@ export async function DELETE(req: NextRequest, { params }: { params: Promise<{ i
   const { error, organizationId } = await requirePermission('vendors', 'delete')
   if (error) return error
 
-  const [existing] = await db.execute(
-    'SELECT id FROM vendors WHERE id = ? AND organization_id = ?',
+  const [existingRows] = (await db.execute(
+    'SELECT * FROM vendors WHERE id = ? AND organization_id = ?',
     [id, organizationId]
-  ) as any[]
-  if (!existing[0]) return NextResponse.json({ error: 'Not found' }, { status: 404 })
+  )) as any[]
+  if (!existingRows[0]) return NextResponse.json({ error: 'Not found' }, { status: 404 })
 
-  const [rows] = await db.execute(
+  const vendor = existingRows[0]
+
+  const [rows] = (await db.execute(
     'SELECT COUNT(*) as cnt FROM purchases WHERE vendor_id = ? AND organization_id = ?',
     [id, organizationId]
-  ) as any[]
-  if (rows[0].cnt > 0) return NextResponse.json({ error: 'Cannot delete vendor with existing purchases' }, { status: 400 })
-  await db.execute('DELETE FROM vendors WHERE id = ? AND organization_id = ?', [id, organizationId])
+  )) as any[]
+  if (rows[0].cnt > 0)
+    return NextResponse.json(
+      { error: 'Cannot delete vendor with existing purchases' },
+      { status: 400 }
+    )
+
+  // Archive vendor record to Recovery before deletion
+  try {
+    const { archiveDeletedRecord } = await import('@/lib/recovery')
+    await archiveDeletedRecord({
+      organizationId: organizationId!,
+      entityType: 'VENDOR',
+      recordId: id,
+      referenceNo: vendor.name || `VEND-${id.slice(0, 8)}`,
+      recordData: vendor,
+    })
+  } catch (archiveErr) {
+    console.error('Failed to archive vendor to recovery:', archiveErr)
+  }
+
+  await db.execute('DELETE FROM vendors WHERE id = ? AND organization_id = ?', [
+    id,
+    organizationId,
+  ])
   return NextResponse.json({ success: true })
 }
