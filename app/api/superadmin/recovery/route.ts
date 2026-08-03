@@ -51,20 +51,33 @@ export async function GET(req: NextRequest) {
     params
   )) as [Record<string, unknown>[], unknown]
 
-  // Query summary breakdown stats
+  // Query summary breakdown stats matching filters
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const [statsRows] = (await db.execute(`
-    SELECT
+  const [statsRows] = (await db.execute(
+    `SELECT
       COUNT(*) AS total_deleted,
-      SUM(CASE WHEN entity_type = 'INVOICE' THEN 1 ELSE 0 END) AS total_invoices,
-      SUM(CASE WHEN entity_type = 'PURCHASE' THEN 1 ELSE 0 END) AS total_purchases,
-      SUM(CASE WHEN entity_type = 'PRODUCT' THEN 1 ELSE 0 END) AS total_products,
-      SUM(CASE WHEN entity_type IN ('CUSTOMER', 'VENDOR') THEN 1 ELSE 0 END) AS total_parties
-    FROM deleted_records
-  `)) as [Record<string, unknown>[], unknown]
+      SUM(CASE WHEN dr.entity_type = 'INVOICE' THEN 1 ELSE 0 END) AS total_invoices,
+      SUM(CASE WHEN dr.entity_type = 'PURCHASE' THEN 1 ELSE 0 END) AS total_purchases,
+      SUM(CASE WHEN dr.entity_type = 'PRODUCT' THEN 1 ELSE 0 END) AS total_products,
+      SUM(CASE WHEN dr.entity_type IN ('CUSTOMER', 'VENDOR') THEN 1 ELSE 0 END) AS total_parties
+    FROM deleted_records dr
+    LEFT JOIN organizations o ON dr.organization_id = o.id
+    ${whereClause}`,
+    params
+  )) as [Record<string, unknown>[], unknown]
+
+  // Query list of organizations that have deleted records (or all organizations)
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const [orgs] = (await db.execute(
+    `SELECT DISTINCT o.id, o.name
+     FROM organizations o
+     JOIN deleted_records dr ON o.id = dr.organization_id
+     ORDER BY o.name ASC`
+  )) as [Record<string, unknown>[], unknown]
 
   return NextResponse.json({
     data: rows,
+    organizations: orgs,
     summary: statsRows[0] || {
       total_deleted: 0,
       total_invoices: 0,

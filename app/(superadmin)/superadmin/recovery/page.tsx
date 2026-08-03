@@ -44,9 +44,15 @@ interface RecoverySummary {
   total_parties: number
 }
 
+interface OrgOption {
+  id: string
+  name: string
+}
+
 export default function RecoveryPage() {
   const { toast } = useToast()
   const [records, setRecords] = useState<DeletedRecord[]>([])
+  const [organizations, setOrganizations] = useState<OrgOption[]>([])
   const [summary, setSummary] = useState<RecoverySummary>({
     total_deleted: 0,
     total_invoices: 0,
@@ -57,6 +63,7 @@ export default function RecoveryPage() {
   const [loading, setLoading] = useState(true)
   const [search, setSearch] = useState('')
   const [entityType, setEntityType] = useState('ALL')
+  const [organizationId, setOrganizationId] = useState('ALL')
   const [actionLoadingId, setActionLoadingId] = useState<string | null>(null)
 
   // JSON Inspector Modal state
@@ -68,6 +75,7 @@ export default function RecoveryPage() {
       const params = new URLSearchParams()
       if (search.trim()) params.set('search', search.trim())
       if (entityType && entityType !== 'ALL') params.set('entityType', entityType)
+      if (organizationId && organizationId !== 'ALL') params.set('organizationId', organizationId)
 
       const res = await fetch(`/api/superadmin/recovery?${params}`)
       const result = await res.json()
@@ -79,6 +87,9 @@ export default function RecoveryPage() {
       }
 
       setRecords(Array.isArray(result.data) ? result.data : [])
+      if (Array.isArray(result.organizations)) {
+        setOrganizations(result.organizations)
+      }
       if (result.summary) {
         setSummary(result.summary)
       }
@@ -92,7 +103,7 @@ export default function RecoveryPage() {
 
   useEffect(() => {
     fetchRecords()
-  }, [entityType])
+  }, [entityType, organizationId])
 
   const handleRestore = async (record: DeletedRecord) => {
     setActionLoadingId(record.id)
@@ -214,7 +225,7 @@ export default function RecoveryPage() {
             Data Recovery & Trash Bin
           </h1>
           <p className="text-xs sm:text-sm text-slate-500 mt-1">
-            Audit log of deleted organization records. Restore items or purge them permanently.
+            Audit log of deleted tenant organization records. Restore items or purge them permanently.
           </p>
         </div>
         <Button onClick={fetchRecords} variant="outline" size="sm" className="h-9 text-xs">
@@ -274,6 +285,7 @@ export default function RecoveryPage() {
       {/* Filter Bar */}
       <Card className="p-4">
         <div className="flex flex-col sm:flex-row items-center gap-3">
+          {/* Search Input */}
           <div className="relative flex-1 w-full">
             <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-slate-400" />
             <Input
@@ -285,6 +297,26 @@ export default function RecoveryPage() {
             />
           </div>
 
+          {/* Tenant / Organization Filter Dropdown */}
+          <div className="w-full sm:w-56">
+            <Select value={organizationId} onValueChange={setOrganizationId}>
+              <SelectTrigger className="h-9 text-xs">
+                <SelectValue placeholder="All Organizations" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="ALL" className="text-xs">
+                  All Organizations
+                </SelectItem>
+                {organizations.map((org) => (
+                  <SelectItem key={org.id} value={org.id} className="text-xs">
+                    {org.name}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+
+          {/* Entity Type Filter Dropdown */}
           <div className="w-full sm:w-48">
             <Select value={entityType} onValueChange={setEntityType}>
               <SelectTrigger className="h-9 text-xs">
@@ -315,7 +347,7 @@ export default function RecoveryPage() {
               <TableRow>
                 <TableHead className="text-xs font-bold">Type</TableHead>
                 <TableHead className="text-xs font-bold">Reference / Item</TableHead>
-                <TableHead className="text-xs font-bold">Organization</TableHead>
+                <TableHead className="text-xs font-bold">Organization (Tenant)</TableHead>
                 <TableHead className="text-xs font-bold">Deleted On</TableHead>
                 <TableHead className="text-xs font-bold text-right">Actions</TableHead>
               </TableRow>
@@ -330,7 +362,7 @@ export default function RecoveryPage() {
               ) : records.length === 0 ? (
                 <TableRow>
                   <TableCell colSpan={5} className="text-center py-12 text-slate-500 text-xs">
-                    No deleted records found in trash bin.
+                    No deleted records found for the selected filters.
                   </TableCell>
                 </TableRow>
               ) : (
@@ -340,9 +372,11 @@ export default function RecoveryPage() {
                     <TableCell className="font-semibold text-slate-900 font-mono">
                       {r.reference_no || r.record_id}
                     </TableCell>
-                    <TableCell className="flex items-center gap-1.5">
-                      <Building2 className="h-3.5 w-3.5 text-slate-400" />
-                      <span>{r.organization_name || r.organization_id}</span>
+                    <TableCell>
+                      <div className="flex items-center gap-1.5 font-medium text-slate-900">
+                        <Building2 className="h-3.5 w-3.5 text-blue-600 shrink-0" />
+                        <span>{r.organization_name || r.organization_id}</span>
+                      </div>
                     </TableCell>
                     <TableCell className="text-slate-500">
                       {formatDate(r.deleted_at)}
@@ -364,7 +398,7 @@ export default function RecoveryPage() {
                         disabled={actionLoadingId === r.id}
                         className="h-7 px-2 text-[11px] border-blue-300 text-blue-700 hover:bg-blue-600 hover:text-white"
                       >
-                        <RotateCcw className="h-3 w-3 mr-1" />
+                        <RotateCcw className="h-3.5 w-3.5 mr-1" />
                         Restore
                       </Button>
                       <Button
@@ -374,7 +408,7 @@ export default function RecoveryPage() {
                         disabled={actionLoadingId === r.id}
                         className="h-7 px-2 text-[11px] text-rose-600 hover:bg-rose-50 hover:text-rose-700"
                       >
-                        <Trash2 className="h-3 w-3" />
+                        <Trash2 className="h-3.5 w-3.5" />
                       </Button>
                     </TableCell>
                   </TableRow>
@@ -394,7 +428,7 @@ export default function RecoveryPage() {
               Deleted Record Payload Inspector
             </DialogTitle>
             <DialogDescription className="text-xs">
-              Entity Type: <span className="font-bold text-slate-900">{inspectRecord?.entity_type}</span> | Ref: <span className="font-bold font-mono text-slate-900">{inspectRecord?.reference_no}</span>
+              Tenant: <span className="font-bold text-slate-900">{inspectRecord?.organization_name}</span> | Type: <span className="font-bold text-slate-900">{inspectRecord?.entity_type}</span> | Ref: <span className="font-bold font-mono text-slate-900">{inspectRecord?.reference_no}</span>
             </DialogDescription>
           </DialogHeader>
 
