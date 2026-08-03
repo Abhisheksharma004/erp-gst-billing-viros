@@ -3,13 +3,14 @@
 import Link from 'next/link'
 import { usePathname, useRouter } from 'next/navigation'
 import { useSession, signOut } from 'next-auth/react'
-import { Building2, LayoutDashboard, LogOut, Shield } from 'lucide-react'
+import { Building2, Database, LayoutDashboard, LogOut, Shield } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { Button } from '@/components/ui/button'
 
 const navItems = [
   { title: 'Overview', href: '/superadmin', icon: LayoutDashboard },
   { title: 'Organizations', href: '/superadmin/organizations', icon: Building2 },
+  { title: 'Space', href: '/superadmin/space', icon: Database },
 ]
 
 export function SuperAdminShell({ children }: { children: React.ReactNode }) {
