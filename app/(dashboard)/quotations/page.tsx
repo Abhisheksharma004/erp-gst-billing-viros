@@ -1,13 +1,14 @@
 'use client'
 
-import { useEffect, useState, useCallback } from 'react'
+import { useEffect, useState, useCallback, useRef } from 'react'
+import { createPortal } from 'react-dom'
 import Link from 'next/link'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent } from '@/components/ui/card'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import { useToast } from '@/hooks/use-toast'
 import { usePageCount } from '@/hooks/use-page-count'
-import { Eye, Edit, Trash2, FileText, FileCheck, Receipt } from 'lucide-react'
+import { Eye, Edit, Trash2, FileText, FileCheck, Receipt, ArrowRightLeft } from 'lucide-react'
 import { formatCurrency, formatDate } from '@/lib/utils'
 import { ListPageToolbar } from '@/components/shared/list-page-toolbar'
 import { parseJsonResponse } from '@/lib/fetch-json'
@@ -24,17 +25,185 @@ interface Quotation {
   status: string
 }
 
-const STATUS_COLORS: Record<string, 'secondary' | 'default' | 'destructive' | 'outline'> = {
-  DRAFT: 'secondary',
-  SENT: 'outline',
-  ACCEPTED: 'default',
-  REJECTED: 'destructive',
-  CONVERTED: 'default',
+const STATUS_CONFIG: Record<string, { label: string; className: string }> = {
+  DRAFT: {
+    label: 'Draft',
+    className: 'bg-slate-100 text-slate-700 hover:bg-slate-100 border-slate-200',
+  },
+  SENT: {
+    label: 'Sent',
+    className: 'bg-amber-50 text-amber-700 hover:bg-amber-50 border-amber-200',
+  },
+  ACCEPTED: {
+    label: 'Accepted',
+    className: 'bg-emerald-50 text-emerald-700 hover:bg-emerald-50 border-emerald-200',
+  },
+  REJECTED: {
+    label: 'Rejected',
+    className: 'bg-rose-50 text-rose-700 hover:bg-rose-50 border-rose-200',
+  },
+  OVERDUE: {
+    label: 'Overdue',
+    className: 'bg-rose-50 text-rose-700 hover:bg-rose-50 border-rose-200',
+  },
+  CONVERTED_TO_PROFORMA: {
+    label: 'Converted to Proforma',
+    className: 'bg-blue-50 text-blue-700 hover:bg-blue-50 border-blue-200',
+  },
+  CONVERTED_PROFORMA: {
+    label: 'Converted to Proforma',
+    className: 'bg-blue-50 text-blue-700 hover:bg-blue-50 border-blue-200',
+  },
+  CONVERTED_TO_INVOICE: {
+    label: 'Converted to Invoice',
+    className: 'bg-emerald-50 text-emerald-700 hover:bg-emerald-50 border-emerald-200',
+  },
+  CONVERTED_INVOICE: {
+    label: 'Converted to Invoice',
+    className: 'bg-emerald-50 text-emerald-700 hover:bg-emerald-50 border-emerald-200',
+  },
+  CONVERTED: {
+    label: 'Converted',
+    className: 'bg-blue-50 text-blue-700 hover:bg-blue-50 border-blue-200',
+  },
+}
+
+function getQuotationEffectiveStatus(q: { status: string; valid_until?: string | null }): string {
+  const s = (q.status || 'DRAFT').toUpperCase().trim()
+  if (s.startsWith('CONVERTED') || s === 'ACCEPTED' || s === 'REJECTED') {
+    return s
+  }
+  if (q.valid_until) {
+    const validStr = typeof q.valid_until === 'string'
+      ? q.valid_until.split('T')[0].split(' ')[0]
+      : new Date(q.valid_until).toISOString().split('T')[0]
+    const todayStr = new Date().toISOString().split('T')[0]
+    if (validStr && validStr < todayStr) {
+      return 'OVERDUE'
+    }
+  }
+  return s || 'DRAFT'
 }
 
 function StatusBadge({ status }: { status: string }) {
+  const normalizedKey = (status || '').toUpperCase().trim()
+  const config = STATUS_CONFIG[normalizedKey] || {
+    label: status ? status.replace(/_/g, ' ') : 'Draft',
+    className: 'bg-slate-100 text-slate-700 hover:bg-slate-100 border-slate-200',
+  }
+
   return (
-    <Badge variant={STATUS_COLORS[status] || 'secondary'}>{status}</Badge>
+    <Badge
+      variant="outline"
+      className={`${config.className} font-medium text-xs px-2.5 py-0.5 whitespace-nowrap shadow-none`}
+    >
+      {config.label}
+    </Badge>
+  )
+}
+
+function ConvertDropdown({
+  id,
+  size,
+  icon,
+}: {
+  id: string
+  size: string
+  icon: string
+}) {
+  const [open, setOpen] = useState(false)
+  const buttonRef = useRef<HTMLButtonElement>(null)
+  const menuRef = useRef<HTMLDivElement>(null)
+  const [coords, setCoords] = useState<{ top: number; right: number } | null>(null)
+  const [mounted, setMounted] = useState(false)
+
+  useEffect(() => {
+    setMounted(true)
+  }, [])
+
+  const updatePosition = useCallback(() => {
+    if (buttonRef.current) {
+      const rect = buttonRef.current.getBoundingClientRect()
+      setCoords({
+        top: rect.bottom + 4,
+        right: Math.max(8, window.innerWidth - rect.right),
+      })
+    }
+  }, [])
+
+  useEffect(() => {
+    if (!open) return
+    updatePosition()
+
+    const handleScrollOrResize = () => updatePosition()
+    const handleClickOutside = (e: MouseEvent) => {
+      if (
+        menuRef.current && !menuRef.current.contains(e.target as Node) &&
+        buttonRef.current && !buttonRef.current.contains(e.target as Node)
+      ) {
+        setOpen(false)
+      }
+    }
+
+    document.addEventListener('mousedown', handleClickOutside)
+    window.addEventListener('scroll', handleScrollOrResize, true)
+    window.addEventListener('resize', handleScrollOrResize)
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside)
+      window.removeEventListener('scroll', handleScrollOrResize, true)
+      window.removeEventListener('resize', handleScrollOrResize)
+    }
+  }, [open, updatePosition])
+
+  return (
+    <>
+      <Button
+        ref={buttonRef}
+        variant="ghost"
+        size="icon"
+        title="Convert Quotation"
+        className={`${size} text-blue-600 hover:text-blue-700 hover:bg-blue-50 ${open ? 'bg-blue-100 text-blue-800' : ''}`}
+        onClick={() => {
+          updatePosition()
+          setOpen((prev) => !prev)
+        }}
+      >
+        <ArrowRightLeft className={icon} />
+      </Button>
+
+      {open && mounted && coords && createPortal(
+        <div
+          ref={menuRef}
+          style={{
+            position: 'fixed',
+            top: `${coords.top}px`,
+            right: `${coords.right}px`,
+          }}
+          className="w-48 rounded-lg border bg-popover p-1 shadow-2xl z-[99999] animate-in fade-in-0 zoom-in-95"
+        >
+          <div className="px-2 py-1 text-[10px] font-bold text-muted-foreground uppercase tracking-wider">
+            Convert To
+          </div>
+          <Link
+            href={`/proformas/new?fromQuotationId=${id}`}
+            onClick={() => setOpen(false)}
+            className="flex items-center gap-2 rounded-md px-2.5 py-2 text-xs text-foreground hover:bg-accent hover:text-accent-foreground transition-colors"
+          >
+            <FileCheck className="h-3.5 w-3.5 text-blue-600 shrink-0" />
+            <span className="font-medium">Convert to Proforma</span>
+          </Link>
+          <Link
+            href={`/billing/new?fromQuotationId=${id}`}
+            onClick={() => setOpen(false)}
+            className="flex items-center gap-2 rounded-md px-2.5 py-2 text-xs text-foreground hover:bg-accent hover:text-accent-foreground transition-colors"
+          >
+            <Receipt className="h-3.5 w-3.5 text-emerald-600 shrink-0" />
+            <span className="font-medium">Convert to Invoice</span>
+          </Link>
+        </div>,
+        document.body
+      )}
+    </>
   )
 }
 
@@ -62,26 +231,7 @@ function QuotationActions({
       >
         <Eye className={icon} />
       </Button>
-      <Link href={`/proformas/new?fromQuotationId=${id}`}>
-        <Button
-          variant="ghost"
-          size="icon"
-          title="Convert to Proforma Invoice"
-          className={`${size} text-blue-600 hover:text-blue-700 hover:bg-blue-50`}
-        >
-          <FileCheck className={icon} />
-        </Button>
-      </Link>
-      <Link href={`/billing/new?fromQuotationId=${id}`}>
-        <Button
-          variant="ghost"
-          size="icon"
-          title="Convert to Sales Invoice"
-          className={`${size} text-emerald-600 hover:text-emerald-700 hover:bg-emerald-50`}
-        >
-          <Receipt className={icon} />
-        </Button>
-      </Link>
+      <ConvertDropdown id={id} size={size} icon={icon} />
       <Link href={`/quotations/${id}/edit`}>
         <Button variant="ghost" size="icon" title="Edit" className={size}>
           <Edit className={icon} />
@@ -234,7 +384,7 @@ export default function QuotationsPage() {
                     <TableCell>{q.valid_until ? formatDate(q.valid_until) : '-'}</TableCell>
                     <TableCell className="text-right font-medium">{formatCurrency(q.total_amount)}</TableCell>
                     <TableCell className="text-center">
-                      <StatusBadge status={q.status} />
+                      <StatusBadge status={getQuotationEffectiveStatus(q)} />
                     </TableCell>
                     <TableCell className="text-right">
                       <QuotationActions
@@ -322,7 +472,7 @@ export default function QuotationsPage() {
                     <div className="flex items-center gap-2 border-t bg-muted/40 px-3 py-2.5">
                       <span className="text-xs text-muted-foreground shrink-0">Status</span>
                       <span className="ml-auto">
-                        <StatusBadge status={q.status} />
+                        <StatusBadge status={getQuotationEffectiveStatus(q)} />
                       </span>
                     </div>
                   </CardContent>

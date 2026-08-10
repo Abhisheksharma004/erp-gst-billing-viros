@@ -24,17 +24,64 @@ interface Proforma {
   status: string
 }
 
-const STATUS_COLORS: Record<string, 'secondary' | 'default' | 'destructive' | 'outline'> = {
-  DRAFT: 'secondary',
-  SENT: 'outline',
-  ACCEPTED: 'default',
-  REJECTED: 'destructive',
-  CONVERTED: 'default',
+const STATUS_CONFIG: Record<string, { label: string; className: string }> = {
+  DRAFT: {
+    label: 'Draft',
+    className: 'bg-slate-100 text-slate-700 hover:bg-slate-100 border-slate-200',
+  },
+  SENT: {
+    label: 'Sent',
+    className: 'bg-amber-50 text-amber-700 hover:bg-amber-50 border-amber-200',
+  },
+  ACCEPTED: {
+    label: 'Accepted',
+    className: 'bg-emerald-50 text-emerald-700 hover:bg-emerald-50 border-emerald-200',
+  },
+  REJECTED: {
+    label: 'Rejected',
+    className: 'bg-rose-50 text-rose-700 hover:bg-rose-50 border-rose-200',
+  },
+  OVERDUE: {
+    label: 'Overdue',
+    className: 'bg-rose-50 text-rose-700 hover:bg-rose-50 border-rose-200',
+  },
+  CONVERTED: {
+    label: 'Converted',
+    className: 'bg-blue-50 text-blue-700 hover:bg-blue-50 border-blue-200',
+  },
+}
+
+function getProformaEffectiveStatus(p: { status: string; valid_until?: string | null }): string {
+  const s = (p.status || 'DRAFT').toUpperCase().trim()
+  if (s.startsWith('CONVERTED') || s === 'ACCEPTED' || s === 'REJECTED') {
+    return s
+  }
+  if (p.valid_until) {
+    const validStr = typeof p.valid_until === 'string'
+      ? p.valid_until.split('T')[0].split(' ')[0]
+      : new Date(p.valid_until).toISOString().split('T')[0]
+    const todayStr = new Date().toISOString().split('T')[0]
+    if (validStr && validStr < todayStr) {
+      return 'OVERDUE'
+    }
+  }
+  return s || 'DRAFT'
 }
 
 function StatusBadge({ status }: { status: string }) {
+  const normalizedKey = (status || '').toUpperCase().trim()
+  const config = STATUS_CONFIG[normalizedKey] || {
+    label: status ? status.replace(/_/g, ' ') : 'Draft',
+    className: 'bg-slate-100 text-slate-700 hover:bg-slate-100 border-slate-200',
+  }
+
   return (
-    <Badge variant={STATUS_COLORS[status] || 'secondary'}>{status}</Badge>
+    <Badge
+      variant="outline"
+      className={`${config.className} font-medium text-xs px-2.5 py-0.5 whitespace-nowrap shadow-none`}
+    >
+      {config.label}
+    </Badge>
   )
 }
 
@@ -214,7 +261,7 @@ export default function ProformasPage() {
                     <TableCell>{p.valid_until ? formatDate(p.valid_until) : '-'}</TableCell>
                     <TableCell className="text-right font-medium">{formatCurrency(p.total_amount)}</TableCell>
                     <TableCell className="text-center">
-                      <StatusBadge status={p.status} />
+                      <StatusBadge status={getProformaEffectiveStatus(p)} />
                     </TableCell>
                     <TableCell className="text-right">
                       <ProformaActions
@@ -287,7 +334,7 @@ export default function ProformasPage() {
                     <div className="flex items-center gap-2 border-t bg-muted/40 px-3 py-2.5">
                       <span className="text-xs text-muted-foreground shrink-0">Status</span>
                       <span className="ml-auto">
-                        <StatusBadge status={p.status} />
+                        <StatusBadge status={getProformaEffectiveStatus(p)} />
                       </span>
                     </div>
                   </CardContent>

@@ -66,6 +66,9 @@ async function runEnsureProformaSchema(): Promise<void> {
     ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci
   `)
 
+  await runAlter("ALTER TABLE quotations MODIFY COLUMN status VARCHAR(50) NOT NULL DEFAULT 'DRAFT'")
+  await runAlter("ALTER TABLE proformas MODIFY COLUMN status VARCHAR(50) NOT NULL DEFAULT 'DRAFT'")
+
   proformaSchemaReady = true
 }
 

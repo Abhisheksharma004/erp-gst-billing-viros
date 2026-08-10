@@ -244,7 +244,7 @@ export async function POST(req: NextRequest) {
 
     if (data.fromQuotationId) {
       await conn.execute(
-        `UPDATE quotations SET status = 'CONVERTED', converted_to_id = ? WHERE id = ? AND organization_id = ?`,
+        `UPDATE quotations SET status = 'CONVERTED_TO_INVOICE', converted_to_id = ? WHERE id = ? AND organization_id = ?`,
         [id, data.fromQuotationId, organizationId]
       )
     }
