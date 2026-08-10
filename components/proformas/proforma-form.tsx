@@ -18,6 +18,7 @@ import { computeLineTotals } from '@/lib/quotation-totals'
 import { normalizeProductDiscountPercent } from '@/lib/sales-document-totals'
 import { computeRoundOff, formatCurrency, GST_RATES, roundToNearestRupee, roundToTwo, cn } from '@/lib/utils'
 import { Plus, Trash2, ArrowLeft, Package, Loader2 } from 'lucide-react'
+import { Badge } from '@/components/ui/badge'
 import Link from 'next/link'
 import { parseQuotationPartyDetails } from '@/lib/quotation-party'
 import { ContactFieldInputs } from '@/components/shared/contact-field-inputs'
@@ -74,6 +75,7 @@ type PendingItemMetaRow = { productName: string; hsnSac: string }
 export type ProformaFormProps = {
   mode: 'create' | 'edit'
   proformaId?: string
+  fromQuotationId?: string
 }
 
 const emptyParty: PartyFields = {
@@ -274,13 +276,14 @@ function PartySection({
   )
 }
 
-export function ProformaForm({ mode, proformaId }: ProformaFormProps) {
+export function ProformaForm({ mode, proformaId, fromQuotationId }: ProformaFormProps) {
   const router = useRouter()
   const { toast } = useToast()
   const today = new Date().toISOString().split('T')[0]
   const isEdit = mode === 'edit'
-  const [loading, setLoading] = useState(isEdit)
+  const [loading, setLoading] = useState(isEdit || Boolean(fromQuotationId))
   const [proformaNo, setProformaNo] = useState<string | null>(null)
+  const [convertedQuotationNo, setConvertedQuotationNo] = useState<string | null>(null)
   const [saving, setSaving] = useState(false)
   const [products, setProducts] = useState<Product[]>([])
   const [customers, setCustomers] = useState<Customer[]>([])
@@ -375,10 +378,116 @@ export function ProformaForm({ mode, proformaId }: ProformaFormProps) {
   }, [fields, pendingItemMeta])
 
   useEffect(() => {
-    if (isEdit) return
+    if (isEdit || fromQuotationId) return
     fetch('/api/products?limit=500').then((r) => r.json()).then((d) => setProducts(d.products || []))
     fetch('/api/customers?limit=200').then((r) => r.json()).then((d) => setCustomers(d.customers || []))
-  }, [isEdit])
+  }, [isEdit, fromQuotationId])
+
+  useEffect(() => {
+    if (isEdit || !fromQuotationId) return
+    let cancelled = false
+
+    const loadFromQuotation = async () => {
+      setLoading(true)
+      try {
+        const [qRes, prodRes, cRes] = await Promise.all([
+          fetch(`/api/quotations/${fromQuotationId}`),
+          fetch('/api/products?limit=500'),
+          fetch('/api/customers?limit=200'),
+        ])
+        if (!qRes.ok) throw new Error('Quotation not found')
+        const q = await qRes.json()
+        const prodData = await prodRes.json()
+        const cData = await cRes.json()
+        if (cancelled) return
+
+        const productList: Product[] = prodData.products || []
+        const customerList: Customer[] = cData.customers || []
+        setProducts(productList)
+        setCustomers(customerList)
+        setConvertedQuotationNo(q.quotation_no ?? null)
+
+        const partyDetails = parseQuotationPartyDetails(q.party_details)
+        const buyerFromDb = partyDetails?.buyer
+        const consigneeFromDb = partyDetails?.consignee
+
+        const buyer: PartyFields = {
+          name: buyerFromDb?.name || q.customer_name || '',
+          contactPerson: buyerFromDb?.contactPerson || q.customer_contact_person || '',
+          address: buyerFromDb?.address || q.customer_address || '',
+          mobile: buyerFromDb?.mobile || q.customer_mobile || q.customer_phone || '',
+          gstin: buyerFromDb?.gstin || q.customer_gstin || '',
+          pan: buyerFromDb?.pan || q.customer_pan || '',
+          city: buyerFromDb?.city || q.customer_city || '',
+        }
+
+        const consignee: PartyFields = {
+          name: consigneeFromDb?.name || buyer.name,
+          contactPerson: consigneeFromDb?.contactPerson || buyer.contactPerson,
+          address:
+            consigneeFromDb?.address ||
+            q.customer_shipping_address ||
+            buyer.address,
+          mobile: consigneeFromDb?.mobile || buyer.mobile,
+          gstin: consigneeFromDb?.gstin || buyer.gstin,
+          pan: consigneeFromDb?.pan || buyer.pan,
+          city: consigneeFromDb?.city || q.customer_shipping_city || buyer.city,
+        }
+
+        setBuyerFields(buyer)
+        setConsigneeFields(consignee)
+
+        const rawItems = Array.isArray(q.items) ? q.items : []
+        const formItems = rawItems.map((item: {
+          product_id: string
+          description?: string | null
+          quantity: number
+          rate: number
+          discount?: number
+          gst_rate: number
+        }) => ({
+          productId: item.product_id,
+          description: item.description || '',
+          quantity: Number(item.quantity),
+          rate: Number(item.rate),
+          discount: Number(item.discount) || 0,
+          gstRate: Number(item.gst_rate),
+        }))
+
+        const metaRows: PendingItemMetaRow[] = formItems.map((item: ProformaInput['items'][number]) => {
+          const prod = productList.find((x) => x.id === item.productId)
+          return {
+            productName: prod?.name ?? '',
+            hsnSac: prod ? formatHsnSac(prod.hsn_code, prod.sac_code) : '',
+          }
+        })
+
+        reset({
+          customerId: q.customer_id,
+          date: today,
+          validUntil: q.valid_until ? toDateInputValue(q.valid_until) : undefined,
+          gstType: q.gst_type || 'CGST_SGST',
+          roundOff: Number(q.round_off) || 0,
+          fromQuotationId: q.id,
+          notes: q.notes || undefined,
+          terms: q.terms || undefined,
+          items: formItems.length > 0 ? formItems : [defaultItem],
+        })
+        setPendingItemMeta(metaRows.length > 0 ? metaRows : null)
+      } catch (e: unknown) {
+        if (cancelled) return
+        const message = e instanceof Error ? e.message : 'Failed to load quotation'
+        toast({ title: message, variant: 'destructive' })
+      } finally {
+        if (!cancelled) setLoading(false)
+      }
+    }
+
+    loadFromQuotation()
+    return () => {
+      cancelled = true
+    }
+  }, [isEdit, fromQuotationId, reset, today, toast])
 
   useEffect(() => {
     if (!isEdit || !proformaId) return
@@ -718,13 +827,22 @@ export function ProformaForm({ mode, proformaId }: ProformaFormProps) {
           </Button>
         </Link>
         <div>
-          <h1 className="text-xl sm:text-2xl font-bold">
-            {isEdit ? 'Edit Proforma' : 'New Proforma'}
-          </h1>
+          <div className="flex items-center gap-2">
+            <h1 className="text-xl sm:text-2xl font-bold">
+              {isEdit ? 'Edit Proforma' : 'New Proforma'}
+            </h1>
+            {convertedQuotationNo && (
+              <Badge variant="outline" className="text-blue-600 bg-blue-50 border-blue-200 text-xs">
+                From Quotation #{convertedQuotationNo}
+              </Badge>
+            )}
+          </div>
           <p className="text-sm text-muted-foreground">
             {isEdit && proformaNo
               ? proformaNo
-              : 'Create a professional GST Proforma Invoice'}
+              : convertedQuotationNo
+                ? `Converting Quotation ${convertedQuotationNo} to Proforma Invoice`
+                : 'Create a professional GST Proforma Invoice'}
           </p>
         </div>
       </div>

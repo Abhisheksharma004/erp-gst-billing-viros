@@ -17,7 +17,7 @@ import { quotationSchema, type QuotationInput } from '@/lib/validations'
 import { computeLineTotals } from '@/lib/quotation-totals'
 import { normalizeProductDiscountPercent } from '@/lib/sales-document-totals'
 import { computeRoundOff, formatCurrency, GST_RATES, roundToNearestRupee, roundToTwo, cn } from '@/lib/utils'
-import { Plus, Trash2, ArrowLeft, Package, Loader2 } from 'lucide-react'
+import { Plus, Trash2, ArrowLeft, Package, Loader2, FileCheck, Receipt } from 'lucide-react'
 import Link from 'next/link'
 import { parseQuotationPartyDetails } from '@/lib/quotation-party'
 import { ContactFieldInputs } from '@/components/shared/contact-field-inputs'
@@ -711,22 +711,41 @@ export function QuotationForm({ mode, quotationId }: QuotationFormProps) {
 
   return (
     <div className="space-y-6 max-w-6xl min-w-0">
-      <div className="flex items-center gap-4">
-        <Link href="/quotations">
-          <Button variant="ghost" size="icon">
-            <ArrowLeft className="w-4 h-4" />
-          </Button>
-        </Link>
-        <div>
-          <h1 className="text-xl sm:text-2xl font-bold">
-            {isEdit ? 'Edit Quotation' : 'New Quotation'}
-          </h1>
-          <p className="text-sm text-muted-foreground">
-            {isEdit && quotationNo
-              ? quotationNo
-              : 'Create a professional GST quotation'}
-          </p>
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+        <div className="flex items-center gap-4">
+          <Link href="/quotations">
+            <Button variant="ghost" size="icon">
+              <ArrowLeft className="w-4 h-4" />
+            </Button>
+          </Link>
+          <div>
+            <h1 className="text-xl sm:text-2xl font-bold">
+              {isEdit ? 'Edit Quotation' : 'New Quotation'}
+            </h1>
+            <p className="text-sm text-muted-foreground">
+              {isEdit && quotationNo
+                ? quotationNo
+                : 'Create a professional GST quotation'}
+            </p>
+          </div>
         </div>
+
+        {isEdit && quotationId && (
+          <div className="flex items-center gap-2">
+            <Link href={`/proformas/new?fromQuotationId=${quotationId}`}>
+              <Button type="button" variant="outline" size="sm" className="text-xs text-blue-600 border-blue-200 hover:bg-blue-50">
+                <FileCheck className="w-3.5 h-3.5 mr-1.5" />
+                Convert to Proforma
+              </Button>
+            </Link>
+            <Link href={`/billing/new?fromQuotationId=${quotationId}`}>
+              <Button type="button" variant="outline" size="sm" className="text-xs text-emerald-600 border-emerald-200 hover:bg-emerald-50">
+                <Receipt className="w-3.5 h-3.5 mr-1.5" />
+                Convert to Invoice
+              </Button>
+            </Link>
+          </div>
+        )}
       </div>
 
       <form onSubmit={handleSubmit(onSubmit)} className="space-y-6">

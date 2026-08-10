@@ -108,6 +108,14 @@ export async function POST(req: NextRequest) {
     if (!inserted) throw new Error('Could not generate a unique proforma number after 10 attempts')
 
     await insertProformaItems(conn, id, totals.itemsWithTotals)
+
+    if (data.fromQuotationId) {
+      await conn.execute(
+        `UPDATE quotations SET status = 'CONVERTED', converted_to_id = ? WHERE id = ? AND organization_id = ?`,
+        [id, data.fromQuotationId, organizationId]
+      )
+    }
+
     await conn.commit()
 
     const [rows] = await db.execute(

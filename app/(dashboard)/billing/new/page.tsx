@@ -6,6 +6,11 @@ const InvoiceForm = dynamic(
   { loading: () => <FormPageLoader title="invoice form" /> }
 )
 
-export default function NewInvoicePage() {
-  return <InvoiceForm />
+export default async function NewInvoicePage({
+  searchParams,
+}: {
+  searchParams: Promise<{ fromQuotationId?: string }>
+}) {
+  const { fromQuotationId } = await searchParams
+  return <InvoiceForm fromQuotationId={fromQuotationId} />
 }

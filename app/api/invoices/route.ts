@@ -242,6 +242,13 @@ export async function POST(req: NextRequest) {
       }
     }
 
+    if (data.fromQuotationId) {
+      await conn.execute(
+        `UPDATE quotations SET status = 'CONVERTED', converted_to_id = ? WHERE id = ? AND organization_id = ?`,
+        [id, data.fromQuotationId, organizationId]
+      )
+    }
+
     await conn.commit()
     const [rows] = await db.execute(
       'SELECT i.*, c.name as customer_name FROM invoices i LEFT JOIN customers c ON i.customer_id = c.id WHERE i.id = ? AND i.organization_id = ?',

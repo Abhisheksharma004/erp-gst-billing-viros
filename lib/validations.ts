@@ -393,6 +393,7 @@ export const proformaSchema = z
     notes: z.string().optional(),
     terms: z.string().optional(),
     roundOff: z.number().default(0),
+    fromQuotationId: z.string().optional(),
     partyDetails: z.object({
       buyer: partySnapshotSchema.optional(),
       consignee: partySnapshotSchema.optional(),

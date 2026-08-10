@@ -15,6 +15,7 @@ import { Separator } from '@/components/ui/separator'
 import { useToast, toastSuccessNavigate } from '@/hooks/use-toast'
 import { useDefaultDocumentTerms } from '@/hooks/use-default-document-terms'
 import { DocumentTermsField } from '@/components/shared/document-terms-field'
+import { Badge } from '@/components/ui/badge'
 import Link from 'next/link'
 import { Plus, Trash2, ArrowLeft, Loader2, Package } from 'lucide-react'
 import {
@@ -293,12 +294,13 @@ function toDateInput(value: string | Date | null | undefined): string {
   return value.toISOString().split('T')[0]
 }
 
-export function InvoiceForm({ invoiceId }: { invoiceId?: string }) {
+export function InvoiceForm({ invoiceId, fromQuotationId }: { invoiceId?: string; fromQuotationId?: string }) {
   const router = useRouter()
   const { toast } = useToast()
   const isEdit = Boolean(invoiceId)
-  const [loadingInitial, setLoadingInitial] = useState(isEdit)
+  const [loadingInitial, setLoadingInitial] = useState(isEdit || Boolean(fromQuotationId))
   const [invoiceNo, setInvoiceNo] = useState('')
+  const [convertedQuotationNo, setConvertedQuotationNo] = useState<string | null>(null)
   const [customers, setCustomers] = useState<Customer[]>([])
   const [products, setProducts] = useState<Product[]>([])
   const [saving, setSaving] = useState(false)
@@ -348,7 +350,7 @@ export function InvoiceForm({ invoiceId }: { invoiceId?: string }) {
   }, [customers, buyerFields.name])
 
   useEffect(() => {
-    if (isEdit) return
+    if (isEdit || fromQuotationId) return
     Promise.all([
       fetch('/api/customers?limit=200').then((r) => r.json()),
       fetch('/api/products?limit=500').then((r) => r.json()),
@@ -356,7 +358,115 @@ export function InvoiceForm({ invoiceId }: { invoiceId?: string }) {
       setCustomers(custs.customers || [])
       setProducts(prods.products || [])
     })
-  }, [isEdit])
+  }, [isEdit, fromQuotationId])
+
+  useEffect(() => {
+    if (isEdit || !fromQuotationId) return
+    let cancelled = false
+
+    const loadFromQuotation = async () => {
+      setLoadingInitial(true)
+      try {
+        const [qRes, custRes, prodRes] = await Promise.all([
+          fetch(`/api/quotations/${fromQuotationId}`),
+          fetch('/api/customers?limit=200'),
+          fetch('/api/products?limit=500'),
+        ])
+        if (!qRes.ok) throw new Error('Quotation not found')
+        const q = await qRes.json()
+        const custData = await custRes.json()
+        const prodData = await prodRes.json()
+        if (cancelled) return
+
+        const productList: Product[] = prodData.products || []
+        const customerList: Customer[] = custData.customers || []
+        setProducts(productList)
+        setCustomers(customerList)
+        setConvertedQuotationNo(q.quotation_no || null)
+
+        const partyDetails = parseQuotationPartyDetails(q.party_details)
+        const buyerFromDb = partyDetails?.buyer
+        const consigneeFromDb = partyDetails?.consignee
+
+        const buyer: PartyFields = {
+          name: buyerFromDb?.name || q.customer_name || '',
+          contactPerson: buyerFromDb?.contactPerson || q.customer_contact_person || '',
+          address: buyerFromDb?.address || q.customer_address || '',
+          mobile: buyerFromDb?.mobile || q.customer_mobile || q.customer_phone || '',
+          gstin: buyerFromDb?.gstin || q.customer_gstin || '',
+          pan: buyerFromDb?.pan || q.customer_pan || '',
+          city: buyerFromDb?.city || q.customer_city || '',
+        }
+
+        const consignee: PartyFields = {
+          name: consigneeFromDb?.name || buyer.name,
+          contactPerson: consigneeFromDb?.contactPerson || buyer.contactPerson,
+          address:
+            consigneeFromDb?.address ||
+            q.customer_shipping_address ||
+            buyer.address,
+          mobile: consigneeFromDb?.mobile || buyer.mobile,
+          gstin: consigneeFromDb?.gstin || buyer.gstin,
+          pan: consigneeFromDb?.pan || buyer.pan,
+          city: consigneeFromDb?.city || q.customer_shipping_city || buyer.city,
+        }
+
+        setBuyerFields(buyer)
+        setConsigneeFields(consignee)
+        setSameAsBuyer(partiesMatch(buyer, consignee))
+
+        const rawItems = Array.isArray(q.items) ? q.items : []
+        const formItems = rawItems.map((item: {
+          product_id: string
+          description?: string | null
+          quantity: number
+          rate: number
+          discount?: number
+          gst_rate: number
+        }) => ({
+          productId: item.product_id,
+          description: item.description || '',
+          quantity: Number(item.quantity),
+          rate: Number(item.rate),
+          discount: Number(item.discount) || 0,
+          gstRate: Number(item.gst_rate),
+        }))
+
+        const metaRows: PendingItemMetaRow[] = formItems.map((item: InvoiceInput['items'][number]) => {
+          const p = productList.find((x) => x.id === item.productId)
+          return {
+            productName: p?.name ?? '',
+            hsnSac: p ? formatHsnSac(p.hsn_code, p.sac_code) : '',
+          }
+        })
+
+        reset({
+          customerId: q.customer_id,
+          date: new Date().toISOString().split('T')[0],
+          dueDate: q.valid_until ? toDateInput(q.valid_until) : undefined,
+          gstType: q.gst_type || 'CGST_SGST',
+          paymentMode: '',
+          paymentRef: '',
+          paidAmount: 0,
+          notes: q.notes || undefined,
+          terms: q.terms || undefined,
+          fromQuotationId: q.id,
+          items: formItems.length > 0 ? formItems : [{ productId: '', quantity: 1, rate: 0, discount: 0, gstRate: 18 }],
+        })
+        setPendingItemMeta(metaRows.length > 0 ? metaRows : null)
+      } catch (err) {
+        if (cancelled) return
+        toast({ title: 'Error', description: 'Could not load quotation', variant: 'destructive' })
+      } finally {
+        if (!cancelled) setLoadingInitial(false)
+      }
+    }
+
+    loadFromQuotation()
+    return () => {
+      cancelled = true
+    }
+  }, [isEdit, fromQuotationId, reset, toast])
 
   useEffect(() => {
     if (!invoiceId) return
@@ -831,11 +941,22 @@ function isPaymentModeActive(mode?: string | null): boolean {
           </Button>
         </Link>
         <div>
-          <h1 className="text-xl sm:text-2xl font-bold">
-            {isEdit ? 'Edit Invoice' : 'New Invoice'}
-          </h1>
+          <div className="flex items-center gap-2">
+            <h1 className="text-xl sm:text-2xl font-bold">
+              {isEdit ? 'Edit Invoice' : 'New Invoice'}
+            </h1>
+            {convertedQuotationNo && (
+              <Badge variant="outline" className="text-blue-600 bg-blue-50 border-blue-200 text-xs">
+                From Quotation #{convertedQuotationNo}
+              </Badge>
+            )}
+          </div>
           <p className="text-sm text-muted-foreground">
-            {isEdit && invoiceNo ? invoiceNo : 'Create a GST sales invoice'}
+            {isEdit && invoiceNo
+              ? invoiceNo
+              : convertedQuotationNo
+                ? `Converting Quotation ${convertedQuotationNo} to Sales Invoice`
+                : 'Create a GST sales invoice'}
           </p>
         </div>
       </div>

@@ -7,7 +7,7 @@ import { Card, CardContent } from '@/components/ui/card'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import { useToast } from '@/hooks/use-toast'
 import { usePageCount } from '@/hooks/use-page-count'
-import { Eye, Edit, Trash2, FileText } from 'lucide-react'
+import { Eye, Edit, Trash2, FileText, FileCheck, Receipt } from 'lucide-react'
 import { formatCurrency, formatDate } from '@/lib/utils'
 import { ListPageToolbar } from '@/components/shared/list-page-toolbar'
 import { parseJsonResponse } from '@/lib/fetch-json'
@@ -62,6 +62,26 @@ function QuotationActions({
       >
         <Eye className={icon} />
       </Button>
+      <Link href={`/proformas/new?fromQuotationId=${id}`}>
+        <Button
+          variant="ghost"
+          size="icon"
+          title="Convert to Proforma Invoice"
+          className={`${size} text-blue-600 hover:text-blue-700 hover:bg-blue-50`}
+        >
+          <FileCheck className={icon} />
+        </Button>
+      </Link>
+      <Link href={`/billing/new?fromQuotationId=${id}`}>
+        <Button
+          variant="ghost"
+          size="icon"
+          title="Convert to Sales Invoice"
+          className={`${size} text-emerald-600 hover:text-emerald-700 hover:bg-emerald-50`}
+        >
+          <Receipt className={icon} />
+        </Button>
+      </Link>
       <Link href={`/quotations/${id}/edit`}>
         <Button variant="ghost" size="icon" title="Edit" className={size}>
           <Edit className={icon} />
@@ -281,6 +301,21 @@ export default function QuotationsPage() {
                           <span className="text-xs text-muted-foreground">Amount</span>
                           <span className="font-semibold text-sm text-primary">{formatCurrency(q.total_amount)}</span>
                         </div>
+                      </div>
+
+                      <div className="mt-3 flex items-center gap-2 border-t pt-2.5">
+                        <Link href={`/proformas/new?fromQuotationId=${q.id}`} className="flex-1">
+                          <Button variant="outline" size="sm" className="w-full text-xs h-7 text-blue-600 border-blue-200 hover:bg-blue-50">
+                            <FileCheck className="w-3.5 h-3.5 mr-1" />
+                            To Proforma
+                          </Button>
+                        </Link>
+                        <Link href={`/billing/new?fromQuotationId=${q.id}`} className="flex-1">
+                          <Button variant="outline" size="sm" className="w-full text-xs h-7 text-emerald-600 border-emerald-200 hover:bg-emerald-50">
+                            <Receipt className="w-3.5 h-3.5 mr-1" />
+                            To Invoice
+                          </Button>
+                        </Link>
                       </div>
                     </div>
 

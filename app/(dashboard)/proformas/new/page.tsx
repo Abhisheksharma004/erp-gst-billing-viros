@@ -6,6 +6,11 @@ const ProformaForm = dynamic(
   { loading: () => <FormPageLoader title="proforma form" /> }
 )
 
-export default function NewProformaPage() {
-  return <ProformaForm mode="create" />
+export default async function NewProformaPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ fromQuotationId?: string }>
+}) {
+  const { fromQuotationId } = await searchParams
+  return <ProformaForm mode="create" fromQuotationId={fromQuotationId} />
 }
