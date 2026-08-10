@@ -35,7 +35,14 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
   ) as any[]
   if (!rows[0]) return NextResponse.json({ error: 'Not found' }, { status: 404 })
 
-  const [items] = await db.execute('SELECT * FROM proforma_items WHERE proforma_id = ? ORDER BY sort_order ASC, id ASC', [id]) as any[]
+  const [items] = await db.execute(
+    `SELECT pi.*, COALESCE(NULLIF(TRIM(pi.description), ''), p.description, '') as description
+     FROM proforma_items pi
+     LEFT JOIN products p ON pi.product_id = p.id
+     WHERE pi.proforma_id = ?
+     ORDER BY pi.sort_order ASC, pi.id ASC`,
+    [id]
+  ) as any[]
   return NextResponse.json({ ...rows[0], items })
 }
 

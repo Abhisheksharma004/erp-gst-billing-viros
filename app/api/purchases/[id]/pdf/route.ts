@@ -38,7 +38,20 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
     ) as any[]
 
     const [itemRows] = await db.execute(
-      `SELECT pi.*, p.name as product_name, p.hsn_code, p.sac_code, u.short_name as unit_short
+      `SELECT pi.id,
+              pi.purchase_id,
+              pi.product_id,
+              COALESCE(NULLIF(TRIM(pi.description), ''), p.description, '') as description,
+              pi.quantity,
+              pi.rate,
+              pi.discount,
+              pi.gst_rate,
+              pi.gst_amount,
+              pi.amount,
+              COALESCE(NULLIF(TRIM(p.name), ''), NULLIF(TRIM(pi.description), ''), 'Product') as product_name,
+              p.hsn_code,
+              p.sac_code,
+              u.short_name as unit_short
        FROM purchase_items pi
        LEFT JOIN products p ON pi.product_id = p.id
        LEFT JOIN units u ON p.unit_id = u.id

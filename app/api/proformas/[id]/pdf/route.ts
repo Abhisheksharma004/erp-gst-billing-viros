@@ -15,7 +15,7 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
     await Promise.all([ensureBusinessSettingsBankingColumns(), ensureProformaSchema()])
 
     const [proformaRows] = await db.execute(
-      `SELECT p.id, p.proforma_no, p.customer_id, p.date, p.valid_until,
+      `SELECT p.id, p.proforma_no, p.customer_id, p.date, p.valid_until, p.gst_type,
               p.subtotal, p.discount_amount, p.tax_amount, p.round_off, p.total_amount,
               p.notes, p.terms, p.party_details
        FROM proformas p
@@ -42,11 +42,25 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
     const parties = buildPdfParties(customerRow, partyDetails)
 
     const [itemRows] = await db.execute(
-      `SELECT pi.*, p.name as product_name, p.hsn_code, p.sac_code, u.short_name as unit_short
+      `SELECT pi.id,
+              pi.proforma_id,
+              pi.product_id,
+              COALESCE(NULLIF(TRIM(pi.description), ''), p.description, '') as description,
+              pi.quantity,
+              pi.rate,
+              pi.discount,
+              pi.gst_rate,
+              pi.gst_amount,
+              pi.amount,
+              COALESCE(NULLIF(TRIM(p.name), ''), NULLIF(TRIM(pi.description), ''), 'Product') as product_name,
+              p.hsn_code,
+              p.sac_code,
+              u.short_name as unit_short
        FROM proforma_items pi
        LEFT JOIN products p ON pi.product_id = p.id
        LEFT JOIN units u ON p.unit_id = u.id
-       WHERE pi.proforma_id = ?`,
+       WHERE pi.proforma_id = ?
+       ORDER BY pi.sort_order ASC, pi.id ASC`,
       [id]
     ) as any[]
 
@@ -64,6 +78,7 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
         proforma_no: proforma.proforma_no,
         date: proforma.date,
         valid_until: proforma.valid_until,
+        gst_type: proforma.gst_type,
         subtotal: Number(proforma.subtotal),
         discount_amount: Number(proforma.discount_amount),
         tax_amount: Number(proforma.tax_amount),

@@ -44,7 +44,26 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
     const parties = buildPdfParties(customerRow, partyDetails)
 
     const [itemRows] = await db.execute(
-      `SELECT ii.*, p.name as product_name, p.hsn_code, p.sac_code, u.short_name as unit_short
+      `SELECT ii.id,
+              ii.invoice_id,
+              ii.product_id,
+              COALESCE(NULLIF(TRIM(ii.description), ''), p.description, '') as description,
+              ii.quantity,
+              ii.rate,
+              ii.discount,
+              ii.gst_rate,
+              ii.cgst_rate,
+              ii.sgst_rate,
+              ii.igst_rate,
+              ii.cgst_amount,
+              ii.sgst_amount,
+              ii.igst_amount,
+              ii.gst_amount,
+              ii.amount,
+              COALESCE(NULLIF(TRIM(p.name), ''), NULLIF(TRIM(ii.description), ''), 'Product') as product_name,
+              p.hsn_code,
+              p.sac_code,
+              u.short_name as unit_short
        FROM invoice_items ii
        LEFT JOIN products p ON ii.product_id = p.id
        LEFT JOIN units u ON p.unit_id = u.id

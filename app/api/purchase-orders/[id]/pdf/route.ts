@@ -41,7 +41,20 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
     const vendorRow = vendorRows[0] || {}
 
     const [itemRows] = await db.execute(
-      `SELECT poi.*, p.name as product_name, p.hsn_code, p.sac_code, u.short_name as unit_short
+      `SELECT poi.id,
+              poi.purchase_order_id,
+              poi.product_id,
+              COALESCE(NULLIF(TRIM(poi.description), ''), p.description, '') as description,
+              poi.quantity,
+              poi.rate,
+              poi.discount,
+              poi.gst_rate,
+              poi.gst_amount,
+              poi.amount,
+              COALESCE(NULLIF(TRIM(p.name), ''), NULLIF(TRIM(poi.description), ''), 'Product') as product_name,
+              p.hsn_code,
+              p.sac_code,
+              u.short_name as unit_short
        FROM purchase_order_items poi
        LEFT JOIN products p ON poi.product_id = p.id
        LEFT JOIN units u ON p.unit_id = u.id

@@ -81,6 +81,7 @@ export interface QuotationPdfData {
   tax_amount: number
   round_off?: number
   total_amount: number
+  gst_type?: string | null
   terms?: string | null
   notes?: string | null
   customer: QuotationPdfCustomer
@@ -233,12 +234,19 @@ const ITEM_TABLE_CELL_PADDING = 1.5
 
 function getProductCellParts(item: QuotationPdfItem | null | undefined): { productName: string; description: string | null } {
   if (!item) return { productName: '-', description: null }
-  const productName = item.product_name?.trim() || '-'
-  const description = item.description?.trim() || null
-  if (!description || description.toLowerCase() === productName.toLowerCase()) {
-    return { productName, description: null }
+  const pName = item.product_name?.trim() || ''
+  const pDesc = item.description?.trim() || ''
+
+  if (pName && pDesc) {
+    return { productName: pName, description: pDesc }
   }
-  return { productName, description }
+  if (pName && !pDesc) {
+    return { productName: pName, description: null }
+  }
+  if (!pName && pDesc) {
+    return { productName: pDesc, description: null }
+  }
+  return { productName: '-', description: null }
 }
 
 function estimateProductCellHeight(doc: jsPDF, item: QuotationPdfItem, maxWidth: number): number {
@@ -1395,7 +1403,7 @@ export function generateQuotationPdfBuffer(
   settings: QuotationPdfSettings
 ): ArrayBuffer {
   const doc = new jsPDF({ unit: 'mm', format: 'a4' })
-  renderSalesDocumentPage(doc, 'quotation', quotation, settings, undefined, {
+  renderSalesDocumentPage(doc, 'quotation', quotation, settings, quotation.gst_type, {
     copyLabel: 'ORIGINAL FOR RECIPIENT',
     pageNumber: 1,
     totalPages: 1,
@@ -1408,7 +1416,7 @@ export function generateProformaPdfBuffer(
   settings: QuotationPdfSettings
 ): ArrayBuffer {
   const doc = new jsPDF({ unit: 'mm', format: 'a4' })
-  renderSalesDocumentPage(doc, 'proforma', proforma, settings, undefined, {
+  renderSalesDocumentPage(doc, 'proforma', proforma, settings, proforma.gst_type, {
     copyLabel: 'ORIGINAL FOR RECIPIENT',
     pageNumber: 1,
     totalPages: 1,

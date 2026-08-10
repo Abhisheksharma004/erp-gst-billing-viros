@@ -15,7 +15,7 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
     await Promise.all([ensureBusinessSettingsBankingColumns(), ensureQuotationSchema()])
 
     const [quotationRows] = await db.execute(
-      `SELECT q.id, q.quotation_no, q.customer_id, q.date, q.valid_until,
+      `SELECT q.id, q.quotation_no, q.customer_id, q.date, q.valid_until, q.gst_type,
               q.subtotal, q.discount_amount, q.tax_amount, q.round_off, q.total_amount,
               q.notes, q.terms, q.party_details
        FROM quotations q
@@ -42,11 +42,25 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
     const parties = buildPdfParties(customerRow, partyDetails)
 
     const [itemRows] = await db.execute(
-      `SELECT qi.*, p.name as product_name, p.hsn_code, p.sac_code, u.short_name as unit_short
+      `SELECT qi.id,
+              qi.quotation_id,
+              qi.product_id,
+              COALESCE(NULLIF(TRIM(qi.description), ''), p.description, '') as description,
+              qi.quantity,
+              qi.rate,
+              qi.discount,
+              qi.gst_rate,
+              qi.gst_amount,
+              qi.amount,
+              COALESCE(NULLIF(TRIM(p.name), ''), NULLIF(TRIM(qi.description), ''), 'Product') as product_name,
+              p.hsn_code,
+              p.sac_code,
+              u.short_name as unit_short
        FROM quotation_items qi
        LEFT JOIN products p ON qi.product_id = p.id
        LEFT JOIN units u ON p.unit_id = u.id
-       WHERE qi.quotation_id = ?`,
+       WHERE qi.quotation_id = ?
+       ORDER BY qi.sort_order ASC, qi.id ASC`,
       [id]
     ) as any[]
 
@@ -64,6 +78,7 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
         quotation_no: quotation.quotation_no,
         date: quotation.date,
         valid_until: quotation.valid_until,
+        gst_type: quotation.gst_type,
         subtotal: Number(quotation.subtotal),
         discount_amount: Number(quotation.discount_amount),
         tax_amount: Number(quotation.tax_amount),
