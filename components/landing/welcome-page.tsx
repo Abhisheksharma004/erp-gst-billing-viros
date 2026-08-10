@@ -378,15 +378,28 @@ export function WelcomePage() {
                 <ul className="space-y-3 text-sm font-medium">
                   <li>
                     <a
-                      href="mailto:Sales@virosentrepreneurs.com"
+                      href="mailto:sales@virosentrepreneurs.com"
                       className="group flex items-center gap-2.5 text-slate-700 hover:text-blue-600 transition-colors"
                     >
                       <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-blue-50 text-blue-600 group-hover:bg-blue-600 group-hover:text-white transition-colors">
                         <Mail className="h-4 w-4" />
                       </div>
-                      <span className="break-all font-semibold">Sales@virosentrepreneurs.com</span>
+                      <span className="break-all font-semibold">sales@virosentrepreneurs.com</span>
                     </a>
                   </li>
+
+                  <li>
+                    <a
+                      href="mailto:software@virosentrepreneurs.in"
+                      className="group flex items-center gap-2.5 text-slate-700 hover:text-blue-600 transition-colors"
+                    >
+                      <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-blue-50 text-blue-600 group-hover:bg-blue-600 group-hover:text-white transition-colors">
+                        <Mail className="h-4 w-4" />
+                      </div>
+                      <span className="break-all font-semibold">software@virosentrepreneurs.in</span>
+                    </a>
+                  </li>
+
                   <li>
                     <a
                       href="tel:+918377929141"
@@ -413,6 +426,7 @@ export function WelcomePage() {
                     </a>
                   </li>
                 </ul>
+                
               </div>
             </div>
 
