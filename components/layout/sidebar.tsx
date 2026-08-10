@@ -21,6 +21,7 @@ import {
   Building2,
   Wallet,
   ChevronDown,
+  FileCheck,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { useEffect, useMemo, useState } from 'react'
@@ -52,6 +53,7 @@ const navItems: NavItem[] = [
   { title: 'Customers', href: '/customers', icon: Users, permission: 'customers:view' },
   { title: 'Vendors', href: '/vendors', icon: Truck, permission: 'vendors:view' },
   { title: 'Quotations', href: '/quotations', icon: ClipboardList, permission: 'quotations:view' },
+  { title: 'Proforma', href: '/proformas', icon: FileCheck, permission: 'proformas:view' },
   { title: 'Sales Invoice', href: '/billing', icon: FileText, permission: 'billing:view' },
   { title: 'Payments', href: '/payments', icon: Wallet, permission: 'payments:view' },
   { title: 'Purchase Orders', href: '/purchase-orders', icon: ShoppingBag, permission: 'purchase-orders:view' },

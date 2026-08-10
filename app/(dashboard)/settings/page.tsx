@@ -352,7 +352,7 @@ export default function SettingsPage() {
             </p>
           </CardHeader>
           <CardContent className="space-y-6">
-            <div className="grid grid-cols-2 gap-4">
+            <div className="grid grid-cols-2 sm:grid-cols-3 gap-4">
               <div className="space-y-2">
                 <Label>Invoice Prefix</Label>
                 <Input {...register('invoicePrefix')} placeholder="VE" />
@@ -360,6 +360,10 @@ export default function SettingsPage() {
               <div className="space-y-2">
                 <Label>Quotation Prefix</Label>
                 <Input {...register('quotationPrefix')} placeholder="QT" />
+              </div>
+              <div className="space-y-2">
+                <Label>Proforma Prefix</Label>
+                <Input {...register('proformaPrefix')} placeholder="PI" />
               </div>
               <div className="space-y-2">
                 <Label>Purchase Order Prefix</Label>

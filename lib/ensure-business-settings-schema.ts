@@ -70,7 +70,10 @@ export async function ensureBusinessSettingsBankingColumns(): Promise<void> {
     'ALTER TABLE business_settings ADD COLUMN quotation_prefix VARCHAR(10) NOT NULL DEFAULT \'QT\' AFTER invoice_prefix'
   )
   await runAlter(
-    'ALTER TABLE business_settings ADD COLUMN purchase_order_prefix VARCHAR(10) NOT NULL DEFAULT \'PO\' AFTER quotation_prefix'
+    'ALTER TABLE business_settings ADD COLUMN proforma_prefix VARCHAR(10) NOT NULL DEFAULT \'PI\' AFTER quotation_prefix'
+  )
+  await runAlter(
+    'ALTER TABLE business_settings ADD COLUMN purchase_order_prefix VARCHAR(10) NOT NULL DEFAULT \'PO\' AFTER proforma_prefix'
   )
   await runAlter(
     'ALTER TABLE business_settings ADD COLUMN challan_prefix VARCHAR(10) NOT NULL DEFAULT \'DC\' AFTER purchase_order_prefix'
@@ -93,6 +96,7 @@ export async function ensureBusinessSettingsBankingColumns(): Promise<void> {
 
   const documentTermsColumns = [
     'quotation_terms',
+    'proforma_terms',
     'sales_invoice_terms',
     'purchase_order_terms',
     'purchase_invoice_terms',

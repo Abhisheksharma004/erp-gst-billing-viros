@@ -163,6 +163,7 @@ export interface PurchaseOrderPdfData {
 
 type SalesDocumentKind =
   | 'quotation'
+  | 'proforma'
   | 'invoice'
   | 'delivery-challan'
   | 'returnable-challan'
@@ -338,6 +339,21 @@ function getQuotationMetaFields(quotation: QuotationPdfData): LabeledLine[] {
   return lines
 }
 
+function getProformaMetaFields(proforma: any): LabeledLine[] {
+  const lines: LabeledLine[] = [
+    { label: 'Proforma No.', value: proforma.proforma_no || proforma.quotation_no || '', valueBold: true },
+    { label: 'Proforma Date', value: formatPdfDate(proforma.date), valueBold: true },
+  ]
+  if (proforma.valid_until) {
+    lines.push({
+      label: 'Valid Till',
+      value: formatPdfDate(proforma.valid_until),
+      valueBold: true,
+    })
+  }
+  return lines
+}
+
 function getInvoiceMetaFields(invoice: InvoicePdfData): LabeledLine[] {
   const lines: LabeledLine[] = [
     { label: 'Invoice No.', value: invoice.invoice_no, valueBold: true },
@@ -505,6 +521,7 @@ function getDocumentMetaFields(
   kind: SalesDocumentKind,
   data: QuotationPdfData | InvoicePdfData | DeliveryChallanPdfData | PurchasePdfData | PurchaseOrderPdfData
 ): LabeledLine[] {
+  if (kind === 'proforma') return getProformaMetaFields(data)
   if (kind === 'invoice') return getInvoiceMetaFields(data as InvoicePdfData)
   if (kind === 'delivery-challan') return getDeliveryChallanMetaFields(data as DeliveryChallanPdfData)
   if (kind === 'returnable-challan') return getReturnableChallanMetaFields(data as DeliveryChallanPdfData)
@@ -524,6 +541,7 @@ function usesInvoiceStyleFooter(kind: SalesDocumentKind): boolean {
 }
 
 function getDocumentTitle(kind: SalesDocumentKind): string {
+  if (kind === 'proforma') return 'Proforma Invoice'
   if (kind === 'invoice') return 'Tax Invoice'
   if (kind === 'delivery-challan') return 'Delivery Challan'
   if (kind === 'returnable-challan') return 'Returnable Challan'
@@ -1378,6 +1396,19 @@ export function generateQuotationPdfBuffer(
 ): ArrayBuffer {
   const doc = new jsPDF({ unit: 'mm', format: 'a4' })
   renderSalesDocumentPage(doc, 'quotation', quotation, settings, undefined, {
+    copyLabel: 'ORIGINAL FOR RECIPIENT',
+    pageNumber: 1,
+    totalPages: 1,
+  })
+  return doc.output('arraybuffer')
+}
+
+export function generateProformaPdfBuffer(
+  proforma: any,
+  settings: QuotationPdfSettings
+): ArrayBuffer {
+  const doc = new jsPDF({ unit: 'mm', format: 'a4' })
+  renderSalesDocumentPage(doc, 'proforma', proforma, settings, undefined, {
     copyLabel: 'ORIGINAL FOR RECIPIENT',
     pageNumber: 1,
     totalPages: 1,

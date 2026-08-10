@@ -20,9 +20,12 @@ CREATE TABLE IF NOT EXISTS business_settings (
   bank_branch VARCHAR(100) NULL,
   invoice_prefix VARCHAR(10) NOT NULL DEFAULT 'VE',
   quotation_prefix VARCHAR(10) NOT NULL DEFAULT 'QT',
+  proforma_prefix VARCHAR(10) NOT NULL DEFAULT 'PI',
   purchase_order_prefix VARCHAR(10) NOT NULL DEFAULT 'PO',
   challan_prefix VARCHAR(10) NOT NULL DEFAULT 'DC',
   terms_condition TEXT NULL,
+  quotation_terms TEXT NULL,
+  proforma_terms TEXT NULL,
   created_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
   updated_at DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
   UNIQUE KEY uk_business_settings (id)
@@ -43,6 +46,7 @@ INSERT INTO business_settings (
   website,
   invoice_prefix,
   quotation_prefix,
+  proforma_prefix,
   purchase_order_prefix,
   challan_prefix,
   terms_condition
@@ -60,6 +64,7 @@ INSERT INTO business_settings (
   'https://www.virosentrepreneurs.com/',
   'VE',
   'QT',
+  'PI',
   'PO',
   'DC',
   'Warranty as per company guidlines'
@@ -76,6 +81,7 @@ INSERT INTO business_settings (
   website = VALUES(website),
   invoice_prefix = VALUES(invoice_prefix),
   quotation_prefix = VALUES(quotation_prefix),
+  proforma_prefix = VALUES(proforma_prefix),
   purchase_order_prefix = VALUES(purchase_order_prefix),
   challan_prefix = VALUES(challan_prefix),
   terms_condition = VALUES(terms_condition),

@@ -382,6 +382,33 @@ export const quotationSchema = z
     }
   })
 
+export const proformaItemSchema = quotationItemSchema
+
+export const proformaSchema = z
+  .object({
+    customerId: z.string().min(1, 'Customer required'),
+    date: requiredDateInput('Please select a valid proforma date'),
+    validUntil: requiredDateInput('Please select a Valid Till date'),
+    gstType: z.enum(['CGST_SGST', 'IGST', 'EXEMPT']).default('CGST_SGST'),
+    notes: z.string().optional(),
+    terms: z.string().optional(),
+    roundOff: z.number().default(0),
+    partyDetails: z.object({
+      buyer: partySnapshotSchema.optional(),
+      consignee: partySnapshotSchema.optional(),
+    }).optional(),
+    items: z.array(proformaItemSchema).min(1, 'At least one item required'),
+  })
+  .superRefine((data, ctx) => {
+    if (data.validUntil && data.date && data.validUntil < data.date) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: 'Valid till must be on or after the proforma date',
+        path: ['validUntil'],
+      })
+    }
+  })
+
 export const challanSchema = z.object({
   customerId: z.string().min(1, 'Customer required'),
   date: z.string().or(z.date()),
@@ -435,6 +462,7 @@ export const businessSettingsSchema = z.object({
   bankBranch: z.string().optional(),
   invoicePrefix: z.string().default('VE'),
   quotationPrefix: z.string().default('QT'),
+  proformaPrefix: z.string().default('PI'),
   purchaseOrderPrefix: z.string().default('PO'),
   challanPrefix: z.string().default('DC'),
   documentNumberSeparator: z.string().max(5).default('/'),
@@ -442,6 +470,7 @@ export const businessSettingsSchema = z.object({
     .enum(['PREFIX_SERIAL_FY', 'PREFIX_FY_SERIAL', 'FY_PREFIX_SERIAL'])
     .default('PREFIX_SERIAL_FY'),
   quotationTerms: z.string().optional(),
+  proformaTerms: z.string().optional(),
   salesInvoiceTerms: z.string().optional(),
   purchaseOrderTerms: z.string().optional(),
   purchaseInvoiceTerms: z.string().optional(),
@@ -493,6 +522,7 @@ export type InvoiceInput = z.infer<typeof invoiceSchema>
 export type PurchaseOrderInput = z.infer<typeof purchaseOrderSchema>
 export type PurchaseInput = z.infer<typeof purchaseSchema>
 export type QuotationInput = z.infer<typeof quotationSchema>
+export type ProformaInput = z.infer<typeof proformaSchema>
 export type ChallanInput = z.infer<typeof challanSchema>
 export type ReturnableChallanInput = z.infer<typeof returnableChallanSchema>
 export type BusinessSettingsInput = z.infer<typeof businessSettingsSchema>

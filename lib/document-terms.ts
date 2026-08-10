@@ -10,6 +10,7 @@ export function resolveDocumentTerms(
 
 export const DOCUMENT_TERMS_MODULES = [
   { field: 'quotationTerms', label: 'Quotations', placeholder: 'Terms to print on quotations...' },
+  { field: 'proformaTerms', label: 'Proforma', placeholder: 'Terms to print on proforma invoices...' },
   { field: 'salesInvoiceTerms', label: 'Sales Invoice', placeholder: 'Terms to print on sales invoices...' },
   { field: 'purchaseOrderTerms', label: 'Purchase Order', placeholder: 'Terms to print on purchase orders...' },
   { field: 'purchaseInvoiceTerms', label: 'Purchase Invoice', placeholder: 'Terms to print on purchase invoices...' },
@@ -19,6 +20,7 @@ export const DOCUMENT_TERMS_MODULES = [
 
 export type DefaultDocumentTermsModule =
   | 'quotation'
+  | 'proforma'
   | 'sales-invoice'
   | 'purchase-order'
   | 'purchase-invoice'

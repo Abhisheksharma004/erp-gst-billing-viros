@@ -9,6 +9,7 @@ import {
 
 const MODULE_COLUMN_MAP: Record<DefaultDocumentTermsModule, string> = {
   quotation: 'quotation_terms',
+  proforma: 'proforma_terms',
   'sales-invoice': 'sales_invoice_terms',
   'purchase-order': 'purchase_order_terms',
   'purchase-invoice': 'purchase_invoice_terms',
