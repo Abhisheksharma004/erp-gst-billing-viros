@@ -228,7 +228,8 @@ export default function ReportsPage() {
       if (reportType === 'purchase-summary') {
         return {
           Date: formatDate(row.date),
-          'Bill No': row.purchaseNo || row.purchase_number,
+          'Bill Date': formatDate(row.billDate),
+          'Bill No': row.purchaseNo || row.purchase_number || row.billNo || '-',
           Vendor: row.vendorName || row.vendor?.name || '-',
           'Taxable Amount': Number(row.taxableAmount || row.taxable_amount || 0),
           'Tax Amount': Number(row.taxAmount || row.tax_amount || 0),
@@ -240,7 +241,8 @@ export default function ReportsPage() {
       if (reportType === 'gst-purchase') {
         return {
           Date: formatDate(row.date),
-          'Bill No': row.purchaseNo || row.purchase_number,
+          'Bill Date': formatDate(row.billDate),
+          'Bill No': row.purchaseNo || row.purchase_number || row.billNo || '-',
           Vendor: row.vendorName || row.vendor?.name || '-',
           GSTIN: row.gstin || row.vendor?.gstin || '-',
           'Taxable Amount': Number(row.taxableAmount || row.taxable_amount || 0),
@@ -837,6 +839,7 @@ export default function ReportsPage() {
           <TableHeader>
             <TableRow>
               <TableHead className="text-xs">Date</TableHead>
+              <TableHead className="text-xs">Bill Date</TableHead>
               <TableHead className="text-xs">Bill No</TableHead>
               <TableHead className="text-xs">Vendor</TableHead>
               <TableHead className="text-xs text-right">Taxable Amt</TableHead>
@@ -851,6 +854,7 @@ export default function ReportsPage() {
             {data.map((row: any, idx: number) => (
               <TableRow key={row.id || idx} className={cn('text-xs', idx % 2 === 1 && 'bg-slate-50/80 dark:bg-slate-900/40')}>
                 <TableCell>{formatDate(row.date)}</TableCell>
+                <TableCell>{formatDate(row.billDate)}</TableCell>
                 <TableCell className="font-medium font-mono">{row.purchaseNo}</TableCell>
                 <TableCell>{row.vendorName || row.vendor?.name}</TableCell>
                 <TableCell className="text-right">{formatCurrency(row.taxableAmount)}</TableCell>
@@ -862,7 +866,7 @@ export default function ReportsPage() {
             ))}
             {summary && (
               <TableRow className="bg-muted/40 font-semibold text-xs border-t-2">
-                <TableCell colSpan={3} className="text-right">Total ({data.length} Bill(s))</TableCell>
+                <TableCell colSpan={4} className="text-right">Total ({data.length} Bill(s))</TableCell>
                 <TableCell className="text-right">{formatCurrency(summary.total_taxable)}</TableCell>
                 <TableCell className="text-right">{formatCurrency(summary.total_tax)}</TableCell>
                 <TableCell className="text-right">{formatCurrency(summary.total_purchases)}</TableCell>
@@ -881,6 +885,7 @@ export default function ReportsPage() {
           <TableHeader>
             <TableRow>
               <TableHead className="text-xs">Date</TableHead>
+              <TableHead className="text-xs">Bill Date</TableHead>
               <TableHead className="text-xs">Bill No</TableHead>
               <TableHead className="text-xs">Vendor</TableHead>
               <TableHead className="text-xs">GSTIN</TableHead>
@@ -897,6 +902,7 @@ export default function ReportsPage() {
             {data.map((row: any, idx: number) => (
               <TableRow key={row.id || idx} className={cn('text-xs', idx % 2 === 1 && 'bg-slate-50/80 dark:bg-slate-900/40')}>
                 <TableCell>{formatDate(row.date)}</TableCell>
+                <TableCell>{formatDate(row.billDate)}</TableCell>
                 <TableCell className="font-medium font-mono">{row.purchaseNo}</TableCell>
                 <TableCell>{row.vendorName || row.vendor?.name}</TableCell>
                 <TableCell className="font-mono text-[11px]">{row.gstin || '-'}</TableCell>
@@ -910,7 +916,7 @@ export default function ReportsPage() {
             ))}
             {summary && (
               <TableRow className="bg-muted/40 font-semibold text-xs border-t-2">
-                <TableCell colSpan={4} className="text-right">Total ({data.length} Record(s))</TableCell>
+                <TableCell colSpan={5} className="text-right">Total ({data.length} Record(s))</TableCell>
                 <TableCell className="text-right">{formatCurrency(summary.total_taxable)}</TableCell>
                 <TableCell className="text-right">{formatCurrency(summary.total_cgst)}</TableCell>
                 <TableCell className="text-right">{formatCurrency(summary.total_sgst)}</TableCell>

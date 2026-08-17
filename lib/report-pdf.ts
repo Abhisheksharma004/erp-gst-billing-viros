@@ -176,9 +176,10 @@ export function generateReportPdf(options: ReportPdfOptions) {
       foot = [['Total', '', `${data.length} Record(s)`, '', formatAmount(summary.total_taxable), formatAmount(summary.total_cgst), formatAmount(summary.total_sgst), formatAmount(summary.total_igst), formatAmount(summary.total_tax), formatAmount(summary.total_sales)]]
     }
   } else if (reportType === 'purchase-summary') {
-    head = [['Date', 'Bill No', 'Vendor Name', 'Taxable Amt (Rs.)', 'Tax Amt (Rs.)', 'Total Amount (Rs.)', 'Paid (Rs.)', 'Balance (Rs.)']]
+    head = [['Date', 'Bill Date', 'Bill No', 'Vendor Name', 'Taxable Amt (Rs.)', 'Tax Amt (Rs.)', 'Total Amount (Rs.)', 'Paid (Rs.)', 'Balance (Rs.)']]
     body = data.map((r) => [
       formatDate(r.date),
+      formatDate(r.billDate),
       r.purchaseNo || '-',
       r.vendorName || r.vendor?.name || '-',
       formatAmount(r.taxableAmount),
@@ -188,12 +189,13 @@ export function generateReportPdf(options: ReportPdfOptions) {
       formatAmount(r.balanceAmount),
     ])
     if (summary) {
-      foot = [['Total', '', `${data.length} Bill(s)`, formatAmount(summary.total_taxable), formatAmount(summary.total_tax), formatAmount(summary.total_purchases), formatAmount(summary.total_paid), formatAmount(summary.total_outstanding)]]
+      foot = [['Total', '', '', `${data.length} Bill(s)`, formatAmount(summary.total_taxable), formatAmount(summary.total_tax), formatAmount(summary.total_purchases), formatAmount(summary.total_paid), formatAmount(summary.total_outstanding)]]
     }
   } else if (reportType === 'gst-purchase') {
-    head = [['Date', 'Bill No', 'Vendor Name', 'GSTIN', 'Taxable (Rs.)', 'CGST (Rs.)', 'SGST (Rs.)', 'IGST (Rs.)', 'Total Tax (Rs.)', 'Bill Total (Rs.)']]
+    head = [['Date', 'Bill Date', 'Bill No', 'Vendor Name', 'GSTIN', 'Taxable (Rs.)', 'CGST (Rs.)', 'SGST (Rs.)', 'IGST (Rs.)', 'Total Tax (Rs.)', 'Bill Total (Rs.)']]
     body = data.map((r) => [
       formatDate(r.date),
+      formatDate(r.billDate),
       r.purchaseNo || '-',
       r.vendorName || r.vendor?.name || '-',
       r.gstin || r.vendor?.gstin || '-',
@@ -205,7 +207,7 @@ export function generateReportPdf(options: ReportPdfOptions) {
       formatAmount(r.totalAmount),
     ])
     if (summary) {
-      foot = [['Total', '', `${data.length} Record(s)`, '', formatAmount(summary.total_taxable), formatAmount(summary.total_cgst), formatAmount(summary.total_sgst), formatAmount(summary.total_igst), formatAmount(summary.total_tax), formatAmount(summary.total_purchases)]]
+      foot = [['Total', '', '', `${data.length} Record(s)`, '', formatAmount(summary.total_taxable), formatAmount(summary.total_cgst), formatAmount(summary.total_sgst), formatAmount(summary.total_igst), formatAmount(summary.total_tax), formatAmount(summary.total_purchases)]]
     }
   } else if (reportType === 'pending-customer-invoices') {
     head = [['Date', 'Due Date', 'Invoice No', 'Customer Name', 'Total Amount (Rs.)', 'Paid Amount (Rs.)', 'Pending Balance (Rs.)', 'Status']]

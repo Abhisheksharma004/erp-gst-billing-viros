@@ -28,11 +28,14 @@ function mapInvoiceRow(row: Record<string, unknown>) {
 
 function mapPurchaseRow(row: Record<string, unknown>) {
   const date = row.date
+  const billDate = row.bill_date || null
   const dueDate = row.due_date || date
   return {
     id: row.id,
     purchaseNo: row.bill_no || '-',
+    billNo: row.bill_no || '-',
     date,
+    billDate,
     dueDate,
     status: row.status,
     taxableAmount: Number(row.subtotal || 0),
@@ -165,7 +168,7 @@ export async function GET(req: NextRequest) {
     const where = 'WHERE ' + conditions.join(' AND ')
 
     const [rows] = (await db.execute(
-      `SELECT p.id, p.bill_no, p.date, p.due_date, p.status, p.subtotal, p.tax_amount, p.total_amount, p.paid_amount, p.balance_amount,
+      `SELECT p.id, p.bill_no, p.date, p.bill_date, p.due_date, p.status, p.subtotal, p.tax_amount, p.total_amount, p.paid_amount, p.balance_amount,
               p.cgst_amount, p.sgst_amount, p.igst_amount, v.name AS vendor_name, v.gstin AS vendor_gstin
        FROM purchases p
        LEFT JOIN vendors v ON p.vendor_id = v.id
@@ -258,7 +261,7 @@ export async function GET(req: NextRequest) {
     const where = 'WHERE ' + conditions.join(' AND ')
 
     const [rows] = (await db.execute(
-      `SELECT p.id, p.bill_no, p.date, p.due_date, p.status, p.subtotal, p.tax_amount, p.total_amount, p.paid_amount, p.balance_amount,
+      `SELECT p.id, p.bill_no, p.date, p.bill_date, p.due_date, p.status, p.subtotal, p.tax_amount, p.total_amount, p.paid_amount, p.balance_amount,
               p.cgst_amount, p.sgst_amount, p.igst_amount, v.name AS vendor_name, v.gstin AS vendor_gstin
        FROM purchases p
        LEFT JOIN vendors v ON p.vendor_id = v.id
