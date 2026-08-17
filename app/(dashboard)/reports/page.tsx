@@ -1,30 +1,56 @@
 'use client'
 
-import { useState, useEffect } from 'react'
+import React, { useState, useEffect } from 'react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
+import {
+  Select,
+  SelectContent,
+  SelectGroup,
+  SelectItem,
+  SelectLabel,
+  SelectSeparator,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select'
 import { SearchablePartySelect } from '@/components/ui/searchable-party-select'
 import { FileSpreadsheet, FileText, Search, TrendingUp, Receipt, Wallet, Scale } from 'lucide-react'
 import { formatCurrency, formatDate, cn } from '@/lib/utils'
 import { usePageCount } from '@/hooks/use-page-count'
 import { useToast } from '@/hooks/use-toast'
 
-const REPORT_TYPES = [
-  { value: 'sales-summary', label: 'Sales Summary' },
-  { value: 'purchase-summary', label: 'Purchase Summary' },
-  { value: 'pending-customer-invoices', label: 'Pending Customer Invoices' },
-  { value: 'pending-vendor-invoices', label: 'Pending Vendor Invoices' },
-  { value: 'gst-sales', label: 'GST Sales Register' },
-  { value: 'gst-purchase', label: 'GST Purchase Register' },
-  { value: 'stock-report', label: 'Stock Report' },
-  { value: 'low-stock', label: 'Low Stock Report' },
-  { value: 'customer-ledger', label: 'Customer Ledger' },
-  { value: 'vendor-ledger', label: 'Vendor Ledger' },
+const REPORT_GROUPS = [
+  {
+    heading: 'Sales Report',
+    items: [
+      { value: 'sales-summary', label: 'Sales Summary' },
+      { value: 'gst-sales', label: 'GST Sales Register' },
+      { value: 'pending-customer-invoices', label: 'Pending Customer Invoices' },
+    ],
+  },
+  {
+    heading: 'Purchase Report',
+    items: [
+      { value: 'purchase-summary', label: 'Purchase Summary' },
+      { value: 'gst-purchase', label: 'GST Purchase Register' },
+      { value: 'pending-vendor-invoices', label: 'Pending Vendor Invoices' },
+    ],
+  },
+  {
+    heading: 'Other Report',
+    items: [
+      { value: 'stock-report', label: 'Stock Report' },
+      { value: 'low-stock', label: 'Low Stock Report' },
+      { value: 'customer-ledger', label: 'Customer Ledger' },
+      { value: 'vendor-ledger', label: 'Vendor Ledger' },
+    ],
+  },
 ]
+
+const REPORT_TYPES = REPORT_GROUPS.flatMap((group) => group.items)
 
 const exportExcelWrapClass =
   'rounded-md bg-gradient-to-r from-green-500 via-emerald-500 to-teal-500 p-[2px] shadow-sm'
@@ -1097,11 +1123,21 @@ export default function ReportsPage() {
                 <SelectTrigger className="h-9 w-full text-xs">
                   <SelectValue />
                 </SelectTrigger>
-                <SelectContent>
-                  {REPORT_TYPES.map((r) => (
-                    <SelectItem key={r.value} value={r.value} className="text-xs">
-                      {r.label}
-                    </SelectItem>
+                <SelectContent className="max-h-80">
+                  {REPORT_GROUPS.map((group, groupIdx) => (
+                    <React.Fragment key={group.heading}>
+                      {groupIdx > 0 && <SelectSeparator className="my-1" />}
+                      <SelectGroup>
+                        <SelectLabel className="px-2 py-1 text-[11px] font-bold text-muted-foreground uppercase tracking-wider">
+                          {group.heading}
+                        </SelectLabel>
+                        {group.items.map((r) => (
+                          <SelectItem key={r.value} value={r.value} className="text-xs">
+                            {r.label}
+                          </SelectItem>
+                        ))}
+                      </SelectGroup>
+                    </React.Fragment>
                   ))}
                 </SelectContent>
               </Select>

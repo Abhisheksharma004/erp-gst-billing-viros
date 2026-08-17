@@ -59,7 +59,7 @@ INSERT INTO business_settings (
   'New Delhi',
   'Delhi',
   '110044',
-  '7290969141',
+  '7065779141',
   'info@virosentrepreneurs.com',
   'https://www.virosentrepreneurs.com/',
   'VE',
