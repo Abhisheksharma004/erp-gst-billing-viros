@@ -29,6 +29,7 @@ const REPORT_GROUPS = [
       { value: 'sales-summary', label: 'Sales Summary' },
       { value: 'gst-sales', label: 'GST Sales Register' },
       { value: 'pending-customer-invoices', label: 'Pending Customer Invoices' },
+      { value: 'sales-product', label: 'Sales Product' },
     ],
   },
   {
@@ -37,6 +38,7 @@ const REPORT_GROUPS = [
       { value: 'purchase-summary', label: 'Purchase Summary' },
       { value: 'gst-purchase', label: 'GST Purchase Register' },
       { value: 'pending-vendor-invoices', label: 'Pending Vendor Invoices' },
+      { value: 'purchase-product', label: 'Purchase Product' },
     ],
   },
   {
@@ -68,12 +70,27 @@ const exportPdfBtnClass = cn(
   'dark:text-indigo-300 dark:hover:bg-indigo-950/40'
 )
 
+function getFirstDayOfCurrentMonth(): string {
+  const now = new Date()
+  const year = now.getFullYear()
+  const month = String(now.getMonth() + 1).padStart(2, '0')
+  return `${year}-${month}-01`
+}
+
+function getTodayDateString(): string {
+  const now = new Date()
+  const year = now.getFullYear()
+  const month = String(now.getMonth() + 1).padStart(2, '0')
+  const day = String(now.getDate()).padStart(2, '0')
+  return `${year}-${month}-${day}`
+}
+
 export default function ReportsPage() {
   usePageCount('Generate and export business reports')
   const { toast } = useToast()
   const [reportType, setReportType] = useState('sales-summary')
-  const [from, setFrom] = useState(new Date(new Date().getFullYear(), new Date().getMonth(), 1).toISOString().split('T')[0])
-  const [to, setTo] = useState(new Date().toISOString().split('T')[0])
+  const [from, setFrom] = useState(getFirstDayOfCurrentMonth)
+  const [to, setTo] = useState(getTodayDateString)
   const [partyId, setPartyId] = useState('ALL')
   const [customers, setCustomers] = useState<{ id: string; name: string }[]>([])
   const [vendors, setVendors] = useState<{ id: string; name: string }[]>([])
@@ -91,7 +108,7 @@ export default function ReportsPage() {
         if (Array.isArray(resData.customers)) setCustomers(resData.customers)
         if (Array.isArray(resData.vendors)) setVendors(resData.vendors)
       })
-      .catch(() => {})
+      .catch(() => { })
   }, [])
 
   const resetReportResults = () => {
@@ -106,8 +123,8 @@ export default function ReportsPage() {
     resetReportResults()
   }
 
-  const isCustomerReport = ['sales-summary', 'gst-sales', 'customer-ledger', 'pending-customer-invoices'].includes(reportType)
-  const isVendorReport = ['purchase-summary', 'gst-purchase', 'vendor-ledger', 'pending-vendor-invoices'].includes(reportType)
+  const isCustomerReport = ['sales-summary', 'gst-sales', 'customer-ledger', 'pending-customer-invoices', 'sales-product'].includes(reportType)
+  const isVendorReport = ['purchase-summary', 'gst-purchase', 'vendor-ledger', 'pending-vendor-invoices', 'purchase-product'].includes(reportType)
   const showDateRange = !['stock-report', 'low-stock'].includes(reportType)
 
   const selectedPartyName = () => {
@@ -166,7 +183,7 @@ export default function ReportsPage() {
       fromDate: showDateRange ? formatDate(from) : undefined,
       toDate: showDateRange ? formatDate(to) : undefined,
       partyName: selectedPartyName(),
-      generatedDate: formatDate(new Date().toISOString().split('T')[0]),
+      generatedDate: formatDate(getTodayDateString()),
     }
 
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -250,6 +267,38 @@ export default function ReportsPage() {
           SGST: Number(row.sgstAmount || row.sgst_amount || 0),
           IGST: Number(row.igstAmount || row.igst_amount || 0),
           'Total Tax': Number(row.taxAmount || row.tax_amount || 0),
+          'Total Amount': Number(row.totalAmount || row.total_amount || 0),
+        }
+      }
+      if (reportType === 'sales-product') {
+        return {
+          Date: formatDate(row.date),
+          'Invoice No': row.invoiceNo || row.invoice_number || '-',
+          'Product Name': row.productName || row.name || '-',
+          'HSN/SAC': row.hsn || row.hsnCode || '-',
+          Quantity: Number(row.quantity || 0),
+          Unit: row.unit || '-',
+          Rate: Number(row.rate || 0),
+          'Discount %': Number(row.discount || 0),
+          'Taxable Amount': Number(row.taxableAmount || row.taxable_amount || 0),
+          'GST %': Number(row.gstRate || 0),
+          'GST Amount': Number(row.gstAmount || row.gst_amount || 0),
+          'Total Amount': Number(row.totalAmount || row.total_amount || 0),
+        }
+      }
+      if (reportType === 'purchase-product') {
+        return {
+          'Bill Date': formatDate(row.billDate || row.date),
+          'Bill No': row.purchaseNo || row.billNo || '-',
+          'Product Name': row.productName || row.name || '-',
+          'HSN/SAC': row.hsn || row.hsnCode || '-',
+          Quantity: Number(row.quantity || 0),
+          Unit: row.unit || '-',
+          Rate: Number(row.rate || 0),
+          'Discount %': Number(row.discount || 0),
+          'Taxable Amount': Number(row.taxableAmount || row.taxable_amount || 0),
+          'GST %': Number(row.gstRate || 0),
+          'GST Amount': Number(row.gstAmount || row.gst_amount || 0),
           'Total Amount': Number(row.totalAmount || row.total_amount || 0),
         }
       }
@@ -344,7 +393,7 @@ export default function ReportsPage() {
         .replace(/[^a-zA-Z0-9_-]/g, '_')
         .replace(/_+/g, '_')
 
-    const todayStr = new Date().toISOString().split('T')[0]
+    const todayStr = getTodayDateString()
     const party = selectedPartyName()
 
     let filename = ''
@@ -572,6 +621,110 @@ export default function ReportsPage() {
               {formatCurrency(Number(summary.total_outstanding || 0))}
             </p>
             <span className="text-[11px] text-amber-600 dark:text-amber-400">Total Outstanding Payable</span>
+          </Card>
+        </div>
+      )
+    }
+
+    if (reportType === 'sales-product') {
+      return (
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-4">
+          <Card className="p-3 shadow-none bg-blue-50/50 border-blue-200 dark:bg-blue-950/20 dark:border-blue-900">
+            <div className="flex items-center justify-between">
+              <span className="text-xs font-medium text-blue-700 dark:text-blue-300">Total Quantity Sold</span>
+              <TrendingUp className="w-4 h-4 text-blue-600 dark:text-blue-400" />
+            </div>
+            <p className="text-lg font-bold text-blue-900 dark:text-blue-100 mt-1">
+              {summary.total_quantity || 0}
+            </p>
+            <span className="text-[11px] text-blue-600 dark:text-blue-400">{summary.total_count || 0} Line Item(s)</span>
+          </Card>
+
+          <Card className="p-3 shadow-none bg-indigo-50/50 border-indigo-200 dark:bg-indigo-950/20 dark:border-indigo-900">
+            <div className="flex items-center justify-between">
+              <span className="text-xs font-medium text-indigo-700 dark:text-indigo-300">Taxable Value</span>
+              <Receipt className="w-4 h-4 text-indigo-600 dark:text-indigo-400" />
+            </div>
+            <p className="text-lg font-bold text-indigo-900 dark:text-indigo-100 mt-1">
+              {formatCurrency(Number(summary.total_taxable || 0))}
+            </p>
+            <span className="text-[11px] text-indigo-600 dark:text-indigo-400">
+              Tax: {formatCurrency(Number(summary.total_tax || 0))}
+            </span>
+          </Card>
+
+          <Card className="p-3 shadow-none bg-green-50/50 border-green-200 dark:bg-green-950/20 dark:border-green-900">
+            <div className="flex items-center justify-between">
+              <span className="text-xs font-medium text-green-700 dark:text-green-300">Total GST</span>
+              <Wallet className="w-4 h-4 text-green-600 dark:text-green-400" />
+            </div>
+            <p className="text-lg font-bold text-green-900 dark:text-green-100 mt-1">
+              {formatCurrency(Number(summary.total_tax || 0))}
+            </p>
+            <span className="text-[11px] text-green-600 dark:text-green-400">CGST + SGST + IGST</span>
+          </Card>
+
+          <Card className="p-3 shadow-none bg-amber-50/50 border-amber-200 dark:bg-amber-950/20 dark:border-amber-900">
+            <div className="flex items-center justify-between">
+              <span className="text-xs font-medium text-amber-700 dark:text-amber-300">Total Product Sales</span>
+              <Scale className="w-4 h-4 text-amber-600 dark:text-amber-400" />
+            </div>
+            <p className="text-lg font-bold text-amber-900 dark:text-amber-100 mt-1">
+              {formatCurrency(Number(summary.total_sales || 0))}
+            </p>
+            <span className="text-[11px] text-amber-600 dark:text-amber-400">Gross Product Amount</span>
+          </Card>
+        </div>
+      )
+    }
+
+    if (reportType === 'purchase-product') {
+      return (
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-4">
+          <Card className="p-3 shadow-none bg-purple-50/50 border-purple-200 dark:bg-purple-950/20 dark:border-purple-900">
+            <div className="flex items-center justify-between">
+              <span className="text-xs font-medium text-purple-700 dark:text-purple-300">Total Quantity Purchased</span>
+              <TrendingUp className="w-4 h-4 text-purple-600 dark:text-purple-400" />
+            </div>
+            <p className="text-lg font-bold text-purple-900 dark:text-purple-100 mt-1">
+              {summary.total_quantity || 0}
+            </p>
+            <span className="text-[11px] text-purple-600 dark:text-purple-400">{summary.total_count || 0} Line Item(s)</span>
+          </Card>
+
+          <Card className="p-3 shadow-none bg-indigo-50/50 border-indigo-200 dark:bg-indigo-950/20 dark:border-indigo-900">
+            <div className="flex items-center justify-between">
+              <span className="text-xs font-medium text-indigo-700 dark:text-indigo-300">Taxable Value</span>
+              <Receipt className="w-4 h-4 text-indigo-600 dark:text-indigo-400" />
+            </div>
+            <p className="text-lg font-bold text-indigo-900 dark:text-indigo-100 mt-1">
+              {formatCurrency(Number(summary.total_taxable || 0))}
+            </p>
+            <span className="text-[11px] text-indigo-600 dark:text-indigo-400">
+              Tax: {formatCurrency(Number(summary.total_tax || 0))}
+            </span>
+          </Card>
+
+          <Card className="p-3 shadow-none bg-green-50/50 border-green-200 dark:bg-green-950/20 dark:border-green-900">
+            <div className="flex items-center justify-between">
+              <span className="text-xs font-medium text-green-700 dark:text-green-300">Total GST</span>
+              <Wallet className="w-4 h-4 text-green-600 dark:text-green-400" />
+            </div>
+            <p className="text-lg font-bold text-green-900 dark:text-green-100 mt-1">
+              {formatCurrency(Number(summary.total_tax || 0))}
+            </p>
+            <span className="text-[11px] text-green-600 dark:text-green-400">Input Tax Credit</span>
+          </Card>
+
+          <Card className="p-3 shadow-none bg-amber-50/50 border-amber-200 dark:bg-amber-950/20 dark:border-amber-900">
+            <div className="flex items-center justify-between">
+              <span className="text-xs font-medium text-amber-700 dark:text-amber-300">Total Product Purchases</span>
+              <Scale className="w-4 h-4 text-amber-600 dark:text-amber-400" />
+            </div>
+            <p className="text-lg font-bold text-amber-900 dark:text-amber-100 mt-1">
+              {formatCurrency(Number(summary.total_purchases || 0))}
+            </p>
+            <span className="text-[11px] text-amber-600 dark:text-amber-400">Gross Purchased Amount</span>
           </Card>
         </div>
       )
@@ -1106,6 +1259,98 @@ export default function ReportsPage() {
                   </TableCell>
                 </TableRow>
               </>
+            )}
+          </TableBody>
+        </Table>
+      )
+    }
+
+    if (reportType === 'sales-product') {
+      return (
+        <Table>
+          <TableHeader>
+            <TableRow>
+              <TableHead className="text-xs">Date</TableHead>
+              <TableHead className="text-xs">Invoice No</TableHead>
+              <TableHead className="text-xs">Product Name</TableHead>
+              <TableHead className="text-xs">HSN/SAC</TableHead>
+              <TableHead className="text-xs text-right">Qty</TableHead>
+              <TableHead className="text-xs text-right">Rate</TableHead>
+              <TableHead className="text-xs text-right">Taxable</TableHead>
+              <TableHead className="text-xs text-right">GST</TableHead>
+              <TableHead className="text-xs text-right">Total</TableHead>
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            {/* eslint-disable-next-line @typescript-eslint/no-explicit-any */}
+            {data.map((row: any, idx: number) => (
+              <TableRow key={row.id || idx} className={cn('text-xs', idx % 2 === 1 && 'bg-slate-50/80 dark:bg-slate-900/40')}>
+                <TableCell>{formatDate(row.date)}</TableCell>
+                <TableCell className="font-medium font-mono">{row.invoiceNo || '-'}</TableCell>
+                <TableCell className="font-medium">{row.productName || row.name || '-'}</TableCell>
+                <TableCell className="font-mono text-xs">{row.hsn || '-'}</TableCell>
+                <TableCell className="text-right font-semibold">{row.quantity} {row.unit || ''}</TableCell>
+                <TableCell className="text-right">{formatCurrency(row.rate)}</TableCell>
+                <TableCell className="text-right">{formatCurrency(row.taxableAmount)}</TableCell>
+                <TableCell className="text-right">{formatCurrency(row.gstAmount)} ({row.gstRate}%)</TableCell>
+                <TableCell className="text-right font-bold text-slate-900 dark:text-slate-100">{formatCurrency(row.totalAmount)}</TableCell>
+              </TableRow>
+            ))}
+            {summary && (
+              <TableRow className="bg-muted/40 font-semibold text-xs border-t-2">
+                <TableCell colSpan={4} className="text-right">Total ({data.length} Item(s))</TableCell>
+                <TableCell className="text-right font-bold">{summary.total_quantity || 0}</TableCell>
+                <TableCell className="text-right">-</TableCell>
+                <TableCell className="text-right">{formatCurrency(summary.total_taxable)}</TableCell>
+                <TableCell className="text-right">{formatCurrency(summary.total_tax)}</TableCell>
+                <TableCell className="text-right font-bold">{formatCurrency(summary.total_sales)}</TableCell>
+              </TableRow>
+            )}
+          </TableBody>
+        </Table>
+      )
+    }
+
+    if (reportType === 'purchase-product') {
+      return (
+        <Table>
+          <TableHeader>
+            <TableRow>
+              <TableHead className="text-xs">Bill Date</TableHead>
+              <TableHead className="text-xs">Bill No</TableHead>
+              <TableHead className="text-xs">Product Name</TableHead>
+              <TableHead className="text-xs">HSN/SAC</TableHead>
+              <TableHead className="text-xs text-right">Qty</TableHead>
+              <TableHead className="text-xs text-right">Rate</TableHead>
+              <TableHead className="text-xs text-right">Taxable</TableHead>
+              <TableHead className="text-xs text-right">GST</TableHead>
+              <TableHead className="text-xs text-right">Total</TableHead>
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            {/* eslint-disable-next-line @typescript-eslint/no-explicit-any */}
+            {data.map((row: any, idx: number) => (
+              <TableRow key={row.id || idx} className={cn('text-xs', idx % 2 === 1 && 'bg-slate-50/80 dark:bg-slate-900/40')}>
+                <TableCell>{formatDate(row.billDate || row.date)}</TableCell>
+                <TableCell className="font-medium font-mono">{row.purchaseNo || row.billNo || '-'}</TableCell>
+                <TableCell className="font-medium">{row.productName || row.name || '-'}</TableCell>
+                <TableCell className="font-mono text-xs">{row.hsn || '-'}</TableCell>
+                <TableCell className="text-right font-semibold">{row.quantity} {row.unit || ''}</TableCell>
+                <TableCell className="text-right">{formatCurrency(row.rate)}</TableCell>
+                <TableCell className="text-right">{formatCurrency(row.taxableAmount)}</TableCell>
+                <TableCell className="text-right">{formatCurrency(row.gstAmount)} ({row.gstRate}%)</TableCell>
+                <TableCell className="text-right font-bold text-slate-900 dark:text-slate-100">{formatCurrency(row.totalAmount)}</TableCell>
+              </TableRow>
+            ))}
+            {summary && (
+              <TableRow className="bg-muted/40 font-semibold text-xs border-t-2">
+                <TableCell colSpan={4} className="text-right">Total ({data.length} Item(s))</TableCell>
+                <TableCell className="text-right font-bold">{summary.total_quantity || 0}</TableCell>
+                <TableCell className="text-right">-</TableCell>
+                <TableCell className="text-right">{formatCurrency(summary.total_taxable)}</TableCell>
+                <TableCell className="text-right">{formatCurrency(summary.total_tax)}</TableCell>
+                <TableCell className="text-right font-bold">{formatCurrency(summary.total_purchases)}</TableCell>
+              </TableRow>
             )}
           </TableBody>
         </Table>

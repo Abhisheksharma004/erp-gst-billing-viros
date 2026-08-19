@@ -60,14 +60,16 @@ export function generateReportPdf(options: ReportPdfOptions) {
     reportType === 'customer-ledger' ||
     reportType === 'sales-summary' ||
     reportType === 'gst-sales' ||
-    reportType === 'pending-customer-invoices'
+    reportType === 'pending-customer-invoices' ||
+    reportType === 'sales-product'
   ) {
     partyLabel = 'Customer Name'
   } else if (
     reportType === 'vendor-ledger' ||
     reportType === 'purchase-summary' ||
     reportType === 'gst-purchase' ||
-    reportType === 'pending-vendor-invoices'
+    reportType === 'pending-vendor-invoices' ||
+    reportType === 'purchase-product'
   ) {
     partyLabel = 'Vendor Name'
   }
@@ -123,6 +125,18 @@ export function generateReportPdf(options: ReportPdfOptions) {
       doc.text(`Taxable Value:-  ${formatAmount(summary.total_taxable)}`, rightX, rightY)
       rightY += 6.5
       doc.text(`Total Tax:-  ${formatAmount(summary.total_tax)}`, rightX, rightY)
+    } else if (reportType === 'sales-product') {
+      doc.text(`Total Qty Sold:-  ${summary.total_quantity || 0}`, rightX, rightY)
+      rightY += 6.5
+      doc.text(`Taxable Value:-  ${formatAmount(summary.total_taxable)}`, rightX, rightY)
+      rightY += 6.5
+      doc.text(`Total Product Sales:-  ${formatAmount(summary.total_sales)}`, rightX, rightY)
+    } else if (reportType === 'purchase-product') {
+      doc.text(`Total Qty Purchased:-  ${summary.total_quantity || 0}`, rightX, rightY)
+      rightY += 6.5
+      doc.text(`Taxable Value:-  ${formatAmount(summary.total_taxable)}`, rightX, rightY)
+      rightY += 6.5
+      doc.text(`Total Product Purchases:-  ${formatAmount(summary.total_purchases)}`, rightX, rightY)
     } else if (reportType === 'pending-customer-invoices') {
       doc.text(`Pending Invoices:-  ${summary.total_count || 0}`, rightX, rightY)
       rightY += 6.5
@@ -290,6 +304,38 @@ export function generateReportPdf(options: ReportPdfOptions) {
         ['Total', '', '', '', '', formatAmount(summary.total_credit), formatAmount(summary.total_debit), '-'],
         ['Closing Bal.', '', '', '', '', '0.00', `${formatAmount(Math.abs(bal))} ${drCr}`, '-'],
       ]
+    }
+  } else if (reportType === 'sales-product') {
+    head = [['Date', 'Invoice No', 'Product Name', 'HSN/SAC', 'Qty', 'Rate (Rs.)', 'Taxable (Rs.)', 'GST (Rs.)', 'Total (Rs.)']]
+    body = data.map((r) => [
+      formatDate(r.date),
+      r.invoiceNo || '-',
+      r.productName || r.name || '-',
+      r.hsn || '-',
+      `${r.quantity ?? 0} ${r.unit || ''}`.trim(),
+      formatAmount(r.rate),
+      formatAmount(r.taxableAmount),
+      `${formatAmount(r.gstAmount)} (${r.gstRate || 0}%)`,
+      formatAmount(r.totalAmount),
+    ])
+    if (summary) {
+      foot = [['Total', '', `${data.length} Item(s)`, '', String(summary.total_quantity || 0), '', formatAmount(summary.total_taxable), formatAmount(summary.total_tax), formatAmount(summary.total_sales)]]
+    }
+  } else if (reportType === 'purchase-product') {
+    head = [['Bill Date', 'Bill No', 'Product Name', 'HSN/SAC', 'Qty', 'Rate (Rs.)', 'Taxable (Rs.)', 'GST (Rs.)', 'Total (Rs.)']]
+    body = data.map((r) => [
+      formatDate(r.billDate || r.date),
+      r.purchaseNo || r.billNo || '-',
+      r.productName || r.name || '-',
+      r.hsn || '-',
+      `${r.quantity ?? 0} ${r.unit || ''}`.trim(),
+      formatAmount(r.rate),
+      formatAmount(r.taxableAmount),
+      `${formatAmount(r.gstAmount)} (${r.gstRate || 0}%)`,
+      formatAmount(r.totalAmount),
+    ])
+    if (summary) {
+      foot = [['Total', '', `${data.length} Item(s)`, '', String(summary.total_quantity || 0), '', formatAmount(summary.total_taxable), formatAmount(summary.total_tax), formatAmount(summary.total_purchases)]]
     }
   } else if (reportType === 'stock-report' || reportType === 'low-stock') {
     head = [['Product Name', 'Description', 'HSN/SAC', 'Current Stock', 'Alert Level']]

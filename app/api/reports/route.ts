@@ -289,6 +289,154 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ data: rows.map(mapPurchaseRow), summary: summaryRows[0] || null })
   }
 
+  if (type === 'sales-product') {
+    const conditions: string[] = ["i.status != 'CANCELLED'"]
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const params: any[] = []
+    appendOrgFilter(conditions, params, organizationId!, 'i')
+    if (partyId && partyId !== 'ALL') {
+      conditions.push('i.customer_id = ?')
+      params.push(partyId)
+    }
+    if (fromDate) {
+      conditions.push('DATE(i.date) >= ?')
+      params.push(fromDate)
+    }
+    if (toDate) {
+      conditions.push('DATE(i.date) <= ?')
+      params.push(toDate)
+    }
+    const where = 'WHERE ' + conditions.join(' AND ')
+
+    const [rows] = (await db.execute(
+      `SELECT ii.id, i.date, i.invoice_no, c.name AS customer_name, c.gstin AS customer_gstin,
+              COALESCE(p.name, ii.description, 'Unknown Product') AS product_name,
+              p.hsn_code, p.sac_code, u.short_name AS unit_name,
+              ii.quantity, ii.rate, ii.discount, ii.gst_rate,
+              ROUND((ii.quantity * ii.rate * (1 - COALESCE(ii.discount, 0) / 100)), 2) AS taxable_amount,
+              ii.cgst_amount, ii.sgst_amount, ii.igst_amount, ii.gst_amount, ii.amount AS total_amount
+       FROM invoice_items ii
+       JOIN invoices i ON ii.invoice_id = i.id
+       LEFT JOIN products p ON ii.product_id = p.id
+       LEFT JOIN units u ON p.unit_id = u.id
+       LEFT JOIN customers c ON i.customer_id = c.id
+       ${where}
+       ORDER BY i.date DESC, i.invoice_no DESC, ii.id ASC
+       ${sqlLimitClause(limit)}`,
+      params
+    )) as [Record<string, unknown>[], unknown]
+
+    const [summaryRows] = (await db.execute(
+      `SELECT COALESCE(SUM(ii.quantity), 0) AS total_quantity,
+              COALESCE(SUM(ROUND((ii.quantity * ii.rate * (1 - COALESCE(ii.discount, 0) / 100)), 2)), 0) AS total_taxable,
+              COALESCE(SUM(ii.gst_amount), 0) AS total_tax,
+              COALESCE(SUM(ii.amount), 0) AS total_sales,
+              COUNT(*) AS total_count
+       FROM invoice_items ii
+       JOIN invoices i ON ii.invoice_id = i.id
+       ${where}`,
+      params
+    )) as [Record<string, unknown>[], unknown]
+
+    const formattedData = rows.map((r) => ({
+      id: r.id,
+      date: r.date,
+      invoiceNo: r.invoice_no,
+      customerName: r.customer_name || '-',
+      gstin: r.customer_gstin || '-',
+      productName: r.product_name,
+      hsn: formatProductHsn(r.hsn_code, r.sac_code),
+      unit: r.unit_name || '',
+      quantity: Number(r.quantity || 0),
+      rate: Number(r.rate || 0),
+      discount: Number(r.discount || 0),
+      gstRate: Number(r.gst_rate || 0),
+      taxableAmount: Number(r.taxable_amount || 0),
+      cgstAmount: Number(r.cgst_amount || 0),
+      sgstAmount: Number(r.sgst_amount || 0),
+      igstAmount: Number(r.igst_amount || 0),
+      gstAmount: Number(r.gst_amount || 0),
+      totalAmount: Number(r.total_amount || 0),
+    }))
+
+    return NextResponse.json({ data: formattedData, summary: summaryRows[0] || null })
+  }
+
+  if (type === 'purchase-product') {
+    const conditions: string[] = ["p.status != 'CANCELLED'"]
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const params: any[] = []
+    appendOrgFilter(conditions, params, organizationId!, 'p')
+    if (partyId && partyId !== 'ALL') {
+      conditions.push('p.vendor_id = ?')
+      params.push(partyId)
+    }
+    if (fromDate) {
+      conditions.push('DATE(p.date) >= ?')
+      params.push(fromDate)
+    }
+    if (toDate) {
+      conditions.push('DATE(p.date) <= ?')
+      params.push(toDate)
+    }
+    const where = 'WHERE ' + conditions.join(' AND ')
+
+    const [rows] = (await db.execute(
+      `SELECT pi.id, p.date, p.bill_date, p.bill_no, v.name AS vendor_name, v.gstin AS vendor_gstin,
+              COALESCE(pr.name, pi.description, 'Unknown Product') AS product_name,
+              pr.hsn_code, pr.sac_code, u.short_name AS unit_name,
+              pi.quantity, pi.rate, pi.discount, pi.gst_rate,
+              ROUND((pi.quantity * pi.rate * (1 - COALESCE(pi.discount, 0) / 100)), 2) AS taxable_amount,
+              pi.cgst_amount, pi.sgst_amount, pi.igst_amount, pi.gst_amount, pi.amount AS total_amount
+       FROM purchase_items pi
+       JOIN purchases p ON pi.purchase_id = p.id
+       LEFT JOIN products pr ON pi.product_id = pr.id
+       LEFT JOIN units u ON pr.unit_id = u.id
+       LEFT JOIN vendors v ON p.vendor_id = v.id
+       ${where}
+       ORDER BY COALESCE(p.bill_date, p.date) DESC, p.id DESC, pi.id ASC
+       ${sqlLimitClause(limit)}`,
+      params
+    )) as [Record<string, unknown>[], unknown]
+
+    const [summaryRows] = (await db.execute(
+      `SELECT COALESCE(SUM(pi.quantity), 0) AS total_quantity,
+              COALESCE(SUM(ROUND((pi.quantity * pi.rate * (1 - COALESCE(pi.discount, 0) / 100)), 2)), 0) AS total_taxable,
+              COALESCE(SUM(pi.gst_amount), 0) AS total_tax,
+              COALESCE(SUM(pi.amount), 0) AS total_purchases,
+              COUNT(*) AS total_count
+       FROM purchase_items pi
+       JOIN purchases p ON pi.purchase_id = p.id
+       ${where}`,
+      params
+    )) as [Record<string, unknown>[], unknown]
+
+    const formattedData = rows.map((r) => ({
+      id: r.id,
+      date: r.date,
+      billDate: r.bill_date || r.date,
+      purchaseNo: r.bill_no || '-',
+      billNo: r.bill_no || '-',
+      vendorName: r.vendor_name || '-',
+      gstin: r.vendor_gstin || '-',
+      productName: r.product_name,
+      hsn: formatProductHsn(r.hsn_code, r.sac_code),
+      unit: r.unit_name || '',
+      quantity: Number(r.quantity || 0),
+      rate: Number(r.rate || 0),
+      discount: Number(r.discount || 0),
+      gstRate: Number(r.gst_rate || 0),
+      taxableAmount: Number(r.taxable_amount || 0),
+      cgstAmount: Number(r.cgst_amount || 0),
+      sgstAmount: Number(r.sgst_amount || 0),
+      igstAmount: Number(r.igst_amount || 0),
+      gstAmount: Number(r.gst_amount || 0),
+      totalAmount: Number(r.total_amount || 0),
+    }))
+
+    return NextResponse.json({ data: formattedData, summary: summaryRows[0] || null })
+  }
+
   if (stockTypes.includes(type) || lowStockTypes.includes(type)) {
     const conditions: string[] = ['p.is_active = 1']
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
