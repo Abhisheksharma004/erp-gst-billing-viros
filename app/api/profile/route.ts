@@ -47,6 +47,7 @@ export async function GET() {
     status: user.status,
     branch: user.branch,
     avatar: user.avatar,
+    organizationId: session!.user.organizationId || null,
     createdAt: user.created_at,
     updatedAt: user.updated_at,
     modules,
