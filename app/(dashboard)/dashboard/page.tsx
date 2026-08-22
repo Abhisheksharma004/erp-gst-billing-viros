@@ -24,6 +24,17 @@ const SalesPurchasesChart = dynamic(
   }
 )
 
+const InvoiceCountPieChart = dynamic(
+  () =>
+    import('@/components/dashboard/invoice-count-pie-chart').then((m) => ({
+      default: m.InvoiceCountPieChart,
+    })),
+  {
+    ssr: false,
+    loading: () => <div className="h-[280px] animate-pulse rounded-lg bg-muted" />,
+  }
+)
+
 interface ChartRow {
   period: string
   total: number
@@ -228,104 +239,91 @@ export default function DashboardPage() {
     if (monthPart) setMonth(monthPart)
   }
 
+  const totalSalesCount = monthTotals ? monthTotals.salesCount : chartData.reduce((acc, c) => acc + c.salesCount, 0)
+  const totalPurchasesCount = monthTotals ? monthTotals.purchasesCount : chartData.reduce((acc, c) => acc + c.purchasesCount, 0)
+
   return (
-    <div className="space-y-4 md:space-y-6 min-w-0">
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 md:gap-4">
+    <div className="space-y-6">
+      {/* Top Stat Cards */}
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
         <StatCard
-          title="Sales this month"
+          title="Sales (This Month)"
           value={formatCurrency(stats.salesThisMonth.amount)}
           sub={`${stats.salesThisMonth.count} invoice(s)`}
           icon={TrendingUp}
-          color="bg-blue-500"
+          color="bg-blue-600"
           href="/billing"
         />
         <StatCard
-          title="Purchases this month"
+          title="Purchases (This Month)"
           value={formatCurrency(stats.purchasesThisMonth.amount)}
           sub={`${stats.purchasesThisMonth.count} bill(s)`}
           icon={ShoppingCart}
-          color="bg-purple-500"
+          color="bg-purple-600"
           href="/purchases"
         />
         <StatCard
           title="Pending Quotations"
           value={String(stats.pendingQuotations)}
+          sub="Awaiting approval"
           icon={FileText}
-          color="bg-teal-500"
+          color="bg-amber-600"
           href="/quotations"
         />
         <StatCard
           title="Low Stock Items"
           value={String(stats.lowStockCount)}
+          sub="Reorder needed"
           icon={AlertTriangle}
-          color="bg-yellow-500"
+          color="bg-rose-600"
+          badge={stats.lowStockCount > 0 ? 'Attention Needed' : undefined}
           href="/inventory"
         />
       </div>
 
-      {/* Monthly Payments & Cash Flow Summary Cards */}
+      {/* Cashflow Summary Cards */}
       {stats.paymentsSummary && (
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-3 md:gap-4">
-          <Link href="/payments?type=INWARD" className="block group">
-            <Card className="border-l-4 border-l-emerald-500 shadow-sm transition-shadow hover:shadow-md cursor-pointer h-full">
-              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                <CardTitle className="text-sm font-medium text-muted-foreground">
-                  Total Inward (Received)
-                </CardTitle>
-                <div className="rounded-full bg-emerald-100 dark:bg-emerald-950 p-2 text-emerald-600">
-                  <ArrowDownLeft className="h-4 w-4" />
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
+          <Link href="/payments" className="block group">
+            <Card className="transition-shadow hover:shadow-md cursor-pointer border-emerald-100 dark:border-emerald-950">
+              <CardContent className="p-4">
+                <div className="flex items-center justify-between">
+                  <span className="text-xs font-medium text-emerald-700 dark:text-emerald-400">Total Inward</span>
+                  <ArrowDownLeft className="w-4 h-4 text-emerald-600" />
                 </div>
-              </CardHeader>
-              <CardContent>
-                <div className="text-2xl font-bold text-emerald-600 dark:text-emerald-400">
+                <div className="text-xl font-bold text-emerald-800 dark:text-emerald-300 mt-1">
                   {formatCurrency(stats.paymentsSummary.totalInward)}
                 </div>
                 <p className="text-xs text-muted-foreground mt-1">
-                  Payments collected from customers ({periodLabel})
+                  Received ({periodLabel})
                 </p>
               </CardContent>
             </Card>
           </Link>
-
-          <Link href="/payments?type=OUTWARD" className="block group">
-            <Card className="border-l-4 border-l-blue-500 shadow-sm transition-shadow hover:shadow-md cursor-pointer h-full">
-              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                <CardTitle className="text-sm font-medium text-muted-foreground">
-                  Total Outward (Paid)
-                </CardTitle>
-                <div className="rounded-full bg-blue-100 dark:bg-blue-950 p-2 text-blue-600">
-                  <ArrowUpRight className="h-4 w-4" />
+          <Link href="/payments" className="block group">
+            <Card className="transition-shadow hover:shadow-md cursor-pointer border-amber-100 dark:border-amber-950">
+              <CardContent className="p-4">
+                <div className="flex items-center justify-between">
+                  <span className="text-xs font-medium text-amber-700 dark:text-amber-400">Total Outward</span>
+                  <ArrowUpRight className="w-4 h-4 text-amber-600" />
                 </div>
-              </CardHeader>
-              <CardContent>
-                <div className="text-2xl font-bold text-blue-600 dark:text-blue-400">
+                <div className="text-xl font-bold text-amber-800 dark:text-amber-300 mt-1">
                   {formatCurrency(stats.paymentsSummary.totalOutward)}
                 </div>
                 <p className="text-xs text-muted-foreground mt-1">
-                  Payments disbursed to vendors ({periodLabel})
+                  Paid ({periodLabel})
                 </p>
               </CardContent>
             </Card>
           </Link>
-
           <Link href="/payments" className="block group">
-            <Card className="border-l-4 border-l-purple-500 shadow-sm transition-shadow hover:shadow-md cursor-pointer h-full">
-              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                <CardTitle className="text-sm font-medium text-muted-foreground">
-                  Net Cash Flow
-                </CardTitle>
-                <div className="rounded-full bg-purple-100 dark:bg-purple-950 p-2 text-purple-600">
-                  <Wallet className="h-4 w-4" />
+            <Card className="transition-shadow hover:shadow-md cursor-pointer border-blue-100 dark:border-blue-950">
+              <CardContent className="p-4">
+                <div className="flex items-center justify-between">
+                  <span className="text-xs font-medium text-blue-700 dark:text-blue-400">Net Cashflow</span>
+                  <Wallet className="w-4 h-4 text-blue-600" />
                 </div>
-              </CardHeader>
-              <CardContent>
-                <div
-                  className={`text-2xl font-bold ${
-                    stats.paymentsSummary.netCashflow >= 0
-                      ? 'text-emerald-600 dark:text-emerald-400'
-                      : 'text-rose-600 dark:text-rose-400'
-                  }`}
-                >
+                <div className="text-xl font-bold text-blue-800 dark:text-blue-300 mt-1">
                   {formatCurrency(stats.paymentsSummary.netCashflow)}
                 </div>
                 <p className="text-xs text-muted-foreground mt-1">
@@ -337,6 +335,7 @@ export default function DashboardPage() {
         </div>
       )}
 
+      {/* Main Charts Grid */}
       <div className="relative">
         {chartLoading && (
           <div className="absolute inset-0 z-10 flex items-center justify-center bg-background/60 rounded-lg">
@@ -344,74 +343,107 @@ export default function DashboardPage() {
           </div>
         )}
 
-        <Card>
-          <CardHeader className="space-y-4 pb-2">
-            <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+          {/* Main Area Chart */}
+          <Card className="lg:col-span-2 flex flex-col justify-between">
+            <CardHeader className="space-y-4 pb-2">
+              <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                <CardTitle className="text-base">
+                  Sales vs Purchases ({periodLabel})
+                </CardTitle>
+                <div className="flex flex-wrap items-end gap-2">
+                  <div className="space-y-1">
+                    <Label className="text-xs text-muted-foreground">Year</Label>
+                    <Select value={year} onValueChange={setYear}>
+                      <SelectTrigger className="h-9 w-[100px]">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {getYearOptions().map((y) => (
+                          <SelectItem key={y} value={String(y)}>{y}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div className="space-y-1">
+                    <Label className="text-xs text-muted-foreground">Month</Label>
+                    <Select value={month} onValueChange={setMonth}>
+                      <SelectTrigger className="h-9 w-[140px]">
+                        <SelectValue placeholder="Select month" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="ALL">All Months</SelectItem>
+                        {MONTH_NAMES.map((name, i) => (
+                          <SelectItem key={name} value={String(i + 1).padStart(2, '0')}>
+                            {name}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                </div>
+              </div>
+              {isMonthView && monthTotals && (
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 text-sm pt-1">
+                  <div className="rounded-xl border border-blue-100 bg-gradient-to-br from-blue-50/80 to-blue-50/20 p-3 shadow-sm dark:border-blue-900/40 dark:from-blue-950/30 dark:to-transparent">
+                    <div className="flex items-center justify-between">
+                      <p className="text-xs font-semibold text-blue-600 dark:text-blue-400">Sales</p>
+                      <span className="rounded-full bg-blue-100 px-2 py-0.5 text-[10px] font-bold text-blue-700 dark:bg-blue-900/60 dark:text-blue-300">
+                        {monthTotals.salesCount} invoice(s)
+                      </span>
+                    </div>
+                    <p className="mt-1 text-lg font-bold tracking-tight text-blue-700 dark:text-blue-300">
+                      {formatCurrency(monthTotals.sales)}
+                    </p>
+                  </div>
+                  <div className="rounded-xl border border-purple-100 bg-gradient-to-br from-purple-50/80 to-purple-50/20 p-3 shadow-sm dark:border-purple-900/40 dark:from-purple-950/30 dark:to-transparent">
+                    <div className="flex items-center justify-between">
+                      <p className="text-xs font-semibold text-purple-600 dark:text-purple-400">Purchases</p>
+                      <span className="rounded-full bg-purple-100 px-2 py-0.5 text-[10px] font-bold text-purple-700 dark:bg-purple-900/60 dark:text-purple-300">
+                        {monthTotals.purchasesCount} bill(s)
+                      </span>
+                    </div>
+                    <p className="mt-1 text-lg font-bold tracking-tight text-purple-700 dark:text-purple-300">
+                      {formatCurrency(monthTotals.purchases)}
+                    </p>
+                  </div>
+                </div>
+              )}
+              {!isMonthView && (
+                <p className="text-xs text-muted-foreground">
+                  Select a month from the dropdown, or click a month on the chart for day-wise data.
+                </p>
+              )}
+            </CardHeader>
+            <CardContent>
+              <SalesPurchasesChart
+                data={chartData}
+                chartType={stats.chartType}
+                month={month}
+                xLabel={xLabel}
+                onChartClick={handleChartClick}
+              />
+            </CardContent>
+          </Card>
+
+          {/* Invoice Count Pie Chart */}
+          <Card className="lg:col-span-1 flex flex-col justify-between">
+            <CardHeader className="pb-2">
               <CardTitle className="text-base">
-                Sales vs Purchases ({periodLabel})
+                Invoice Ratio ({periodLabel})
               </CardTitle>
-              <div className="flex flex-wrap items-end gap-2">
-                <div className="space-y-1">
-                  <Label className="text-xs text-muted-foreground">Year</Label>
-                  <Select value={year} onValueChange={setYear}>
-                    <SelectTrigger className="h-9 w-[100px]">
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {getYearOptions().map((y) => (
-                        <SelectItem key={y} value={String(y)}>{y}</SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-                <div className="space-y-1">
-                  <Label className="text-xs text-muted-foreground">Month</Label>
-                  <Select value={month} onValueChange={setMonth}>
-                    <SelectTrigger className="h-9 w-[140px]">
-                      <SelectValue placeholder="Select month" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="ALL">All Months</SelectItem>
-                      {MONTH_NAMES.map((name, i) => (
-                        <SelectItem key={name} value={String(i + 1).padStart(2, '0')}>
-                          {name}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-              </div>
-            </div>
-            {isMonthView && monthTotals && (
-              <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-sm">
-                <div className="rounded-lg border bg-blue-50/50 px-3 py-2">
-                  <p className="text-xs text-muted-foreground">Sales</p>
-                  <p className="font-semibold text-blue-700">{formatCurrency(monthTotals.sales)}</p>
-                  <p className="text-xs text-muted-foreground">{monthTotals.salesCount} invoice(s)</p>
-                </div>
-                <div className="rounded-lg border bg-purple-50/50 px-3 py-2">
-                  <p className="text-xs text-muted-foreground">Purchases</p>
-                  <p className="font-semibold text-purple-700">{formatCurrency(monthTotals.purchases)}</p>
-                  <p className="text-xs text-muted-foreground">{monthTotals.purchasesCount} bill(s)</p>
-                </div>
-              </div>
-            )}
-            {!isMonthView && (
               <p className="text-xs text-muted-foreground">
-                Select a month from the dropdown, or click a month on the chart for day-wise data.
+                Distribution of sales vs purchase invoices
               </p>
-            )}
-          </CardHeader>
-          <CardContent>
-            <SalesPurchasesChart
-              data={chartData}
-              chartType={stats.chartType}
-              month={month}
-              xLabel={xLabel}
-              onChartClick={handleChartClick}
-            />
-          </CardContent>
-        </Card>
+            </CardHeader>
+            <CardContent className="flex-1 flex flex-col justify-center pt-2">
+              <InvoiceCountPieChart
+                salesCount={totalSalesCount}
+                purchasesCount={totalPurchasesCount}
+              />
+            </CardContent>
+          </Card>
+        </div>
       </div>
     </div>
   )
