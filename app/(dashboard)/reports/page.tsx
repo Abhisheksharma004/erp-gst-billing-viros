@@ -1386,7 +1386,7 @@ export default function ReportsPage() {
                 <SelectTrigger className="h-9 w-full text-xs">
                   <SelectValue />
                 </SelectTrigger>
-                <SelectContent className="max-h-80 w-[240px] p-1.5 shadow-xl border-border/80">
+                <SelectContent className="max-h-80 min-w-[240px] p-1.5 shadow-xl border-border/80">
                   {REPORT_GROUPS.map((group, groupIdx) => (
                     <React.Fragment key={group.heading}>
                       {groupIdx > 0 && <SelectSeparator className="my-1.5 bg-border/60" />}
@@ -1400,7 +1400,7 @@ export default function ReportsPage() {
                             key={r.value}
                             value={r.value}
                             className={cn(
-                              'text-xs py-1.5 px-2.5 cursor-pointer rounded transition-colors',
+                              'text-xs py-1.5 pl-8 pr-3 cursor-pointer rounded transition-colors',
                               itemIdx % 2 === 1 ? 'bg-slate-50/90 dark:bg-slate-900/40' : 'bg-transparent',
                               'hover:bg-primary/10 hover:text-primary dark:hover:bg-primary/20 focus:bg-primary/10 focus:text-primary font-medium'
                             )}
