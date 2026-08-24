@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import db, { sqlLimitClause } from '@/lib/db'
 import { requirePermission } from '@/lib/api-auth'
 import { appendOrgFilter } from '@/lib/tenant'
+import { parseFinancialYear } from '@/lib/financial-year'
 
 function mapInvoiceRow(row: Record<string, unknown>) {
   const date = row.date
@@ -77,8 +78,12 @@ export async function GET(req: NextRequest) {
   const { searchParams } = new URL(req.url)
   const type = searchParams.get('type') || 'sales-summary'
   const partyId = searchParams.get('partyId') || searchParams.get('customerId') || searchParams.get('vendorId')
-  const fromDate = searchParams.get('from') || searchParams.get('fromDate')
-  const toDate = searchParams.get('to') || searchParams.get('toDate')
+  const financialYear = searchParams.get('financialYear') || searchParams.get('fy')
+  const fyRange = parseFinancialYear(financialYear)
+  const rawFrom = searchParams.get('from') || searchParams.get('fromDate')
+  const rawTo = searchParams.get('to') || searchParams.get('toDate')
+  const fromDate = rawFrom || (financialYear ? fyRange.startDate : null)
+  const toDate = rawTo || (financialYear ? fyRange.endDate : null)
   const limit = parseInt(searchParams.get('limit') || '1000', 10)
 
   // Quick Party Options endpoint for filter dropdowns

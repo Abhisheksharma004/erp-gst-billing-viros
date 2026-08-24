@@ -53,6 +53,7 @@ import {
   DialogFooter,
 } from '@/components/ui/dialog'
 import { useToast } from '@/hooks/use-toast'
+import { useAppStore } from '@/store/app-store'
 import { AddPaymentModal } from './add-payment-modal'
 
 interface PaymentListProps {
@@ -69,6 +70,7 @@ export function PaymentList({
   hideTypeFilter = false,
 }: PaymentListProps) {
   const { toast } = useToast()
+  const financialYear = useAppStore((s) => s.financialYear)
   const [loading, setLoading] = useState(true)
   const [payments, setPayments] = useState<any[]>([])
   const [summary, setSummary] = useState({ totalInward: 0, totalOutward: 0, netCashflow: 0 })
@@ -188,6 +190,7 @@ export function PaymentList({
       if (modeFilter !== 'ALL') params.set('paymentMode', modeFilter)
       if (fromDate) params.set('fromDate', fromDate)
       if (toDate) params.set('toDate', toDate)
+      if (financialYear) params.set('financialYear', financialYear)
       
       if (selectedPartyId && selectedPartyId !== 'ALL') {
         if (partyType === 'CUSTOMER') params.set('customerId', selectedPartyId)
@@ -215,7 +218,7 @@ export function PaymentList({
     } finally {
       setLoading(false)
     }
-  }, [typeFilter, search, modeFilter, fromDate, toDate, selectedPartyId, partyType, page, toast])
+  }, [typeFilter, search, modeFilter, fromDate, toDate, selectedPartyId, partyType, page, financialYear, toast])
 
   useEffect(() => {
     fetchPayments()

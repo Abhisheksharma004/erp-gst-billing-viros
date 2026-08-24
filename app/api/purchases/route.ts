@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import db, { sqlPagination } from '@/lib/db'
 import { requirePermission } from '@/lib/api-auth'
 import { appendOrgFilter } from '@/lib/tenant'
+import { appendFyFilter } from '@/lib/financial-year'
 import { purchaseSchema } from '@/lib/validations'
 import { ensurePurchaseSchema, ensureDocumentTermsColumns } from '@/lib/ensure-purchase-schema'
 import { computePurchaseItemTotals } from '@/lib/purchase-totals'
@@ -20,6 +21,7 @@ export async function GET(req: NextRequest) {
   const vendorId = searchParams.get('vendorId')
   const fromDate = searchParams.get('fromDate')
   const toDate = searchParams.get('toDate')
+  const financialYear = searchParams.get('financialYear') || searchParams.get('fy')
   const page = parseInt(searchParams.get('page') || '1')
   const limit = parseInt(searchParams.get('limit') || '20')
   const offset = (page - 1) * limit
@@ -31,6 +33,7 @@ export async function GET(req: NextRequest) {
   if (vendorId) { conditions.push('p.vendor_id = ?'); params.push(vendorId) }
   if (fromDate) { conditions.push('p.date >= ?'); params.push(fromDate) }
   if (toDate) { conditions.push('p.date <= ?'); params.push(toDate) }
+  appendFyFilter(conditions, params, financialYear, 'p.date', fromDate, toDate)
   appendOrgFilter(conditions, params, organizationId!, 'p')
 
   const where = conditions.length ? 'WHERE ' + conditions.join(' AND ') : ''

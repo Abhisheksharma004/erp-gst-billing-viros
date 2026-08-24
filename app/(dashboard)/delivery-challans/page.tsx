@@ -11,6 +11,7 @@ import { ListPageToolbar } from '@/components/shared/list-page-toolbar'
 import { DocumentPdfViewer } from '@/components/shared/document-pdf-viewer'
 import { Eye, Edit, Trash2, Package } from 'lucide-react'
 import { formatDate, cn } from '@/lib/utils'
+import { useAppStore } from '@/store/app-store'
 
 interface Challan {
   id: string
@@ -64,9 +65,10 @@ function ChallanActions({
 
 export default function DeliveryChallansPage() {
   const { toast } = useToast()
+  const financialYear = useAppStore((s) => s.financialYear)
   const [challans, setChallans] = useState<Challan[]>([])
   const [total, setTotal] = useState(0)
-  usePageCount(`${total} challan(s)`)
+  usePageCount(`${total} delivery challan(s)`)
   const [loading, setLoading] = useState(true)
   const [search, setSearch] = useState('')
   const [page, setPage] = useState(1)
@@ -75,7 +77,7 @@ export default function DeliveryChallansPage() {
   const [pdfViewerOpen, setPdfViewerOpen] = useState(false)
   const [pdfViewerUrl, setPdfViewerUrl] = useState<string | null>(null)
   const [pdfViewerTitle, setPdfViewerTitle] = useState('')
-  const [pdfViewerFilename, setPdfViewerFilename] = useState('delivery-challan.pdf')
+  const [pdfViewerFilename, setPdfViewerFilename] = useState('challan.pdf')
 
   const showTable = viewMode === 'table' && !isMobile
   const showCards = viewMode === 'card' || isMobile
@@ -93,6 +95,7 @@ export default function DeliveryChallansPage() {
     try {
       const params = new URLSearchParams({ page: String(page), limit: '20' })
       if (search) params.set('search', search)
+      if (financialYear) params.set('financialYear', financialYear)
       const res = await fetch(`/api/delivery-challans?${params}`)
       const data = await res.json()
       if (!res.ok) {
@@ -106,7 +109,7 @@ export default function DeliveryChallansPage() {
     } finally {
       setLoading(false)
     }
-  }, [search, page, toast])
+  }, [search, page, financialYear, toast])
 
   useEffect(() => { fetchChallans() }, [fetchChallans])
 

@@ -11,6 +11,7 @@ import { ListPageToolbar } from '@/components/shared/list-page-toolbar'
 import { DocumentPdfViewer } from '@/components/shared/document-pdf-viewer'
 import { Eye, Edit, Trash2, RotateCcw } from 'lucide-react'
 import { formatDate, cn } from '@/lib/utils'
+import { useAppStore } from '@/store/app-store'
 
 interface Challan {
   id: string
@@ -64,9 +65,10 @@ function ChallanActions({
 
 export default function ReturnableChallansPage() {
   const { toast } = useToast()
+  const financialYear = useAppStore((s) => s.financialYear)
   const [challans, setChallans] = useState<Challan[]>([])
   const [total, setTotal] = useState(0)
-  usePageCount(`${total} challan(s)`)
+  usePageCount(`${total} returnable challan(s)`)
   const [loading, setLoading] = useState(true)
   const [search, setSearch] = useState('')
   const [page, setPage] = useState(1)
@@ -93,6 +95,7 @@ export default function ReturnableChallansPage() {
     try {
       const params = new URLSearchParams({ page: String(page), limit: '20' })
       if (search) params.set('search', search)
+      if (financialYear) params.set('financialYear', financialYear)
       const res = await fetch(`/api/returnable-challans?${params}`)
       const data = await res.json()
       if (!res.ok) {
@@ -106,7 +109,7 @@ export default function ReturnableChallansPage() {
     } finally {
       setLoading(false)
     }
-  }, [search, page, toast])
+  }, [search, page, financialYear, toast])
 
   useEffect(() => { fetchChallans() }, [fetchChallans])
 

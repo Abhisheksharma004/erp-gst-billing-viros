@@ -21,6 +21,8 @@ import { FileSpreadsheet, FileText, Search, TrendingUp, Receipt, Wallet, Scale }
 import { formatCurrency, formatDate, cn } from '@/lib/utils'
 import { usePageCount } from '@/hooks/use-page-count'
 import { useToast } from '@/hooks/use-toast'
+import { useAppStore } from '@/store/app-store'
+import { parseFinancialYear } from '@/lib/financial-year'
 
 const REPORT_GROUPS = [
   {
@@ -30,6 +32,7 @@ const REPORT_GROUPS = [
       { value: 'gst-sales', label: 'GST Sales Register' },
       { value: 'pending-customer-invoices', label: 'Pending Customer Invoices' },
       { value: 'sales-product', label: 'Sales Product' },
+      { value: 'customer-ledger', label: 'Customer Ledger' },
     ],
   },
   {
@@ -39,6 +42,7 @@ const REPORT_GROUPS = [
       { value: 'gst-purchase', label: 'GST Purchase Register' },
       { value: 'pending-vendor-invoices', label: 'Pending Vendor Invoices' },
       { value: 'purchase-product', label: 'Purchase Product' },
+      { value: 'vendor-ledger', label: 'Vendor Ledger' },
     ],
   },
   {
@@ -46,28 +50,20 @@ const REPORT_GROUPS = [
     items: [
       { value: 'stock-report', label: 'Stock Report' },
       { value: 'low-stock', label: 'Low Stock Report' },
-      { value: 'customer-ledger', label: 'Customer Ledger' },
-      { value: 'vendor-ledger', label: 'Vendor Ledger' },
     ],
   },
 ]
 
 const REPORT_TYPES = REPORT_GROUPS.flatMap((group) => group.items)
 
-const exportExcelWrapClass =
-  'rounded-md bg-gradient-to-r from-green-500 via-emerald-500 to-teal-500 p-[2px] shadow-sm'
-
 const exportExcelBtnClass = cn(
-  'h-9 border-0 bg-background text-emerald-800 hover:bg-emerald-50',
-  'dark:text-emerald-300 dark:hover:bg-emerald-950/40'
+  'h-9 px-3.5 text-xs font-semibold border border-emerald-300 bg-emerald-50 text-emerald-700 hover:bg-emerald-100/90 shadow-sm',
+  'dark:border-emerald-800 dark:bg-emerald-950/50 dark:text-emerald-300 dark:hover:bg-emerald-900/60 transition-all'
 )
 
-const exportPdfWrapClass =
-  'rounded-md bg-gradient-to-r from-blue-600 via-indigo-600 to-purple-600 p-[2px] shadow-sm'
-
 const exportPdfBtnClass = cn(
-  'h-9 border-0 bg-background text-indigo-800 hover:bg-indigo-50',
-  'dark:text-indigo-300 dark:hover:bg-indigo-950/40'
+  'h-9 px-3.5 text-xs font-semibold border border-indigo-300 bg-indigo-50 text-indigo-700 hover:bg-indigo-100/90 shadow-sm',
+  'dark:border-indigo-800 dark:bg-indigo-950/50 dark:text-indigo-300 dark:hover:bg-indigo-900/60 transition-all'
 )
 
 function getFirstDayOfCurrentMonth(): string {
@@ -88,6 +84,7 @@ function getTodayDateString(): string {
 export default function ReportsPage() {
   usePageCount('Generate and export business reports')
   const { toast } = useToast()
+  const financialYear = useAppStore((s) => s.financialYear)
   const [reportType, setReportType] = useState('sales-summary')
   const [from, setFrom] = useState(getFirstDayOfCurrentMonth)
   const [to, setTo] = useState(getTodayDateString)
@@ -100,6 +97,14 @@ export default function ReportsPage() {
   const [summary, setSummary] = useState<Record<string, any> | null>(null)
   const [loading, setLoading] = useState(false)
   const [hasRun, setHasRun] = useState(false)
+
+  useEffect(() => {
+    if (financialYear) {
+      const range = parseFinancialYear(financialYear)
+      setFrom(range.startDate)
+      setTo(range.endDate)
+    }
+  }, [financialYear])
 
   useEffect(() => {
     fetch('/api/reports?type=options')
@@ -155,6 +160,7 @@ export default function ReportsPage() {
     setHasRun(true)
     try {
       const params = new URLSearchParams({ type: reportType, from, to, partyId })
+      if (financialYear) params.set('financialYear', financialYear)
       const res = await fetch(`/api/reports?${params}`)
       const result = await res.json()
       if (!res.ok) {
@@ -274,6 +280,7 @@ export default function ReportsPage() {
         return {
           Date: formatDate(row.date),
           'Invoice No': row.invoiceNo || row.invoice_number || '-',
+          'Party Name': row.customerName || row.customer?.name || '-',
           'Product Name': row.productName || row.name || '-',
           'HSN/SAC': row.hsn || row.hsnCode || '-',
           Quantity: Number(row.quantity || 0),
@@ -290,6 +297,7 @@ export default function ReportsPage() {
         return {
           'Bill Date': formatDate(row.billDate || row.date),
           'Bill No': row.purchaseNo || row.billNo || '-',
+          'Party Name': row.vendorName || row.vendor?.name || '-',
           'Product Name': row.productName || row.name || '-',
           'HSN/SAC': row.hsn || row.hsnCode || '-',
           Quantity: Number(row.quantity || 0),
@@ -788,20 +796,20 @@ export default function ReportsPage() {
       const totalAmount = Number(summary?.total_sales) || data.reduce((s, r) => s + Number(r.totalAmount || 0), 0)
       return (
         <Table>
-          <TableHeader>
+          <TableHeader className="bg-slate-100/90 dark:bg-slate-800/90 border-b border-border">
             <TableRow>
-              <TableHead className="text-xs">Date</TableHead>
-              <TableHead className="text-xs">Invoice No</TableHead>
-              <TableHead className="text-xs">Customer Name</TableHead>
-              <TableHead className="text-xs text-right">Taxable Amt</TableHead>
-              <TableHead className="text-xs text-right">Tax Amt</TableHead>
-              <TableHead className="text-xs text-right">Total Amount</TableHead>
+              <TableHead className="text-xs font-bold text-slate-800 dark:text-slate-200">Date</TableHead>
+              <TableHead className="text-xs font-bold text-slate-800 dark:text-slate-200">Invoice No</TableHead>
+              <TableHead className="text-xs font-bold text-slate-800 dark:text-slate-200">Customer Name</TableHead>
+              <TableHead className="text-xs font-bold text-slate-800 dark:text-slate-200 text-right">Taxable Amt</TableHead>
+              <TableHead className="text-xs font-bold text-slate-800 dark:text-slate-200 text-right">Tax Amt</TableHead>
+              <TableHead className="text-xs font-bold text-slate-800 dark:text-slate-200 text-right">Total Amount</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
             {/* eslint-disable-next-line @typescript-eslint/no-explicit-any */}
             {data.map((row: any, idx: number) => (
-              <TableRow key={row.id || idx} className={cn('text-xs', idx % 2 === 1 && 'bg-slate-50/80 dark:bg-slate-900/40')}>
+              <TableRow key={row.id || idx} className={cn('text-xs transition-colors hover:bg-primary/5 dark:hover:bg-primary/10', idx % 2 === 1 ? 'bg-slate-50/80 dark:bg-slate-900/40' : 'bg-background')}>
                 <TableCell>{formatDate(row.date)}</TableCell>
                 <TableCell className="font-medium font-mono">{row.invoiceNo}</TableCell>
                 <TableCell>{row.customerName || row.customer?.name}</TableCell>
@@ -824,16 +832,16 @@ export default function ReportsPage() {
     if (reportType === 'pending-customer-invoices') {
       return (
         <Table>
-          <TableHeader>
+          <TableHeader className="bg-slate-100/90 dark:bg-slate-800/90 border-b border-border">
             <TableRow>
-              <TableHead className="text-xs">Date</TableHead>
-              <TableHead className="text-xs">Due Date</TableHead>
-              <TableHead className="text-xs">Invoice No</TableHead>
-              <TableHead className="text-xs">Customer Name</TableHead>
-              <TableHead className="text-xs text-right">Total Amount</TableHead>
-              <TableHead className="text-xs text-right">Paid Amount</TableHead>
-              <TableHead className="text-xs text-right">Pending Balance</TableHead>
-              <TableHead className="text-xs text-center">Status / Overdue</TableHead>
+              <TableHead className="text-xs font-bold text-slate-800 dark:text-slate-200">Date</TableHead>
+              <TableHead className="text-xs font-bold text-slate-800 dark:text-slate-200">Due Date</TableHead>
+              <TableHead className="text-xs font-bold text-slate-800 dark:text-slate-200">Invoice No</TableHead>
+              <TableHead className="text-xs font-bold text-slate-800 dark:text-slate-200">Customer Name</TableHead>
+              <TableHead className="text-xs font-bold text-slate-800 dark:text-slate-200 text-right">Total Amount</TableHead>
+              <TableHead className="text-xs font-bold text-slate-800 dark:text-slate-200 text-right">Paid Amount</TableHead>
+              <TableHead className="text-xs font-bold text-slate-800 dark:text-slate-200 text-right">Pending Balance</TableHead>
+              <TableHead className="text-xs font-bold text-slate-800 dark:text-slate-200 text-center">Status / Overdue</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
@@ -843,7 +851,7 @@ export default function ReportsPage() {
               const diffTime = new Date().getTime() - new Date(row.dueDate || row.date).getTime()
               const daysOverdue = Math.max(0, Math.floor(diffTime / 86400000))
               return (
-                <TableRow key={row.id || idx} className={cn('text-xs', idx % 2 === 1 && 'bg-slate-50/80 dark:bg-slate-900/40')}>
+                <TableRow key={row.id || idx} className={cn('text-xs transition-colors hover:bg-primary/5 dark:hover:bg-primary/10', idx % 2 === 1 ? 'bg-slate-50/80 dark:bg-slate-900/40' : 'bg-background')}>
                   <TableCell>{formatDate(row.date)}</TableCell>
                   <TableCell>{dueStr}</TableCell>
                   <TableCell className="font-medium font-mono">{row.invoiceNo}</TableCell>
@@ -882,16 +890,16 @@ export default function ReportsPage() {
     if (reportType === 'pending-vendor-invoices') {
       return (
         <Table>
-          <TableHeader>
+          <TableHeader className="bg-slate-100/90 dark:bg-slate-800/90 border-b border-border">
             <TableRow>
-              <TableHead className="text-xs">Date</TableHead>
-              <TableHead className="text-xs">Due Date</TableHead>
-              <TableHead className="text-xs">Bill No</TableHead>
-              <TableHead className="text-xs">Vendor Name</TableHead>
-              <TableHead className="text-xs text-right">Total Amount</TableHead>
-              <TableHead className="text-xs text-right">Paid Amount</TableHead>
-              <TableHead className="text-xs text-right">Pending Balance</TableHead>
-              <TableHead className="text-xs text-center">Status / Overdue</TableHead>
+              <TableHead className="text-xs font-bold text-slate-800 dark:text-slate-200">Date</TableHead>
+              <TableHead className="text-xs font-bold text-slate-800 dark:text-slate-200">Due Date</TableHead>
+              <TableHead className="text-xs font-bold text-slate-800 dark:text-slate-200">Bill No</TableHead>
+              <TableHead className="text-xs font-bold text-slate-800 dark:text-slate-200">Vendor Name</TableHead>
+              <TableHead className="text-xs font-bold text-slate-800 dark:text-slate-200 text-right">Total Amount</TableHead>
+              <TableHead className="text-xs font-bold text-slate-800 dark:text-slate-200 text-right">Paid Amount</TableHead>
+              <TableHead className="text-xs font-bold text-slate-800 dark:text-slate-200 text-right">Pending Balance</TableHead>
+              <TableHead className="text-xs font-bold text-slate-800 dark:text-slate-200 text-center">Status / Overdue</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
@@ -901,7 +909,7 @@ export default function ReportsPage() {
               const diffTime = new Date().getTime() - new Date(row.dueDate || row.date).getTime()
               const daysOverdue = Math.max(0, Math.floor(diffTime / 86400000))
               return (
-                <TableRow key={row.id || idx} className={cn('text-xs', idx % 2 === 1 && 'bg-slate-50/80 dark:bg-slate-900/40')}>
+                <TableRow key={row.id || idx} className={cn('text-xs transition-colors hover:bg-primary/5 dark:hover:bg-primary/10', idx % 2 === 1 ? 'bg-slate-50/80 dark:bg-slate-900/40' : 'bg-background')}>
                   <TableCell>{formatDate(row.date)}</TableCell>
                   <TableCell>{dueStr}</TableCell>
                   <TableCell className="font-medium font-mono">{row.purchaseNo}</TableCell>
@@ -940,24 +948,24 @@ export default function ReportsPage() {
     if (reportType === 'gst-sales') {
       return (
         <Table>
-          <TableHeader>
+          <TableHeader className="bg-slate-100/90 dark:bg-slate-800/90 border-b border-border">
             <TableRow>
-              <TableHead className="text-xs">Date</TableHead>
-              <TableHead className="text-xs">Invoice No</TableHead>
-              <TableHead className="text-xs">Customer</TableHead>
-              <TableHead className="text-xs">GSTIN</TableHead>
-              <TableHead className="text-xs text-right">Taxable Value</TableHead>
-              <TableHead className="text-xs text-right">CGST</TableHead>
-              <TableHead className="text-xs text-right">SGST</TableHead>
-              <TableHead className="text-xs text-right">IGST</TableHead>
-              <TableHead className="text-xs text-right">Total Tax</TableHead>
-              <TableHead className="text-xs text-right">Invoice Total</TableHead>
+              <TableHead className="text-xs font-bold text-slate-800 dark:text-slate-200">Date</TableHead>
+              <TableHead className="text-xs font-bold text-slate-800 dark:text-slate-200">Invoice No</TableHead>
+              <TableHead className="text-xs font-bold text-slate-800 dark:text-slate-200">Customer</TableHead>
+              <TableHead className="text-xs font-bold text-slate-800 dark:text-slate-200">GSTIN</TableHead>
+              <TableHead className="text-xs font-bold text-slate-800 dark:text-slate-200 text-right">Taxable Value</TableHead>
+              <TableHead className="text-xs font-bold text-slate-800 dark:text-slate-200 text-right">CGST</TableHead>
+              <TableHead className="text-xs font-bold text-slate-800 dark:text-slate-200 text-right">SGST</TableHead>
+              <TableHead className="text-xs font-bold text-slate-800 dark:text-slate-200 text-right">IGST</TableHead>
+              <TableHead className="text-xs font-bold text-slate-800 dark:text-slate-200 text-right">Total Tax</TableHead>
+              <TableHead className="text-xs font-bold text-slate-800 dark:text-slate-200 text-right">Invoice Total</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
             {/* eslint-disable-next-line @typescript-eslint/no-explicit-any */}
             {data.map((row: any, idx: number) => (
-              <TableRow key={row.id || idx} className={cn('text-xs', idx % 2 === 1 && 'bg-slate-50/80 dark:bg-slate-900/40')}>
+              <TableRow key={row.id || idx} className={cn('text-xs transition-colors hover:bg-primary/5 dark:hover:bg-primary/10', idx % 2 === 1 ? 'bg-slate-50/80 dark:bg-slate-900/40' : 'bg-background')}>
                 <TableCell>{formatDate(row.date)}</TableCell>
                 <TableCell className="font-medium font-mono">{row.invoiceNo}</TableCell>
                 <TableCell>{row.customerName || row.customer?.name}</TableCell>
@@ -989,23 +997,23 @@ export default function ReportsPage() {
     if (reportType === 'purchase-summary') {
       return (
         <Table>
-          <TableHeader>
+          <TableHeader className="bg-slate-100/90 dark:bg-slate-800/90 border-b border-border">
             <TableRow>
-              <TableHead className="text-xs">Date</TableHead>
-              <TableHead className="text-xs">Bill Date</TableHead>
-              <TableHead className="text-xs">Bill No</TableHead>
-              <TableHead className="text-xs">Vendor</TableHead>
-              <TableHead className="text-xs text-right">Taxable Amt</TableHead>
-              <TableHead className="text-xs text-right">Tax Amt</TableHead>
-              <TableHead className="text-xs text-right">Total Amount</TableHead>
-              <TableHead className="text-xs text-right">Paid</TableHead>
-              <TableHead className="text-xs text-right">Balance</TableHead>
+              <TableHead className="text-xs font-bold text-slate-800 dark:text-slate-200">Date</TableHead>
+              <TableHead className="text-xs font-bold text-slate-800 dark:text-slate-200">Bill Date</TableHead>
+              <TableHead className="text-xs font-bold text-slate-800 dark:text-slate-200">Bill No</TableHead>
+              <TableHead className="text-xs font-bold text-slate-800 dark:text-slate-200">Vendor</TableHead>
+              <TableHead className="text-xs font-bold text-slate-800 dark:text-slate-200 text-right">Taxable Amt</TableHead>
+              <TableHead className="text-xs font-bold text-slate-800 dark:text-slate-200 text-right">Tax Amt</TableHead>
+              <TableHead className="text-xs font-bold text-slate-800 dark:text-slate-200 text-right">Total Amount</TableHead>
+              <TableHead className="text-xs font-bold text-slate-800 dark:text-slate-200 text-right">Paid</TableHead>
+              <TableHead className="text-xs font-bold text-slate-800 dark:text-slate-200 text-right">Balance</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
             {/* eslint-disable-next-line @typescript-eslint/no-explicit-any */}
             {data.map((row: any, idx: number) => (
-              <TableRow key={row.id || idx} className={cn('text-xs', idx % 2 === 1 && 'bg-slate-50/80 dark:bg-slate-900/40')}>
+              <TableRow key={row.id || idx} className={cn('text-xs transition-colors hover:bg-primary/5 dark:hover:bg-primary/10', idx % 2 === 1 ? 'bg-slate-50/80 dark:bg-slate-900/40' : 'bg-background')}>
                 <TableCell>{formatDate(row.date)}</TableCell>
                 <TableCell>{formatDate(row.billDate)}</TableCell>
                 <TableCell className="font-medium font-mono">{row.purchaseNo}</TableCell>
@@ -1035,25 +1043,25 @@ export default function ReportsPage() {
     if (reportType === 'gst-purchase') {
       return (
         <Table>
-          <TableHeader>
+          <TableHeader className="bg-slate-100/90 dark:bg-slate-800/90 border-b border-border">
             <TableRow>
-              <TableHead className="text-xs">Date</TableHead>
-              <TableHead className="text-xs">Bill Date</TableHead>
-              <TableHead className="text-xs">Bill No</TableHead>
-              <TableHead className="text-xs">Vendor</TableHead>
-              <TableHead className="text-xs">GSTIN</TableHead>
-              <TableHead className="text-xs text-right">Taxable Value</TableHead>
-              <TableHead className="text-xs text-right">CGST</TableHead>
-              <TableHead className="text-xs text-right">SGST</TableHead>
-              <TableHead className="text-xs text-right">IGST</TableHead>
-              <TableHead className="text-xs text-right">Total Tax</TableHead>
-              <TableHead className="text-xs text-right">Bill Total</TableHead>
+              <TableHead className="text-xs font-bold text-slate-800 dark:text-slate-200">Date</TableHead>
+              <TableHead className="text-xs font-bold text-slate-800 dark:text-slate-200">Bill Date</TableHead>
+              <TableHead className="text-xs font-bold text-slate-800 dark:text-slate-200">Bill No</TableHead>
+              <TableHead className="text-xs font-bold text-slate-800 dark:text-slate-200">Vendor</TableHead>
+              <TableHead className="text-xs font-bold text-slate-800 dark:text-slate-200">GSTIN</TableHead>
+              <TableHead className="text-xs font-bold text-slate-800 dark:text-slate-200 text-right">Taxable Value</TableHead>
+              <TableHead className="text-xs font-bold text-slate-800 dark:text-slate-200 text-right">CGST</TableHead>
+              <TableHead className="text-xs font-bold text-slate-800 dark:text-slate-200 text-right">SGST</TableHead>
+              <TableHead className="text-xs font-bold text-slate-800 dark:text-slate-200 text-right">IGST</TableHead>
+              <TableHead className="text-xs font-bold text-slate-800 dark:text-slate-200 text-right">Total Tax</TableHead>
+              <TableHead className="text-xs font-bold text-slate-800 dark:text-slate-200 text-right">Bill Total</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
             {/* eslint-disable-next-line @typescript-eslint/no-explicit-any */}
             {data.map((row: any, idx: number) => (
-              <TableRow key={row.id || idx} className={cn('text-xs', idx % 2 === 1 && 'bg-slate-50/80 dark:bg-slate-900/40')}>
+              <TableRow key={row.id || idx} className={cn('text-xs transition-colors hover:bg-primary/5 dark:hover:bg-primary/10', idx % 2 === 1 ? 'bg-slate-50/80 dark:bg-slate-900/40' : 'bg-background')}>
                 <TableCell>{formatDate(row.date)}</TableCell>
                 <TableCell>{formatDate(row.billDate)}</TableCell>
                 <TableCell className="font-medium font-mono">{row.purchaseNo}</TableCell>
@@ -1086,12 +1094,12 @@ export default function ReportsPage() {
     if (reportType === 'stock-report' || reportType === 'low-stock') {
       return (
         <Table>
-          <TableHeader>
+          <TableHeader className="bg-slate-100/90 dark:bg-slate-800/90 border-b border-border">
             <TableRow>
-              <TableHead className="text-xs">Product</TableHead>
-              <TableHead className="text-xs">Description</TableHead>
-              <TableHead className="text-xs">HSN/SAC</TableHead>
-              <TableHead className="text-xs text-right">Current Stock</TableHead>
+              <TableHead className="text-xs font-bold text-slate-800 dark:text-slate-200">Product</TableHead>
+              <TableHead className="text-xs font-bold text-slate-800 dark:text-slate-200">Description</TableHead>
+              <TableHead className="text-xs font-bold text-slate-800 dark:text-slate-200">HSN/SAC</TableHead>
+              <TableHead className="text-xs font-bold text-slate-800 dark:text-slate-200 text-right">Current Stock</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
@@ -1100,7 +1108,7 @@ export default function ReportsPage() {
               const lowAlert = Number(row.lowStockAlert ?? 10)
               const isLow = Number(row.currentStock) <= lowAlert
               return (
-                <TableRow key={row.id || idx} className={cn('text-xs', idx % 2 === 1 && 'bg-slate-50/80 dark:bg-slate-900/40')}>
+                <TableRow key={row.id || idx} className={cn('text-xs transition-colors hover:bg-primary/5 dark:hover:bg-primary/10', idx % 2 === 1 ? 'bg-slate-50/80 dark:bg-slate-900/40' : 'bg-background')}>
                   <TableCell className="font-medium">{row.name}</TableCell>
                   <TableCell className="max-w-xs truncate" title={row.description}>
                     {row.description || '-'}
@@ -1122,22 +1130,22 @@ export default function ReportsPage() {
     if (reportType === 'customer-ledger') {
       return (
         <Table>
-          <TableHeader>
+          <TableHeader className="bg-slate-100/90 dark:bg-slate-800/90 border-b border-border">
             <TableRow>
-              <TableHead className="text-xs">Date</TableHead>
-              <TableHead className="text-xs">Party Name</TableHead>
-              <TableHead className="text-xs">Voucher</TableHead>
-              <TableHead className="text-xs">Invoice No. / Payment ID</TableHead>
-              <TableHead className="text-xs">Mode of payment / Ref No</TableHead>
-              <TableHead className="text-xs text-right">Debit (₹)</TableHead>
-              <TableHead className="text-xs text-right">Credit (₹)</TableHead>
-              <TableHead className="text-xs text-right">Balance (₹)</TableHead>
+              <TableHead className="text-xs font-bold text-slate-800 dark:text-slate-200">Date</TableHead>
+              <TableHead className="text-xs font-bold text-slate-800 dark:text-slate-200">Party Name</TableHead>
+              <TableHead className="text-xs font-bold text-slate-800 dark:text-slate-200">Voucher</TableHead>
+              <TableHead className="text-xs font-bold text-slate-800 dark:text-slate-200">Invoice No. / Payment ID</TableHead>
+              <TableHead className="text-xs font-bold text-slate-800 dark:text-slate-200">Mode of payment / Ref No</TableHead>
+              <TableHead className="text-xs font-bold text-slate-800 dark:text-slate-200 text-right">Debit (₹)</TableHead>
+              <TableHead className="text-xs font-bold text-slate-800 dark:text-slate-200 text-right">Credit (₹)</TableHead>
+              <TableHead className="text-xs font-bold text-slate-800 dark:text-slate-200 text-right">Balance (₹)</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
             {/* eslint-disable-next-line @typescript-eslint/no-explicit-any */}
             {data.map((row: any, idx: number) => (
-              <TableRow key={row.id || idx} className={cn('text-xs', idx % 2 === 1 && 'bg-slate-50/80 dark:bg-slate-900/40')}>
+              <TableRow key={row.id || idx} className={cn('text-xs transition-colors hover:bg-primary/5 dark:hover:bg-primary/10', idx % 2 === 1 ? 'bg-slate-50/80 dark:bg-slate-900/40' : 'bg-background')}>
                 <TableCell>{formatDate(row.date)}</TableCell>
                 <TableCell className="font-medium">{row.partyName}</TableCell>
                 <TableCell>{row.voucherType}</TableCell>
@@ -1195,22 +1203,22 @@ export default function ReportsPage() {
     if (reportType === 'vendor-ledger') {
       return (
         <Table>
-          <TableHeader>
+          <TableHeader className="bg-slate-100/90 dark:bg-slate-800/90 border-b border-border">
             <TableRow>
-              <TableHead className="text-xs">Date</TableHead>
-              <TableHead className="text-xs">Party Name</TableHead>
-              <TableHead className="text-xs">Voucher</TableHead>
-              <TableHead className="text-xs">Bill No. / Payment ID</TableHead>
-              <TableHead className="text-xs">Mode of payment / Ref No</TableHead>
-              <TableHead className="text-xs text-right">Credit (₹)</TableHead>
-              <TableHead className="text-xs text-right">Debit (₹)</TableHead>
-              <TableHead className="text-xs text-right">Balance (₹)</TableHead>
+              <TableHead className="text-xs font-bold text-slate-800 dark:text-slate-200">Date</TableHead>
+              <TableHead className="text-xs font-bold text-slate-800 dark:text-slate-200">Party Name</TableHead>
+              <TableHead className="text-xs font-bold text-slate-800 dark:text-slate-200">Voucher</TableHead>
+              <TableHead className="text-xs font-bold text-slate-800 dark:text-slate-200">Bill No. / Payment ID</TableHead>
+              <TableHead className="text-xs font-bold text-slate-800 dark:text-slate-200">Mode of payment / Ref No</TableHead>
+              <TableHead className="text-xs font-bold text-slate-800 dark:text-slate-200 text-right">Credit (₹)</TableHead>
+              <TableHead className="text-xs font-bold text-slate-800 dark:text-slate-200 text-right">Debit (₹)</TableHead>
+              <TableHead className="text-xs font-bold text-slate-800 dark:text-slate-200 text-right">Balance (₹)</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
             {/* eslint-disable-next-line @typescript-eslint/no-explicit-any */}
             {data.map((row: any, idx: number) => (
-              <TableRow key={row.id || idx} className={cn('text-xs', idx % 2 === 1 && 'bg-slate-50/80 dark:bg-slate-900/40')}>
+              <TableRow key={row.id || idx} className={cn('text-xs transition-colors hover:bg-primary/5 dark:hover:bg-primary/10', idx % 2 === 1 ? 'bg-slate-50/80 dark:bg-slate-900/40' : 'bg-background')}>
                 <TableCell>{formatDate(row.date)}</TableCell>
                 <TableCell className="font-medium">{row.partyName}</TableCell>
                 <TableCell>{row.voucherType}</TableCell>
@@ -1268,25 +1276,27 @@ export default function ReportsPage() {
     if (reportType === 'sales-product') {
       return (
         <Table>
-          <TableHeader>
+          <TableHeader className="bg-slate-100/90 dark:bg-slate-800/90 border-b border-border">
             <TableRow>
-              <TableHead className="text-xs">Date</TableHead>
-              <TableHead className="text-xs">Invoice No</TableHead>
-              <TableHead className="text-xs">Product Name</TableHead>
-              <TableHead className="text-xs">HSN/SAC</TableHead>
-              <TableHead className="text-xs text-right">Qty</TableHead>
-              <TableHead className="text-xs text-right">Rate</TableHead>
-              <TableHead className="text-xs text-right">Taxable</TableHead>
-              <TableHead className="text-xs text-right">GST</TableHead>
-              <TableHead className="text-xs text-right">Total</TableHead>
+              <TableHead className="text-xs font-bold text-slate-800 dark:text-slate-200">Date</TableHead>
+              <TableHead className="text-xs font-bold text-slate-800 dark:text-slate-200">Invoice No</TableHead>
+              <TableHead className="text-xs font-bold text-slate-800 dark:text-slate-200">Party Name</TableHead>
+              <TableHead className="text-xs font-bold text-slate-800 dark:text-slate-200">Product Name</TableHead>
+              <TableHead className="text-xs font-bold text-slate-800 dark:text-slate-200">HSN/SAC</TableHead>
+              <TableHead className="text-xs font-bold text-slate-800 dark:text-slate-200 text-right">Qty</TableHead>
+              <TableHead className="text-xs font-bold text-slate-800 dark:text-slate-200 text-right">Rate</TableHead>
+              <TableHead className="text-xs font-bold text-slate-800 dark:text-slate-200 text-right">Taxable</TableHead>
+              <TableHead className="text-xs font-bold text-slate-800 dark:text-slate-200 text-right">GST</TableHead>
+              <TableHead className="text-xs font-bold text-slate-800 dark:text-slate-200 text-right">Total</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
             {/* eslint-disable-next-line @typescript-eslint/no-explicit-any */}
             {data.map((row: any, idx: number) => (
-              <TableRow key={row.id || idx} className={cn('text-xs', idx % 2 === 1 && 'bg-slate-50/80 dark:bg-slate-900/40')}>
+              <TableRow key={row.id || idx} className={cn('text-xs transition-colors hover:bg-primary/5 dark:hover:bg-primary/10', idx % 2 === 1 ? 'bg-slate-50/80 dark:bg-slate-900/40' : 'bg-background')}>
                 <TableCell>{formatDate(row.date)}</TableCell>
                 <TableCell className="font-medium font-mono">{row.invoiceNo || '-'}</TableCell>
+                <TableCell className="font-medium">{row.customerName || '-'}</TableCell>
                 <TableCell className="font-medium">{row.productName || row.name || '-'}</TableCell>
                 <TableCell className="font-mono text-xs">{row.hsn || '-'}</TableCell>
                 <TableCell className="text-right font-semibold">{row.quantity} {row.unit || ''}</TableCell>
@@ -1298,7 +1308,7 @@ export default function ReportsPage() {
             ))}
             {summary && (
               <TableRow className="bg-muted/40 font-semibold text-xs border-t-2">
-                <TableCell colSpan={4} className="text-right">Total ({data.length} Item(s))</TableCell>
+                <TableCell colSpan={5} className="text-right">Total ({data.length} Item(s))</TableCell>
                 <TableCell className="text-right font-bold">{summary.total_quantity || 0}</TableCell>
                 <TableCell className="text-right">-</TableCell>
                 <TableCell className="text-right">{formatCurrency(summary.total_taxable)}</TableCell>
@@ -1314,25 +1324,27 @@ export default function ReportsPage() {
     if (reportType === 'purchase-product') {
       return (
         <Table>
-          <TableHeader>
+          <TableHeader className="bg-slate-100/90 dark:bg-slate-800/90 border-b border-border">
             <TableRow>
-              <TableHead className="text-xs">Bill Date</TableHead>
-              <TableHead className="text-xs">Bill No</TableHead>
-              <TableHead className="text-xs">Product Name</TableHead>
-              <TableHead className="text-xs">HSN/SAC</TableHead>
-              <TableHead className="text-xs text-right">Qty</TableHead>
-              <TableHead className="text-xs text-right">Rate</TableHead>
-              <TableHead className="text-xs text-right">Taxable</TableHead>
-              <TableHead className="text-xs text-right">GST</TableHead>
-              <TableHead className="text-xs text-right">Total</TableHead>
+              <TableHead className="text-xs font-bold text-slate-800 dark:text-slate-200">Bill Date</TableHead>
+              <TableHead className="text-xs font-bold text-slate-800 dark:text-slate-200">Bill No</TableHead>
+              <TableHead className="text-xs font-bold text-slate-800 dark:text-slate-200">Party Name</TableHead>
+              <TableHead className="text-xs font-bold text-slate-800 dark:text-slate-200">Product Name</TableHead>
+              <TableHead className="text-xs font-bold text-slate-800 dark:text-slate-200">HSN/SAC</TableHead>
+              <TableHead className="text-xs font-bold text-slate-800 dark:text-slate-200 text-right">Qty</TableHead>
+              <TableHead className="text-xs font-bold text-slate-800 dark:text-slate-200 text-right">Rate</TableHead>
+              <TableHead className="text-xs font-bold text-slate-800 dark:text-slate-200 text-right">Taxable</TableHead>
+              <TableHead className="text-xs font-bold text-slate-800 dark:text-slate-200 text-right">GST</TableHead>
+              <TableHead className="text-xs font-bold text-slate-800 dark:text-slate-200 text-right">Total</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
             {/* eslint-disable-next-line @typescript-eslint/no-explicit-any */}
             {data.map((row: any, idx: number) => (
-              <TableRow key={row.id || idx} className={cn('text-xs', idx % 2 === 1 && 'bg-slate-50/80 dark:bg-slate-900/40')}>
+              <TableRow key={row.id || idx} className={cn('text-xs transition-colors hover:bg-primary/5 dark:hover:bg-primary/10', idx % 2 === 1 ? 'bg-slate-50/80 dark:bg-slate-900/40' : 'bg-background')}>
                 <TableCell>{formatDate(row.billDate || row.date)}</TableCell>
                 <TableCell className="font-medium font-mono">{row.purchaseNo || row.billNo || '-'}</TableCell>
+                <TableCell className="font-medium">{row.vendorName || '-'}</TableCell>
                 <TableCell className="font-medium">{row.productName || row.name || '-'}</TableCell>
                 <TableCell className="font-mono text-xs">{row.hsn || '-'}</TableCell>
                 <TableCell className="text-right font-semibold">{row.quantity} {row.unit || ''}</TableCell>
@@ -1344,7 +1356,7 @@ export default function ReportsPage() {
             ))}
             {summary && (
               <TableRow className="bg-muted/40 font-semibold text-xs border-t-2">
-                <TableCell colSpan={4} className="text-right">Total ({data.length} Item(s))</TableCell>
+                <TableCell colSpan={5} className="text-right">Total ({data.length} Item(s))</TableCell>
                 <TableCell className="text-right font-bold">{summary.total_quantity || 0}</TableCell>
                 <TableCell className="text-right">-</TableCell>
                 <TableCell className="text-right">{formatCurrency(summary.total_taxable)}</TableCell>
@@ -1374,16 +1386,25 @@ export default function ReportsPage() {
                 <SelectTrigger className="h-9 w-full text-xs">
                   <SelectValue />
                 </SelectTrigger>
-                <SelectContent className="max-h-80">
+                <SelectContent className="max-h-80 w-[240px] p-1.5 shadow-xl border-border/80">
                   {REPORT_GROUPS.map((group, groupIdx) => (
                     <React.Fragment key={group.heading}>
-                      {groupIdx > 0 && <SelectSeparator className="my-1" />}
+                      {groupIdx > 0 && <SelectSeparator className="my-1.5 bg-border/60" />}
                       <SelectGroup>
-                        <SelectLabel className="px-2 py-1 text-[11px] font-bold text-muted-foreground uppercase tracking-wider">
+                        <SelectLabel className="px-2.5 py-1.5 text-[11px] font-bold tracking-wider uppercase text-primary bg-primary/10 dark:bg-primary/20 rounded-md mb-1 flex items-center gap-1.5">
+                          <span className="w-1.5 h-1.5 rounded-full bg-primary inline-block shrink-0" />
                           {group.heading}
                         </SelectLabel>
-                        {group.items.map((r) => (
-                          <SelectItem key={r.value} value={r.value} className="text-xs">
+                        {group.items.map((r, itemIdx) => (
+                          <SelectItem
+                            key={r.value}
+                            value={r.value}
+                            className={cn(
+                              'text-xs py-1.5 px-2.5 cursor-pointer rounded transition-colors',
+                              itemIdx % 2 === 1 ? 'bg-slate-50/90 dark:bg-slate-900/40' : 'bg-transparent',
+                              'hover:bg-primary/10 hover:text-primary dark:hover:bg-primary/20 focus:bg-primary/10 focus:text-primary font-medium'
+                            )}
+                          >
                             {r.label}
                           </SelectItem>
                         ))}
@@ -1445,25 +1466,21 @@ export default function ReportsPage() {
               </>
             )}
 
-            <div className="flex gap-2 min-w-0 col-span-1 sm:col-span-2 lg:col-span-2 justify-end">
-              <Button onClick={fetchReport} disabled={loading} className="h-9 text-xs">
-                <Search className="w-3.5 h-3.5 mr-1 shrink-0" />
+            <div className="flex flex-wrap items-center gap-2 min-w-0 col-span-1 sm:col-span-2 lg:col-span-2 justify-end">
+              <Button onClick={fetchReport} disabled={loading} className="h-9 px-3.5 text-xs font-semibold shadow-sm transition-all">
+                <Search className="w-3.5 h-3.5 mr-1.5 shrink-0" />
                 <span>{loading ? 'Loading...' : 'Run Report'}</span>
               </Button>
               {hasRun && data.length > 0 && (
                 <>
-                  <div className={cn(exportPdfWrapClass, 'shrink-0')}>
-                    <Button variant="outline" onClick={exportPdf} className={cn(exportPdfBtnClass, 'px-3 text-xs')}>
-                      <FileText className="w-3.5 h-3.5 mr-1 text-indigo-600 dark:text-indigo-400" />
-                      PDF (Landscape)
-                    </Button>
-                  </div>
-                  <div className={cn(exportExcelWrapClass, 'shrink-0')}>
-                    <Button variant="outline" onClick={exportExcel} className={cn(exportExcelBtnClass, 'px-3 text-xs')}>
-                      <FileSpreadsheet className="w-3.5 h-3.5 mr-1 text-green-600 dark:text-emerald-400" />
-                      Excel
-                    </Button>
-                  </div>
+                  <Button variant="outline" onClick={exportPdf} className={exportPdfBtnClass}>
+                    <FileText className="w-3.5 h-3.5 mr-1.5 text-indigo-600 dark:text-indigo-400 shrink-0" />
+                    PDF (Landscape)
+                  </Button>
+                  <Button variant="outline" onClick={exportExcel} className={exportExcelBtnClass}>
+                    <FileSpreadsheet className="w-3.5 h-3.5 mr-1.5 text-emerald-600 dark:text-emerald-400 shrink-0" />
+                    Excel
+                  </Button>
                 </>
               )}
             </div>

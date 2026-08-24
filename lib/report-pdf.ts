@@ -306,10 +306,11 @@ export function generateReportPdf(options: ReportPdfOptions) {
       ]
     }
   } else if (reportType === 'sales-product') {
-    head = [['Date', 'Invoice No', 'Product Name', 'HSN/SAC', 'Qty', 'Rate (Rs.)', 'Taxable (Rs.)', 'GST (Rs.)', 'Total (Rs.)']]
+    head = [['Date', 'Invoice No', 'Party Name', 'Product Name', 'HSN/SAC', 'Qty', 'Rate (Rs.)', 'Taxable (Rs.)', 'GST (Rs.)', 'Total (Rs.)']]
     body = data.map((r) => [
       formatDate(r.date),
       r.invoiceNo || '-',
+      r.customerName || '-',
       r.productName || r.name || '-',
       r.hsn || '-',
       `${r.quantity ?? 0} ${r.unit || ''}`.trim(),
@@ -319,13 +320,14 @@ export function generateReportPdf(options: ReportPdfOptions) {
       formatAmount(r.totalAmount),
     ])
     if (summary) {
-      foot = [['Total', '', `${data.length} Item(s)`, '', String(summary.total_quantity || 0), '', formatAmount(summary.total_taxable), formatAmount(summary.total_tax), formatAmount(summary.total_sales)]]
+      foot = [['Total', '', '', `${data.length} Item(s)`, '', String(summary.total_quantity || 0), '', formatAmount(summary.total_taxable), formatAmount(summary.total_tax), formatAmount(summary.total_sales)]]
     }
   } else if (reportType === 'purchase-product') {
-    head = [['Bill Date', 'Bill No', 'Product Name', 'HSN/SAC', 'Qty', 'Rate (Rs.)', 'Taxable (Rs.)', 'GST (Rs.)', 'Total (Rs.)']]
+    head = [['Bill Date', 'Bill No', 'Party Name', 'Product Name', 'HSN/SAC', 'Qty', 'Rate (Rs.)', 'Taxable (Rs.)', 'GST (Rs.)', 'Total (Rs.)']]
     body = data.map((r) => [
       formatDate(r.billDate || r.date),
       r.purchaseNo || r.billNo || '-',
+      r.vendorName || '-',
       r.productName || r.name || '-',
       r.hsn || '-',
       `${r.quantity ?? 0} ${r.unit || ''}`.trim(),
@@ -335,7 +337,7 @@ export function generateReportPdf(options: ReportPdfOptions) {
       formatAmount(r.totalAmount),
     ])
     if (summary) {
-      foot = [['Total', '', `${data.length} Item(s)`, '', String(summary.total_quantity || 0), '', formatAmount(summary.total_taxable), formatAmount(summary.total_tax), formatAmount(summary.total_purchases)]]
+      foot = [['Total', '', '', `${data.length} Item(s)`, '', String(summary.total_quantity || 0), '', formatAmount(summary.total_taxable), formatAmount(summary.total_tax), formatAmount(summary.total_purchases)]]
     }
   } else if (reportType === 'stock-report' || reportType === 'low-stock') {
     head = [['Product Name', 'Description', 'HSN/SAC', 'Current Stock', 'Alert Level']]

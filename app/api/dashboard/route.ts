@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import db from '@/lib/db'
 import { requirePermission } from '@/lib/api-auth'
+import { parseFinancialYear, getMonthsForFinancialYear } from '@/lib/financial-year'
 
 export async function GET(req: NextRequest) {
   const { error, organizationId } = await requirePermission('dashboard', 'view')
@@ -8,9 +9,11 @@ export async function GET(req: NextRequest) {
 
   try {
     const { searchParams } = new URL(req.url)
-    const now = new Date()
-    const year = parseInt(searchParams.get('year') || String(now.getFullYear()), 10)
+    const financialYear = searchParams.get('financialYear') || searchParams.get('fy')
     const monthParam = searchParams.get('month') || ''
+
+    const fyRange = parseFinancialYear(financialYear)
+    const now = new Date()
     const currentMonthKey = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`
 
     const [[salesThisMonth]] = await db.execute(
@@ -26,8 +29,10 @@ export async function GET(req: NextRequest) {
     ) as any[][]
 
     const [[pendingQuotRow]] = await db.execute(
-      `SELECT COUNT(*) as count FROM quotations WHERE organization_id = ? AND converted_to_id IS NULL`,
-      [organizationId]
+      `SELECT COUNT(*) as count FROM quotations
+       WHERE organization_id = ? AND converted_to_id IS NULL
+         AND DATE(date) >= ? AND DATE(date) <= ?`,
+      [organizationId, fyRange.startDate, fyRange.endDate]
     ) as any[][]
 
     const [[lowStockRow]] = await db.execute(
@@ -40,8 +45,9 @@ export async function GET(req: NextRequest) {
     let chartPurchases: any[] = []
 
     if (monthParam && /^\d{1,2}$/.test(monthParam)) {
+      const yearParam = parseInt(searchParams.get('year') || String(fyRange.startYear), 10)
       const month = monthParam.padStart(2, '0')
-      const monthKey = `${year}-${month}`
+      const monthKey = `${yearParam}-${month}`
 
       chartType = 'daily'
       const [dailySales] = await db.execute(
@@ -69,34 +75,32 @@ export async function GET(req: NextRequest) {
         `SELECT DATE_FORMAT(date, '%Y-%m') as period,
            COALESCE(SUM(total_amount),0) as total, COUNT(*) as count
          FROM invoices
-         WHERE organization_id = ? AND YEAR(date) = ?
+         WHERE organization_id = ? AND DATE(date) >= ? AND DATE(date) <= ?
          GROUP BY DATE_FORMAT(date, '%Y-%m')
          ORDER BY period ASC`,
-        [organizationId, year]
+        [organizationId, fyRange.startDate, fyRange.endDate]
       ) as any[][]
       const [monthlyPurchases] = await db.execute(
         `SELECT DATE_FORMAT(date, '%Y-%m') as period,
            COALESCE(SUM(total_amount),0) as total, COUNT(*) as count
          FROM purchases
-         WHERE organization_id = ? AND YEAR(date) = ? AND status != 'CANCELLED'
+         WHERE organization_id = ? AND DATE(date) >= ? AND DATE(date) <= ? AND status != 'CANCELLED'
          GROUP BY DATE_FORMAT(date, '%Y-%m')
          ORDER BY period ASC`,
-        [organizationId, year]
+        [organizationId, fyRange.startDate, fyRange.endDate]
       ) as any[][]
       chartSales = monthlySales
       chartPurchases = monthlyPurchases
     }
 
-    let paymentWhere = 'organization_id = ?'
-    let paymentParams: any[] = [organizationId]
+    let paymentWhere = 'organization_id = ? AND DATE(payment_date) >= ? AND DATE(payment_date) <= ?'
+    let paymentParams: any[] = [organizationId, fyRange.startDate, fyRange.endDate]
 
     if (monthParam && /^\d{1,2}$/.test(monthParam)) {
-      const monthKey = `${year}-${monthParam.padStart(2, '0')}`
+      const yearParam = parseInt(searchParams.get('year') || String(fyRange.startYear), 10)
+      const monthKey = `${yearParam}-${monthParam.padStart(2, '0')}`
       paymentWhere += " AND DATE_FORMAT(payment_date, '%Y-%m') = ?"
       paymentParams.push(monthKey)
-    } else {
-      paymentWhere += " AND YEAR(payment_date) = ?"
-      paymentParams.push(year)
     }
 
     const [[paymentsSummaryRow]] = await db.execute(
@@ -123,7 +127,8 @@ export async function GET(req: NextRequest) {
         netCashflow,
       },
       chartType,
-      chartYear: year,
+      financialYear: fyRange.fyLabel,
+      chartYear: fyRange.startYear,
       chartMonth: monthParam || null,
       chartSales,
       chartPurchases,

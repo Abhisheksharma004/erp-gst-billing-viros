@@ -15,6 +15,7 @@ import { ListPageToolbar } from '@/components/shared/list-page-toolbar'
 import { Badge } from '@/components/ui/badge'
 import { DocumentPdfViewer } from '@/components/shared/document-pdf-viewer'
 import { parseJsonResponse } from '@/lib/fetch-json'
+import { useAppStore } from '@/store/app-store'
 
 interface Invoice {
   id: string
@@ -88,6 +89,7 @@ function InvoiceActions({
 
 export default function BillingPage() {
   const { toast } = useToast()
+  const financialYear = useAppStore((s) => s.financialYear)
   const [invoices, setInvoices] = useState<Invoice[]>([])
   const [total, setTotal] = useState(0)
   usePageCount(`${total} invoice(s)`)
@@ -121,6 +123,7 @@ export default function BillingPage() {
       if (search.trim()) params.set('search', search.trim())
       if (fromDate) params.set('fromDate', fromDate)
       if (toDate) params.set('toDate', toDate)
+      if (financialYear) params.set('financialYear', financialYear)
       const res = await fetch(`/api/invoices?${params}`)
       const data = await parseJsonResponse<{ invoices?: Invoice[]; total?: number; error?: string }>(res)
       if (!res.ok) {
@@ -135,7 +138,7 @@ export default function BillingPage() {
     } finally {
       setLoading(false)
     }
-  }, [search, fromDate, toDate, page])
+  }, [search, fromDate, toDate, page, financialYear])
 
   useEffect(() => { fetchInvoices() }, [fetchInvoices])
 

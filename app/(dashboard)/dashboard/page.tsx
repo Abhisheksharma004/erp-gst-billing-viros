@@ -12,6 +12,7 @@ import { Label } from '@/components/ui/label'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { formatCurrency } from '@/lib/utils'
 import { DashboardPageSkeleton } from '@/components/layout/page-loader'
+import { useAppStore } from '@/store/app-store'
 
 const SalesPurchasesChart = dynamic(
   () =>
@@ -52,6 +53,7 @@ interface DashboardStats {
     netCashflow: number
   }
   chartType: 'monthly' | 'daily'
+  financialYear?: string
   chartYear: number
   chartMonth: string | null
   chartSales: ChartRow[]
@@ -173,15 +175,17 @@ export default function DashboardPage() {
   const [chartLoading, setChartLoading] = useState(false)
   const [year, setYear] = useState(String(currentYear))
   const [month, setMonth] = useState(currentMonth)
+  const financialYear = useAppStore((s) => s.financialYear)
 
   const isFirstLoad = useRef(true)
 
-  const fetchDashboard = useCallback(async (selectedYear: string, selectedMonth: string) => {
+  const fetchDashboard = useCallback(async (selectedYear: string, selectedMonth: string, fy: string) => {
     if (isFirstLoad.current) setLoading(true)
     else setChartLoading(true)
     try {
       const params = new URLSearchParams({ year: selectedYear })
       if (selectedMonth !== 'ALL') params.set('month', selectedMonth)
+      if (fy) params.set('financialYear', fy)
       const res = await fetch(`/api/dashboard?${params}`)
       const data = await res.json()
       setStats(data)
@@ -196,8 +200,8 @@ export default function DashboardPage() {
   }, [])
 
   useEffect(() => {
-    fetchDashboard(year, month)
-  }, [year, month, fetchDashboard])
+    fetchDashboard(year, month, financialYear)
+  }, [year, month, financialYear, fetchDashboard])
 
   if (loading || !stats) {
     return <DashboardPageSkeleton />

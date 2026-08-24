@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import db, { sqlPagination } from '@/lib/db'
 import { requirePermission } from '@/lib/api-auth'
 import { appendOrgFilter } from '@/lib/tenant'
+import { appendFyFilter } from '@/lib/financial-year'
 import { quotationSchema } from '@/lib/validations'
 import { ensureQuotationSchema } from '@/lib/ensure-quotation-schema'
 import { buildQuotationTotals, insertQuotationItems } from '@/lib/quotation-save'
@@ -18,6 +19,9 @@ export async function GET(req: NextRequest) {
 
     const { searchParams } = new URL(req.url)
     const search = searchParams.get('search') || ''
+    const financialYear = searchParams.get('financialYear') || searchParams.get('fy')
+    const fromDate = searchParams.get('fromDate')
+    const toDate = searchParams.get('toDate')
     const page = parseInt(searchParams.get('page') || '1')
     const limit = parseInt(searchParams.get('limit') || '20')
     const offset = (page - 1) * limit
@@ -29,6 +33,9 @@ export async function GET(req: NextRequest) {
       const s = `%${search}%`
       params.push(s, s)
     }
+    if (fromDate) { conditions.push('q.date >= ?'); params.push(fromDate) }
+    if (toDate) { conditions.push('q.date <= ?'); params.push(toDate) }
+    appendFyFilter(conditions, params, financialYear, 'q.date', fromDate, toDate)
     appendOrgFilter(conditions, params, organizationId!, 'q')
     const where = conditions.length ? 'WHERE ' + conditions.join(' AND ') : ''
     const [rows] = await db.execute(

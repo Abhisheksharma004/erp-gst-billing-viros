@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import db, { sqlPagination } from '@/lib/db'
 import { requirePermission } from '@/lib/api-auth'
 import { appendOrgFilter } from '@/lib/tenant'
+import { appendFyFilter } from '@/lib/financial-year'
 import { paymentSchema } from '@/lib/validations'
 import { ensurePaymentSchema } from '@/lib/ensure-payment-schema'
 import { randomUUID } from 'crypto'
@@ -22,6 +23,7 @@ export async function GET(req: NextRequest) {
   const vendorId = searchParams.get('vendorId')
   const fromDate = searchParams.get('fromDate')
   const toDate = searchParams.get('toDate')
+  const financialYear = searchParams.get('financialYear') || searchParams.get('fy')
   const page = parseInt(searchParams.get('page') || '1')
   const limit = parseInt(searchParams.get('limit') || '20')
   const offset = (page - 1) * limit
@@ -65,6 +67,7 @@ export async function GET(req: NextRequest) {
     params.push(`${toDate} 23:59:59`)
   }
 
+  appendFyFilter(conditions, params, financialYear, 'p.payment_date', fromDate, toDate)
   appendOrgFilter(conditions, params, organizationId!, 'p')
 
   const where = conditions.length ? 'WHERE ' + conditions.join(' AND ') : ''

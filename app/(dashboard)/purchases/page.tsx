@@ -21,6 +21,7 @@ import {
 import { formatCurrency, formatDate, cn } from '@/lib/utils'
 import { ListPageToolbar } from '@/components/shared/list-page-toolbar'
 import { parseJsonResponse } from '@/lib/fetch-json'
+import { useAppStore } from '@/store/app-store'
 
 interface Purchase {
   id: string
@@ -88,6 +89,7 @@ function PurchaseActions({
 
 export default function PurchasesPage() {
   const { toast } = useToast()
+  const financialYear = useAppStore((s) => s.financialYear)
   const [purchases, setPurchases] = useState<Purchase[]>([])
   const [total, setTotal] = useState(0)
   usePageCount(`${total} purchase invoice(s)`)
@@ -122,6 +124,7 @@ export default function PurchasesPage() {
       if (search.trim()) params.set('search', search.trim())
       if (fromDate) params.set('fromDate', fromDate)
       if (toDate) params.set('toDate', toDate)
+      if (financialYear) params.set('financialYear', financialYear)
       const res = await fetch(`/api/purchases?${params}`)
       const data = await parseJsonResponse<{ purchases?: Purchase[]; total?: number; error?: string }>(res)
       if (!res.ok) {
@@ -136,7 +139,7 @@ export default function PurchasesPage() {
     } finally {
       setLoading(false)
     }
-  }, [search, fromDate, toDate, page, toast])
+  }, [search, fromDate, toDate, page, financialYear, toast])
 
   useEffect(() => {
     fetchPurchases()

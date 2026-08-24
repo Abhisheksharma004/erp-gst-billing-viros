@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import db, { sqlPagination } from '@/lib/db'
 import { requirePermission } from '@/lib/api-auth'
 import { appendOrgFilter } from '@/lib/tenant'
+import { appendFyFilter } from '@/lib/financial-year'
 import { purchaseOrderSchema } from '@/lib/validations'
 import { ensureDocumentTermsColumns } from '@/lib/ensure-purchase-schema'
 import { normalizePurchaseDocumentItem } from '@/lib/purchase-include-pricing'
@@ -28,6 +29,7 @@ export async function GET(req: NextRequest) {
   const status = searchParams.get('status')
   const fromDate = searchParams.get('fromDate')
   const toDate = searchParams.get('toDate')
+  const financialYear = searchParams.get('financialYear') || searchParams.get('fy')
   const page = parseInt(searchParams.get('page') || '1')
   const limit = parseInt(searchParams.get('limit') || '20')
   const offset = (page - 1) * limit
@@ -38,6 +40,7 @@ export async function GET(req: NextRequest) {
   if (status) { conditions.push('po.status = ?'); params.push(status) }
   if (fromDate) { conditions.push('po.date >= ?'); params.push(fromDate) }
   if (toDate) { conditions.push('po.date <= ?'); params.push(toDate) }
+  appendFyFilter(conditions, params, financialYear, 'po.date', fromDate, toDate)
   appendOrgFilter(conditions, params, organizationId!, 'po')
 
   const where = conditions.length ? 'WHERE ' + conditions.join(' AND ') : ''

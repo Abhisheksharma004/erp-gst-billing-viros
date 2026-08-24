@@ -15,6 +15,7 @@ import { Eye, Edit, Trash2, ClipboardList, Calendar } from 'lucide-react'
 import { formatCurrency, formatDate, cn } from '@/lib/utils'
 import { ListPageToolbar } from '@/components/shared/list-page-toolbar'
 import { parseJsonResponse } from '@/lib/fetch-json'
+import { useAppStore } from '@/store/app-store'
 
 interface PO {
   id: string
@@ -77,6 +78,7 @@ function POActions({
 
 export default function PurchaseOrdersPage() {
   const { toast } = useToast()
+  const financialYear = useAppStore((s) => s.financialYear)
   const [pos, setPos] = useState<PO[]>([])
   const [total, setTotal] = useState(0)
   usePageCount(`${total} purchase order(s)`)
@@ -111,6 +113,7 @@ export default function PurchaseOrdersPage() {
       if (search.trim()) params.set('search', search.trim())
       if (fromDate) params.set('fromDate', fromDate)
       if (toDate) params.set('toDate', toDate)
+      if (financialYear) params.set('financialYear', financialYear)
       const res = await fetch(`/api/purchase-orders?${params}`)
       const data = await parseJsonResponse<{ purchaseOrders?: PO[]; total?: number; error?: string }>(res)
       if (!res.ok) {
@@ -125,7 +128,7 @@ export default function PurchaseOrdersPage() {
     } finally {
       setLoading(false)
     }
-  }, [search, fromDate, toDate, page, toast])
+  }, [search, fromDate, toDate, page, financialYear, toast])
 
   useEffect(() => {
     fetchPos()

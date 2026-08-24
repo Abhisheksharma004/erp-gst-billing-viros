@@ -11,6 +11,8 @@ import { apiErrorResponse } from '@/lib/api-error'
 import { buildDocumentNumber, buildDocumentNumberLikePattern, fetchMaxDocumentSerial } from '@/lib/document-number'
 import { assertCustomerInOrg } from '@/lib/org-entity'
 
+import { appendFyFilter } from '@/lib/financial-year'
+
 function computeItemTotals(item: any, gstType: string) {
   return computeSalesDocumentItemTotals(
     {
@@ -34,6 +36,7 @@ export async function GET(req: NextRequest) {
   const customerId = searchParams.get('customerId')
   const fromDate = searchParams.get('fromDate')
   const toDate = searchParams.get('toDate')
+  const financialYear = searchParams.get('financialYear') || searchParams.get('fy')
   const page = parseInt(searchParams.get('page') || '1')
   const limit = parseInt(searchParams.get('limit') || '20')
   const offset = (page - 1) * limit
@@ -46,6 +49,7 @@ export async function GET(req: NextRequest) {
   if (customerId) { conditions.push('i.customer_id = ?'); params.push(customerId) }
   if (fromDate) { conditions.push('i.date >= ?'); params.push(fromDate) }
   if (toDate) { conditions.push('i.date <= ?'); params.push(toDate) }
+  appendFyFilter(conditions, params, financialYear, 'i.date', fromDate, toDate)
   appendOrgFilter(conditions, params, organizationId!, 'i')
 
   const where = conditions.length ? 'WHERE ' + conditions.join(' AND ') : ''

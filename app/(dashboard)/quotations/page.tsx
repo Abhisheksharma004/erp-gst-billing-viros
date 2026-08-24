@@ -14,6 +14,7 @@ import { ListPageToolbar } from '@/components/shared/list-page-toolbar'
 import { parseJsonResponse } from '@/lib/fetch-json'
 import { DocumentPdfViewer } from '@/components/shared/document-pdf-viewer'
 import { Badge } from '@/components/ui/badge'
+import { useAppStore } from '@/store/app-store'
 
 interface Quotation {
   id: string
@@ -252,6 +253,7 @@ function QuotationActions({
 
 export default function QuotationsPage() {
   const { toast } = useToast()
+  const financialYear = useAppStore((s) => s.financialYear)
   const [quotations, setQuotations] = useState<Quotation[]>([])
   const [total, setTotal] = useState(0)
   usePageCount(`${total} quotation(s)`)
@@ -281,6 +283,7 @@ export default function QuotationsPage() {
     try {
       const params = new URLSearchParams({ page: String(page), limit: '20' })
       if (search) params.set('search', search)
+      if (financialYear) params.set('financialYear', financialYear)
       const res = await fetch(`/api/quotations?${params}`)
       const data = await parseJsonResponse<{ quotations?: Quotation[]; total?: number; error?: string }>(res)
       if (!res.ok) {
@@ -295,7 +298,7 @@ export default function QuotationsPage() {
     } finally {
       setLoading(false)
     }
-  }, [search, page, toast])
+  }, [search, page, financialYear, toast])
 
   useEffect(() => { fetchQuotations() }, [fetchQuotations])
 

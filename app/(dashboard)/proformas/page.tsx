@@ -13,6 +13,7 @@ import { ListPageToolbar } from '@/components/shared/list-page-toolbar'
 import { parseJsonResponse } from '@/lib/fetch-json'
 import { DocumentPdfViewer } from '@/components/shared/document-pdf-viewer'
 import { Badge } from '@/components/ui/badge'
+import { useAppStore } from '@/store/app-store'
 
 interface Proforma {
   id: string
@@ -129,6 +130,7 @@ function ProformaActions({
 
 export default function ProformasPage() {
   const { toast } = useToast()
+  const financialYear = useAppStore((s) => s.financialYear)
   const [proformas, setProformas] = useState<Proforma[]>([])
   const [total, setTotal] = useState(0)
   usePageCount(`${total} proforma(s)`)
@@ -158,6 +160,7 @@ export default function ProformasPage() {
     try {
       const params = new URLSearchParams({ page: String(page), limit: '20' })
       if (search) params.set('search', search)
+      if (financialYear) params.set('financialYear', financialYear)
       const res = await fetch(`/api/proformas?${params}`)
       const data = await parseJsonResponse<{ proformas?: Proforma[]; total?: number; error?: string }>(res)
       if (!res.ok) {
@@ -172,7 +175,7 @@ export default function ProformasPage() {
     } finally {
       setLoading(false)
     }
-  }, [search, page, toast])
+  }, [search, page, financialYear, toast])
 
   useEffect(() => { fetchProformas() }, [fetchProformas])
 
