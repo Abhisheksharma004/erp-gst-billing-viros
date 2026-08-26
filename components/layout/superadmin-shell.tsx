@@ -41,6 +41,12 @@ const navItems = [
     badgeKey: null,
   },
   {
+    title: 'Log Activity',
+    href: '/superadmin/logs',
+    icon: Activity,
+    badgeKey: null,
+  },
+  {
     title: 'Recovery',
     href: '/superadmin/recovery',
     icon: RotateCcw,
