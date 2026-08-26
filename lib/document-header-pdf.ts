@@ -2,6 +2,7 @@ import type jsPDF from 'jspdf'
 
 export interface DocumentHeaderSettings {
   companyName: string
+  gstin?: string | null
   pan?: string | null
   address?: string | null
   city?: string | null
@@ -82,12 +83,15 @@ export function drawDocumentHeader(
 
   const rightX = pageW - margin
   let contactY = y + 6
-  const contacts = [
+  const rawContacts = [
+    ['GSTIN', settings.gstin],
     ['Phone', settings.phone],
     ['Email', settings.email],
     ['Website', settings.website],
     ['PAN', settings.pan],
   ] as const
+
+  const contacts = rawContacts.filter(([_, val]) => Boolean(val))
 
   doc.setFontSize(7.5)
   contacts.forEach(([label, val]) => {

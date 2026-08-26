@@ -37,7 +37,7 @@ export function RegisterSlidePanel({ open, onOpenChange }: RegisterSlidePanelPro
         <DialogPrimitive.Content
           className={cn(
             'fixed inset-y-0 right-0 z-50 flex h-full w-full flex-col bg-white shadow-2xl',
-            'sm:max-w-xl lg:max-w-2xl',
+            'md:w-1/2 md:max-w-[50vw] lg:max-w-[50vw]',
             'data-[state=open]:animate-in data-[state=closed]:animate-out',
             'data-[state=closed]:slide-out-to-right data-[state=open]:slide-in-from-right',
             'duration-300 ease-out'

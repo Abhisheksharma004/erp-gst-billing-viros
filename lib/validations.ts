@@ -82,14 +82,8 @@ export const registerSchema = z
       z.string().min(5, 'Address is required').max(500)
     ),
     gstin: z.preprocess(
-      (v) => {
-        if (typeof v === 'string') {
-          const t = v.trim().toUpperCase()
-          return t === '' ? undefined : t
-        }
-        return v
-      },
-      z.string().regex(GSTIN_REGEX, 'Invalid GSTIN').optional()
+      trimUpper,
+      z.string().min(1, 'GSTIN is required').regex(GSTIN_REGEX, 'Invalid GSTIN')
     ),
     state: z.preprocess(trimString, z.string().min(1, 'State is required')),
     pincode: z.preprocess(
@@ -100,6 +94,9 @@ export const registerSchema = z
     email: z.string().email('Invalid email address'),
     password: strongPasswordSchema,
     confirmPassword: z.string(),
+    acceptTerms: z.boolean().refine((v) => v === true, {
+      message: 'You must accept the Terms of Service and Privacy Policy to continue',
+    }),
   })
   .refine((data) => data.password === data.confirmPassword, {
     message: 'Passwords do not match',

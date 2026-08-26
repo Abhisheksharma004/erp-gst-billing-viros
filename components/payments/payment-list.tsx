@@ -22,6 +22,8 @@ import {
   AlertCircle,
   LayoutGrid,
   Table as TableIcon,
+  MoreHorizontal,
+  Download,
 } from 'lucide-react'
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
@@ -34,8 +36,16 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select'
+import {
+  DropdownMenu,
+  DropdownMenuTrigger,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+} from '@/components/ui/dropdown-menu'
 import { SearchablePartySelect } from '@/components/ui/searchable-party-select'
 import { DocumentPdfViewer } from '@/components/shared/document-pdf-viewer'
+import { downloadPaymentReceiptPdf } from '@/lib/payment-receipt-pdf'
 import {
   Table,
   TableBody,
@@ -264,6 +274,26 @@ export function PaymentList({
     }
   }
 
+  const handleDownloadReceipt = async (payment: any) => {
+    try {
+      toast({
+        title: 'Generating Voucher PDF...',
+        description: `Downloading receipt for ${payment.payment_no}`,
+      })
+      await downloadPaymentReceiptPdf(payment)
+      toast({
+        title: 'Download Complete',
+        description: `Payment receipt voucher ${payment.payment_no}.pdf downloaded.`,
+      })
+    } catch (err: any) {
+      toast({
+        title: 'Download Failed',
+        description: err.message || 'Could not generate payment receipt PDF.',
+        variant: 'destructive',
+      })
+    }
+  }
+
   const renderCardGrid = () => (
     <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3 p-3 sm:p-4">
       {payments.map((p) => {
@@ -271,9 +301,9 @@ export function PaymentList({
         const partyName = isInward ? p.customer_name || 'Customer' : p.vendor_name || 'Vendor'
         const linkedNo = isInward ? p.linked_invoice_no : p.linked_bill_no
         return (
-          <div key={p.id} className="rounded-xl border bg-card shadow-sm overflow-hidden flex flex-col justify-between hover:shadow-md transition-shadow">
+          <div key={p.id} className="rounded-xl border bg-card shadow-xs overflow-hidden flex flex-col justify-between hover:shadow-md transition-shadow">
             <div className="p-3 sm:p-4 space-y-3">
-              {/* Header: Payment No & Badge + Actions */}
+              {/* Header: Payment No & Badge + Actions Three Dot */}
               <div className="flex items-start justify-between gap-2">
                 <div>
                   <span className="font-mono text-xs font-semibold text-muted-foreground block">{p.payment_no}</span>
@@ -281,26 +311,43 @@ export function PaymentList({
                     {isInward ? 'INWARD (RECEIPT)' : 'OUTWARD (PAID)'}
                   </Badge>
                 </div>
-                <div className="flex items-center gap-1">
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    className="h-8 w-8"
-                    title="View Details"
-                    onClick={() => { setSelectedPayment(p); setIsViewModalOpen(true); }}
-                  >
-                    <Eye className="h-4 w-4" />
-                  </Button>
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    className="h-8 w-8 text-destructive hover:text-destructive"
-                    title="Delete Payment"
-                    onClick={() => setPaymentToDelete(p)}
-                  >
-                    <Trash2 className="h-4 w-4" />
-                  </Button>
-                </div>
+                <DropdownMenu>
+                  <DropdownMenuTrigger asChild>
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="h-8 w-8 text-muted-foreground hover:text-foreground"
+                      title="Actions"
+                    >
+                      <MoreHorizontal className="h-4 w-4" />
+                    </Button>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent align="end" className="w-48">
+                    <DropdownMenuItem
+                      onClick={() => {
+                        setSelectedPayment(p)
+                        setIsViewModalOpen(true)
+                      }}
+                    >
+                      <Eye className="h-4 w-4 mr-2 text-slate-500" />
+                      View Voucher
+                    </DropdownMenuItem>
+                    <DropdownMenuItem
+                      onClick={() => handleDownloadReceipt(p)}
+                    >
+                      <Download className="h-4 w-4 mr-2 text-emerald-600" />
+                      Download Receipt
+                    </DropdownMenuItem>
+                    <DropdownMenuSeparator />
+                    <DropdownMenuItem
+                      onClick={() => setPaymentToDelete(p)}
+                      className="text-rose-600 focus:text-rose-600 focus:bg-rose-50 dark:focus:bg-rose-950/40"
+                    >
+                      <Trash2 className="h-4 w-4 mr-2 text-rose-500" />
+                      Delete Payment
+                    </DropdownMenuItem>
+                  </DropdownMenuContent>
+                </DropdownMenu>
               </div>
 
               {/* Amount & Party */}
@@ -706,29 +753,43 @@ export function PaymentList({
                         {isInward ? '+' : '-'} ₹{Number(p.amount).toLocaleString('en-IN', { minimumFractionDigits: 2 })}
                       </TableCell>
                       <TableCell className="text-center">
-                        <div className="flex items-center justify-center gap-1">
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            className="h-7 w-7 text-muted-foreground hover:text-foreground"
-                            title="View Voucher"
-                            onClick={() => {
-                              setSelectedPayment(p)
-                              setIsViewModalOpen(true)
-                            }}
-                          >
-                            <Eye className="h-4 w-4" />
-                          </Button>
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            className="h-7 w-7 text-rose-500 hover:text-rose-700 hover:bg-rose-50"
-                            title="Delete Payment"
-                            onClick={() => setPaymentToDelete(p)}
-                          >
-                            <Trash2 className="h-4 w-4" />
-                          </Button>
-                        </div>
+                        <DropdownMenu>
+                          <DropdownMenuTrigger asChild>
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              className="h-8 w-8 text-muted-foreground hover:text-foreground"
+                              title="Actions"
+                            >
+                              <MoreHorizontal className="h-4 w-4" />
+                            </Button>
+                          </DropdownMenuTrigger>
+                          <DropdownMenuContent align="end" className="w-48">
+                            <DropdownMenuItem
+                              onClick={() => {
+                                setSelectedPayment(p)
+                                setIsViewModalOpen(true)
+                              }}
+                            >
+                              <Eye className="h-4 w-4 mr-2 text-slate-500" />
+                              View Voucher
+                            </DropdownMenuItem>
+                            <DropdownMenuItem
+                              onClick={() => handleDownloadReceipt(p)}
+                            >
+                              <Download className="h-4 w-4 mr-2 text-emerald-600" />
+                              Download Receipt
+                            </DropdownMenuItem>
+                            <DropdownMenuSeparator />
+                            <DropdownMenuItem
+                              onClick={() => setPaymentToDelete(p)}
+                              className="text-rose-600 focus:text-rose-600 focus:bg-rose-50 dark:focus:bg-rose-950/40"
+                            >
+                              <Trash2 className="h-4 w-4 mr-2 text-rose-500" />
+                              Delete Payment
+                            </DropdownMenuItem>
+                          </DropdownMenuContent>
+                        </DropdownMenu>
                       </TableCell>
                     </TableRow>
                   )
@@ -883,7 +944,17 @@ export function PaymentList({
             </div>
           )}
 
-          <DialogFooter className="pt-2">
+          <DialogFooter className="pt-2 flex flex-col sm:flex-row gap-2 justify-between">
+            <Button
+              type="button"
+              className="bg-emerald-600 hover:bg-emerald-700 text-white flex items-center gap-1.5"
+              onClick={() => {
+                if (selectedPayment) handleDownloadReceipt(selectedPayment)
+              }}
+            >
+              <Download className="h-4 w-4" />
+              Download Voucher (PDF)
+            </Button>
             <Button variant="outline" onClick={() => setIsViewModalOpen(false)}>
               Close
             </Button>

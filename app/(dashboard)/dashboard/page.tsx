@@ -225,14 +225,14 @@ export default function DashboardPage() {
 
   const monthTotals = isMonthView
     ? chartData.reduce(
-        (acc, row) => ({
-          sales: acc.sales + row.sales,
-          purchases: acc.purchases + row.purchases,
-          salesCount: acc.salesCount + row.salesCount,
-          purchasesCount: acc.purchasesCount + row.purchasesCount,
-        }),
-        { sales: 0, purchases: 0, salesCount: 0, purchasesCount: 0 }
-      )
+      (acc, row) => ({
+        sales: acc.sales + row.sales,
+        purchases: acc.purchases + row.purchases,
+        salesCount: acc.salesCount + row.salesCount,
+        purchasesCount: acc.purchasesCount + row.purchasesCount,
+      }),
+      { sales: 0, purchases: 0, salesCount: 0, purchasesCount: 0 }
+    )
     : null
 
   const handleChartClick = (state: { activePayload?: { payload?: { key?: string } }[] }) => {

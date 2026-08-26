@@ -76,7 +76,13 @@ export async function GET(req: NextRequest) {
     const [rows] = (await db.execute(
       `SELECT p.*,
               c.name as customer_name,
+              c.gstin as customer_gstin,
+              c.phone as customer_phone,
+              c.billing_address as customer_address,
               v.name as vendor_name,
+              v.gstin as vendor_gstin,
+              v.phone as vendor_phone,
+              v.address as vendor_address,
               i.invoice_no as linked_invoice_no,
               pur.bill_no as linked_bill_no
        FROM payments p
