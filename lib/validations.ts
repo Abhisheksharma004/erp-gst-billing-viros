@@ -167,10 +167,19 @@ const finiteIntMin0 = z.preprocess((val) => {
 }, z.number().int().min(0))
 
 export const productSchema = z.object({
-  name: z.string().min(2, 'Product name required').max(200),
-  sku: z.string().optional(),
+  name: z.preprocess(
+    (v) => (typeof v === 'string' ? v.trim() : v),
+    z.string().min(2, 'Product name required').max(200)
+  ),
+  sku: z.preprocess(
+    (v) => (typeof v === 'string' ? v.trim() : v),
+    z.string().min(1, 'SKU is required').max(100, 'SKU cannot exceed 100 characters')
+  ),
   barcode: z.string().optional(),
-  hsnCode: z.string().optional(),
+  hsnCode: z.preprocess(
+    (v) => (typeof v === 'string' ? v.trim() : v),
+    z.string().min(1, 'HSN code is required').max(20, 'HSN code cannot exceed 20 characters')
+  ),
   sacCode: z.string().optional(),
   description: z.string().optional(),
   categoryId: z.string().optional(),

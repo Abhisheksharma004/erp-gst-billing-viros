@@ -64,7 +64,7 @@ export async function POST(req: NextRequest) {
         category_id, brand_id, unit_id, purchase_price, selling_price, mrp,
         gst_rate, gst_type, opening_stock, current_stock, low_stock_alert, discount, is_active)
        VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-      [id, organizationId, data.name, data.sku || null, data.barcode || null, data.hsnCode || null, data.sacCode || null,
+      [id, organizationId, data.name, data.sku, data.barcode || null, data.hsnCode, data.sacCode || null,
        data.description || null, data.categoryId || null, data.brandId || null, data.unitId || null,
        data.purchasePrice, data.sellingPrice, data.mrp ?? null, data.gstRate, data.gstType,
        Math.max(0, data.openingStock), Math.max(0, data.openingStock), Math.max(0, data.lowStockAlert), data.discount ?? null, data.isActive ? 1 : 0]

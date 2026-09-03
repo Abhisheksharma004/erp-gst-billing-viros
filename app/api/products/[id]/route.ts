@@ -52,9 +52,9 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
        WHERE id = ? AND organization_id = ?`,
       [
         data.name,
-        optionalToNull(data.sku),
+        data.sku,
         optionalToNull(data.barcode),
-        optionalToNull(data.hsnCode),
+        data.hsnCode,
         optionalToNull(data.sacCode),
         optionalToNull(data.description),
         optionalToNull(data.categoryId),

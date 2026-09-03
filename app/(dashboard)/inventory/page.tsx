@@ -677,12 +677,18 @@ export default function InventoryPage() {
                 )}
               </div>
               <div className="space-y-1">
-                <Label className="text-xs sm:text-sm">SKU</Label>
-                <Input className="h-9" {...form.register('sku')} />
+                <Label className="text-xs sm:text-sm">SKU *</Label>
+                <Input className="h-9" placeholder="e.g. SKU-1001" {...form.register('sku')} />
+                {form.formState.errors.sku && (
+                  <p className="text-destructive text-xs">{form.formState.errors.sku.message}</p>
+                )}
               </div>
               <div className="space-y-1">
-                <Label className="text-xs sm:text-sm">HSN Code</Label>
-                <Input className="h-9" {...form.register('hsnCode')} />
+                <Label className="text-xs sm:text-sm">HSN Code *</Label>
+                <Input className="h-9" placeholder="e.g. 8471" {...form.register('hsnCode')} />
+                {form.formState.errors.hsnCode && (
+                  <p className="text-destructive text-xs">{form.formState.errors.hsnCode.message}</p>
+                )}
               </div>
               <div className="space-y-1">
                 <Label className="text-xs sm:text-sm">Selling Price (₹) *</Label>
