@@ -15,7 +15,7 @@ import { Label } from '@/components/ui/label'
 import { Badge } from '@/components/ui/badge'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
 import { Checkbox } from '@/components/ui/checkbox'
-import { Card, CardContent } from '@/components/ui/card'
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { useToast } from '@/hooks/use-toast'
 import { formatCurrency, cn } from '@/lib/utils'
 import {
@@ -30,7 +30,16 @@ import {
   Layers,
   FileText,
   Maximize2,
-  Tag,
+  Settings2,
+  Gauge,
+  Sliders,
+  Sparkles,
+  CheckCircle2,
+  HardDrive,
+  Laptop,
+  ChevronLeft,
+  ChevronRight,
+  ExternalLink,
 } from 'lucide-react'
 
 export interface PurchaseItemForQR {
@@ -54,6 +63,14 @@ export interface PurchaseDataForQR {
   bill_date?: string | null
   vendor_name?: string | null
   items?: PurchaseItemForQR[]
+}
+
+export interface DevicePrinter {
+  name: string
+  isDefault: boolean
+  portName: string
+  driverName: string
+  isThermal: boolean
 }
 
 interface PurchaseQrCodeDialogProps {
@@ -127,10 +144,21 @@ export function PurchaseQrCodeDialog({
   const [loading, setLoading] = useState(false)
   const [purchase, setPurchase] = useState<PurchaseDataForQR | null>(initialPurchaseData || null)
 
-  // Label Size & Printer Type Customization
+  // Device Connected Printers
+  const [devicePrinters, setDevicePrinters] = useState<DevicePrinter[]>([])
+  const [selectedPrinter, setSelectedPrinter] = useState<string>('')
+  const [loadingPrinters, setLoadingPrinters] = useState<boolean>(false)
+
+  // Label Size & Printer Configuration
   const [labelWidth, setLabelWidth] = useState<number>(50) // Default 50mm
   const [labelHeight, setLabelHeight] = useState<number>(25) // Default 25mm
   const [printerType, setPrinterType] = useState<'DIRECT_THERMAL' | 'THERMAL_TRANSFER'>('DIRECT_THERMAL')
+  const [printerDpi, setPrinterDpi] = useState<string>('203') // 203 DPI standard, 300 DPI
+  const [printDensity, setPrintDensity] = useState<string>('dark') // normal, dark, extra_dark
+  const [sensorType, setSensorType] = useState<string>('gap') // gap, continuous, black_mark
+  const [topOffset, setTopOffset] = useState<number>(0)
+  const [leftOffset, setLeftOffset] = useState<number>(0)
+  const [ribbonType, setRibbonType] = useState<string>('wax') // wax, wax_resin, resin
 
   // Code Combination controls
   const [dateFormat, setDateFormat] = useState<string>('DDMMYY')
@@ -152,7 +180,8 @@ export function PurchaseQrCodeDialog({
   const [showCustomNote2, setShowCustomNote2] = useState<boolean>(false)
 
   // Navigation tab state (self-contained)
-  const [activeTab, setActiveTab] = useState<'preview' | 'configure' | 'list'>('preview')
+  const [activeTab, setActiveTab] = useState<'preview' | 'configure' | 'printer' | 'list'>('preview')
+  const [previewIndex, setPreviewIndex] = useState<number>(0)
 
   // Item configurations
   const [itemConfigs, setItemConfigs] = useState<ItemConfig[]>([])
@@ -160,9 +189,36 @@ export function PurchaseQrCodeDialog({
   const [generating, setGenerating] = useState(false)
   const [copied, setCopied] = useState(false)
 
-  // Fetch purchase details if only purchaseId is provided
+  // Fetch connected printers on device
+  const fetchConnectedPrinters = async () => {
+    setLoadingPrinters(true)
+    try {
+      const res = await fetch('/api/printers')
+      const data = await res.json()
+      if (data.printers && Array.isArray(data.printers)) {
+        setDevicePrinters(data.printers)
+        if (!selectedPrinter) {
+          const defaultP = data.printers.find((p: DevicePrinter) => p.isDefault) || data.printers[0]
+          if (defaultP) {
+            setSelectedPrinter(defaultP.name)
+            if (defaultP.name.toLowerCase().includes('tsc') || defaultP.driverName.toLowerCase().includes('tsc')) {
+              setPrinterType('THERMAL_TRANSFER')
+            }
+          }
+        }
+      }
+    } catch (err) {
+      console.error('Error fetching device printers:', err)
+    } finally {
+      setLoadingPrinters(false)
+    }
+  }
+
+  // Fetch purchase details and device printers
   useEffect(() => {
     if (!open) return
+
+    fetchConnectedPrinters()
 
     if (initialPurchaseData) {
       setPurchase(initialPurchaseData)
@@ -337,6 +393,8 @@ export function PurchaseQrCodeDialog({
   const validWidth = Math.max(10, Math.min(300, labelWidth || 50))
   const validHeight = Math.max(10, Math.min(300, labelHeight || 25))
 
+  const currentSelectedPrinterObj = devicePrinters.find((p) => p.name === selectedPrinter)
+
   return (
     <>
       {/* Dynamic exact label size print styles */}
@@ -356,8 +414,8 @@ export function PurchaseQrCodeDialog({
           }
           #qr-printable-area {
             position: absolute;
-            left: 0;
-            top: 0;
+            left: ${leftOffset}mm !important;
+            top: ${topOffset}mm !important;
             width: ${validWidth}mm !important;
             margin: 0 !important;
             padding: 0 !important;
@@ -388,6 +446,7 @@ export function PurchaseQrCodeDialog({
             align-items: center !important;
             gap: 1.5mm !important;
             overflow: hidden !important;
+            image-rendering: -webkit-optimize-contrast !important;
           }
           .no-print {
             display: none !important;
@@ -417,9 +476,12 @@ export function PurchaseQrCodeDialog({
                     <Badge variant="outline" className="text-[11px] font-mono text-emerald-700 dark:text-emerald-400 border-emerald-300 dark:border-emerald-800 bg-emerald-50 dark:bg-emerald-950/40">
                       {validWidth}mm × {validHeight}mm
                     </Badge>
-                    <Badge variant="secondary" className="text-[11px] font-medium">
-                      {printerType === 'DIRECT_THERMAL' ? 'Direct Thermal' : 'Thermal Transfer'}
-                    </Badge>
+                    {selectedPrinter && (
+                      <Badge variant="outline" className="text-[11px] font-medium text-blue-700 dark:text-blue-300 border-blue-300 dark:border-blue-800 bg-blue-50 dark:bg-blue-950/40 flex items-center gap-1">
+                        <Printer className="w-3 h-3 text-blue-600" />
+                        {selectedPrinter}
+                      </Badge>
+                    )}
                   </div>
                   <DialogDescription className="text-xs text-muted-foreground mt-0.5">
                     Combination: <code className="font-mono text-foreground font-semibold">(SKUCode + Date({dateFormat}) + Serial)</code>
@@ -440,16 +502,6 @@ export function PurchaseQrCodeDialog({
                   {copied ? <Check className="w-3.5 h-3.5 text-emerald-600" /> : <Copy className="w-3.5 h-3.5" />}
                   Copy List
                 </Button>
-                <Button
-                  variant="default"
-                  size="sm"
-                  onClick={handlePrint}
-                  disabled={totalQrCount === 0 || generating}
-                  className="h-9 text-xs gap-1.5 bg-emerald-600 hover:bg-emerald-700 text-white shadow-sm font-medium"
-                >
-                  <Printer className="w-3.5 h-3.5" />
-                  Print QR Labels ({validWidth}×{validHeight}mm)
-                </Button>
               </div>
             </div>
           </DialogHeader>
@@ -468,9 +520,9 @@ export function PurchaseQrCodeDialog({
               </div>
             ) : (
               <div className="w-full space-y-4">
-                {/* Navigation Bar */}
+                {/* Navigation Bar with 4 distinct segments */}
                 <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 border-b pb-3">
-                  <div className="inline-flex h-9 items-center justify-center rounded-lg bg-muted p-1 text-muted-foreground">
+                  <div className="inline-flex h-9 items-center justify-center rounded-lg bg-muted p-1 text-muted-foreground flex-wrap">
                     <button
                       type="button"
                       onClick={() => setActiveTab('preview')}
@@ -499,6 +551,19 @@ export function PurchaseQrCodeDialog({
                     </button>
                     <button
                       type="button"
+                      onClick={() => setActiveTab('printer')}
+                      className={cn(
+                        'inline-flex items-center justify-center whitespace-nowrap rounded-md px-3 py-1 text-xs font-medium ring-offset-background transition-all gap-1.5',
+                        activeTab === 'printer'
+                          ? 'bg-background text-foreground shadow font-semibold text-emerald-600 dark:text-emerald-400'
+                          : 'hover:text-foreground'
+                      )}
+                    >
+                      <Printer className="w-3.5 h-3.5" />
+                      Printer Configuration
+                    </button>
+                    <button
+                      type="button"
                       onClick={() => setActiveTab('list')}
                       className={cn(
                         'inline-flex items-center justify-center whitespace-nowrap rounded-md px-3 py-1 text-xs font-medium ring-offset-background transition-all gap-1.5',
@@ -514,20 +579,21 @@ export function PurchaseQrCodeDialog({
 
                   {/* Label Specification Badge */}
                   {activeTab === 'preview' && (
-                    <div className="flex items-center gap-2 text-xs text-muted-foreground font-medium bg-muted/60 px-2.5 py-1 rounded-md border">
-                      <span>Label Size:</span>
+                    <div className="flex items-center gap-2 text-xs text-muted-foreground font-medium bg-muted/60 px-2.5 py-1 rounded-md border flex-wrap">
+                      <span>Label:</span>
                       <strong className="text-foreground font-mono font-semibold">
                         {validWidth}mm × {validHeight}mm
                       </strong>
                       <span className="text-muted-foreground">•</span>
-                      <span className="text-foreground font-medium">
-                        {printerType === 'DIRECT_THERMAL' ? 'Direct Thermal' : 'Thermal Transfer'}
-                      </span>
+                      <span>Printer:</span>
+                      <strong className="text-foreground font-semibold">
+                        {selectedPrinter || 'Default System Printer'}
+                      </strong>
                     </div>
                   )}
                 </div>
 
-                {/* TAB 1: PREVIEW */}
+                {/* SEGMENT 1: PREVIEW */}
                 {activeTab === 'preview' && (
                   <div className="space-y-4">
                     {generating ? (
@@ -620,126 +686,11 @@ export function PurchaseQrCodeDialog({
                   </div>
                 )}
 
-                {/* TAB 2: FORMAT & LABEL SIZE SETTINGS */}
+                {/* SEGMENT 2: FORMAT SETTINGS */}
                 {activeTab === 'configure' && (
                   <div className="space-y-4">
-                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                      {/* COLUMN 1: LABEL SIZE & PRINTER TYPE CUSTOMIZATION */}
-                      <Card className="shadow-sm border-emerald-200 dark:border-emerald-900/60">
-                        <CardContent className="p-4 space-y-4">
-                          <h4 className="text-sm font-semibold flex items-center gap-1.5 text-emerald-700 dark:text-emerald-400">
-                            <Maximize2 className="w-4 h-4" />
-                            Label Size & Printer Type
-                          </h4>
-
-                          <div className="grid grid-cols-2 gap-3">
-                            <div className="space-y-1.5">
-                              <Label className="text-xs">Width (mm)</Label>
-                              <Input
-                                type="number"
-                                min={10}
-                                max={300}
-                                value={labelWidth}
-                                onChange={(e) => setLabelWidth(parseInt(e.target.value) || 50)}
-                                className="h-9 text-xs font-semibold"
-                                placeholder="50"
-                              />
-                            </div>
-
-                            <div className="space-y-1.5">
-                              <Label className="text-xs">Height (mm)</Label>
-                              <Input
-                                type="number"
-                                min={10}
-                                max={300}
-                                value={labelHeight}
-                                onChange={(e) => setLabelHeight(parseInt(e.target.value) || 25)}
-                                className="h-9 text-xs font-semibold"
-                                placeholder="25"
-                              />
-                            </div>
-                          </div>
-
-                          {/* Quick Size Presets */}
-                          <div className="space-y-1.5">
-                            <Label className="text-[11px] text-muted-foreground">Quick Presets:</Label>
-                            <div className="flex flex-wrap gap-1.5">
-                              <button
-                                type="button"
-                                onClick={() => { setLabelWidth(50); setLabelHeight(25) }}
-                                className={cn(
-                                  'text-[10px] px-2 py-0.5 rounded border font-mono transition-all',
-                                  labelWidth === 50 && labelHeight === 25
-                                    ? 'bg-emerald-100 text-emerald-800 border-emerald-300 font-bold dark:bg-emerald-950 dark:text-emerald-300'
-                                    : 'hover:bg-muted text-muted-foreground'
-                                )}
-                              >
-                                50×25 mm
-                              </button>
-                              <button
-                                type="button"
-                                onClick={() => { setLabelWidth(50); setLabelHeight(30) }}
-                                className={cn(
-                                  'text-[10px] px-2 py-0.5 rounded border font-mono transition-all',
-                                  labelWidth === 50 && labelHeight === 30
-                                    ? 'bg-emerald-100 text-emerald-800 border-emerald-300 font-bold dark:bg-emerald-950 dark:text-emerald-300'
-                                    : 'hover:bg-muted text-muted-foreground'
-                                )}
-                              >
-                                50×30 mm
-                              </button>
-                              <button
-                                type="button"
-                                onClick={() => { setLabelWidth(75); setLabelHeight(50) }}
-                                className={cn(
-                                  'text-[10px] px-2 py-0.5 rounded border font-mono transition-all',
-                                  labelWidth === 75 && labelHeight === 50
-                                    ? 'bg-emerald-100 text-emerald-800 border-emerald-300 font-bold dark:bg-emerald-950 dark:text-emerald-300'
-                                    : 'hover:bg-muted text-muted-foreground'
-                                )}
-                              >
-                                75×50 mm
-                              </button>
-                              <button
-                                type="button"
-                                onClick={() => { setLabelWidth(100); setLabelHeight(50) }}
-                                className={cn(
-                                  'text-[10px] px-2 py-0.5 rounded border font-mono transition-all',
-                                  labelWidth === 100 && labelHeight === 50
-                                    ? 'bg-emerald-100 text-emerald-800 border-emerald-300 font-bold dark:bg-emerald-950 dark:text-emerald-300'
-                                    : 'hover:bg-muted text-muted-foreground'
-                                )}
-                              >
-                                100×50 mm
-                              </button>
-                            </div>
-                          </div>
-
-                          {/* Printer Type: Only two options */}
-                          <div className="space-y-1.5 pt-1">
-                            <Label className="text-xs">Printer / Label Type</Label>
-                            <Select
-                              value={printerType}
-                              onValueChange={(v: 'DIRECT_THERMAL' | 'THERMAL_TRANSFER') => setPrinterType(v)}
-                            >
-                              <SelectTrigger className="h-9 text-xs">
-                                <SelectValue />
-                              </SelectTrigger>
-                              <SelectContent>
-                                <SelectItem value="DIRECT_THERMAL">Direct Thermal (No Ribbon)</SelectItem>
-                                <SelectItem value="THERMAL_TRANSFER">Thermal Transfer (Ribbon Required)</SelectItem>
-                              </SelectContent>
-                            </Select>
-                            <p className="text-[10px] text-muted-foreground">
-                              {printerType === 'DIRECT_THERMAL'
-                                ? 'Heat-sensitive direct thermal paper roll'
-                                : 'Thermal transfer ribbon (Wax / Resin) roll'}
-                            </p>
-                          </div>
-                        </CardContent>
-                      </Card>
-
-                      {/* COLUMN 2: CODE COMBINATION STRUCTURE */}
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      {/* CODE COMBINATION STRUCTURE */}
                       <Card className="shadow-sm">
                         <CardContent className="p-4 space-y-4">
                           <h4 className="text-sm font-semibold flex items-center gap-1.5 text-primary">
@@ -834,7 +785,7 @@ export function PurchaseQrCodeDialog({
                         </CardContent>
                       </Card>
 
-                      {/* COLUMN 3: ELEMENTS PRINTED ON STICKER */}
+                      {/* ELEMENTS PRINTED ON STICKER */}
                       <Card className="shadow-sm">
                         <CardContent className="p-4 space-y-3">
                           <h4 className="text-sm font-semibold flex items-center gap-1.5 text-primary">
@@ -940,7 +891,475 @@ export function PurchaseQrCodeDialog({
                   </div>
                 )}
 
-                {/* TAB 3: PRODUCTS & QUANTITY SELECTION */}
+                {/* SEGMENT 3: PRINTER CONFIGURATION */}
+                {activeTab === 'printer' && (
+                  <div className="space-y-4">
+                    {/* CONNECTED PRINTERS & DIRECT PRINT COMMAND CARD */}
+                    <Card className="shadow-sm border-blue-200 dark:border-blue-900/60 bg-blue-50/20 dark:bg-blue-950/10">
+                      <CardHeader className="pb-2 pt-4 px-4">
+                        <div className="flex items-center justify-between">
+                          <CardTitle className="text-sm font-semibold flex items-center gap-1.5 text-blue-700 dark:text-blue-400">
+                            <Printer className="w-4 h-4" />
+                            Connected Device Printers & Print Command
+                          </CardTitle>
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            onClick={fetchConnectedPrinters}
+                            disabled={loadingPrinters}
+                            className="h-7 text-xs gap-1"
+                          >
+                            <RefreshCw className={cn('w-3 h-3', loadingPrinters && 'animate-spin')} />
+                            Rescan Devices
+                          </Button>
+                        </div>
+                      </CardHeader>
+                      <CardContent className="p-4 pt-1 space-y-3.5">
+                        <div className="space-y-1.5">
+                          <Label className="text-xs font-semibold">Select Target Printer for Output</Label>
+                          {devicePrinters.length > 0 ? (
+                            <Select value={selectedPrinter} onValueChange={setSelectedPrinter}>
+                              <SelectTrigger className="h-9 text-xs bg-background">
+                                <SelectValue placeholder="Choose printer..." />
+                              </SelectTrigger>
+                              <SelectContent>
+                                {devicePrinters.map((p) => (
+                                  <SelectItem key={p.name} value={p.name} className="text-xs">
+                                    <div className="flex items-center gap-2">
+                                      <span className="font-medium">{p.name}</span>
+                                      {p.isDefault && (
+                                        <Badge variant="secondary" className="text-[10px] py-0 px-1">
+                                          Default
+                                        </Badge>
+                                      )}
+                                      {p.isThermal && (
+                                        <Badge variant="outline" className="text-[10px] py-0 px-1 text-emerald-700 border-emerald-300">
+                                          Thermal
+                                        </Badge>
+                                      )}
+                                    </div>
+                                  </SelectItem>
+                                ))}
+                              </SelectContent>
+                            </Select>
+                          ) : (
+                            <p className="text-xs text-muted-foreground">
+                              {loadingPrinters ? 'Scanning connected devices...' : 'No system printers detected. Using system default.'}
+                            </p>
+                          )}
+                        </div>
+
+                        {/* Selected Printer Status Details */}
+                        {currentSelectedPrinterObj && (
+                          <div className="p-3 bg-background rounded-lg border text-xs grid grid-cols-2 sm:grid-cols-4 gap-2">
+                            <div>
+                              <span className="text-[10px] text-muted-foreground block">Port</span>
+                              <span className="font-mono font-semibold">{currentSelectedPrinterObj.portName || 'USB / Network'}</span>
+                            </div>
+                            <div>
+                              <span className="text-[10px] text-muted-foreground block">Driver</span>
+                              <span className="truncate font-medium block" title={currentSelectedPrinterObj.driverName}>
+                                {currentSelectedPrinterObj.driverName || 'Generic'}
+                              </span>
+                            </div>
+                            <div>
+                              <span className="text-[10px] text-muted-foreground block">Printer Type</span>
+                              <span className="font-medium text-emerald-700 dark:text-emerald-400">
+                                {currentSelectedPrinterObj.isThermal ? 'Barcode / Thermal' : 'Standard Document'}
+                              </span>
+                            </div>
+                            <div>
+                              <span className="text-[10px] text-muted-foreground block">Connection</span>
+                              <span className="inline-flex items-center gap-1 text-emerald-600 font-semibold">
+                                <CheckCircle2 className="w-3 h-3" /> Ready
+                              </span>
+                            </div>
+                          </div>
+                        )}
+
+                        {/* PRINT COMMAND & PREVIEW ACTION BUTTONS */}
+                        <div className="pt-1 flex flex-col sm:flex-row items-stretch sm:items-center gap-2.5">
+                          <Button
+                            variant="default"
+                            size="lg"
+                            onClick={handlePrint}
+                            disabled={totalQrCount === 0 || generating}
+                            className="flex-1 h-10 text-xs font-bold gap-2 bg-emerald-600 hover:bg-emerald-700 text-white shadow-sm"
+                          >
+                            <Printer className="w-4 h-4" />
+                            Send Printing Command ({totalQrCount} {totalQrCount === 1 ? 'Label' : 'Labels'} • {validWidth}×{validHeight}mm)
+                          </Button>
+                          <Button
+                            variant="outline"
+                            size="lg"
+                            onClick={() => setActiveTab('preview')}
+                            className="h-10 text-xs font-medium gap-1.5 border-primary/30 hover:bg-primary/5"
+                          >
+                            <Eye className="w-4 h-4 text-primary" />
+                            View Full Preview ({totalQrCount})
+                          </Button>
+                        </div>
+                      </CardContent>
+                    </Card>
+
+                    {/* LIVE VISUAL LABEL PRINT PREVIEW (REAL SCALE MOCKUP) */}
+                    <Card className="shadow-sm border-neutral-300 dark:border-neutral-800 bg-neutral-50/50 dark:bg-neutral-900/30">
+                      <CardHeader className="pb-2 pt-4 px-4">
+                        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                          <CardTitle className="text-sm font-semibold flex items-center gap-1.5">
+                            <Sparkles className="w-4 h-4 text-emerald-600" />
+                            Live Label Print Preview (Real Visual Mockup)
+                          </CardTitle>
+                          <div className="flex items-center gap-2 flex-wrap">
+                            <Badge variant="outline" className="text-[11px] font-mono font-medium text-emerald-700 border-emerald-300 bg-emerald-50 dark:bg-emerald-950/40">
+                              {validWidth}mm Width × {validHeight}mm Height
+                            </Badge>
+                            {generatedLabels.length > 1 && (
+                              <div className="flex items-center gap-1 bg-background border rounded-md px-1.5 py-0.5">
+                                <Button
+                                  variant="ghost"
+                                  size="icon"
+                                  className="h-6 w-6"
+                                  disabled={previewIndex <= 0}
+                                  onClick={() => setPreviewIndex((prev) => Math.max(0, prev - 1))}
+                                >
+                                  <ChevronLeft className="w-3.5 h-3.5" />
+                                </Button>
+                                <span className="text-[11px] font-mono px-1 font-medium">
+                                  {previewIndex + 1} / {generatedLabels.length}
+                                </span>
+                                <Button
+                                  variant="ghost"
+                                  size="icon"
+                                  className="h-6 w-6"
+                                  disabled={previewIndex >= generatedLabels.length - 1}
+                                  onClick={() => setPreviewIndex((prev) => Math.min(generatedLabels.length - 1, prev + 1))}
+                                >
+                                  <ChevronRight className="w-3.5 h-3.5" />
+                                </Button>
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                      </CardHeader>
+                      <CardContent className="p-4 pt-1 space-y-3">
+                        {generating ? (
+                          <div className="py-8 text-center text-muted-foreground flex flex-col items-center justify-center gap-2">
+                            <RefreshCw className="w-5 h-5 animate-spin text-emerald-600" />
+                            <p className="text-xs">Rendering label preview...</p>
+                          </div>
+                        ) : generatedLabels.length === 0 ? (
+                          <div className="py-8 text-center text-muted-foreground">
+                            <p className="text-xs">No items selected to preview.</p>
+                          </div>
+                        ) : (
+                          (() => {
+                            const label = generatedLabels[previewIndex] || generatedLabels[0]
+                            return (
+                              <div className="flex flex-col items-center justify-center gap-3">
+                                {/* Dimension Caliper - Top Width */}
+                                <div className="flex items-center justify-center gap-2 text-[10px] text-muted-foreground font-mono font-medium w-full max-w-[420px]">
+                                  <span className="h-[1px] flex-1 bg-neutral-300 dark:bg-neutral-700" />
+                                  <span>↔ Width: {validWidth} mm</span>
+                                  <span className="h-[1px] flex-1 bg-neutral-300 dark:bg-neutral-700" />
+                                </div>
+
+                                {/* Visual Label Box */}
+                                <div className="flex items-center gap-3 w-full justify-center">
+                                  {/* Dimension Caliper - Left Height */}
+                                  <div className="flex flex-col items-center justify-center gap-1 text-[10px] text-muted-foreground font-mono font-medium">
+                                    <span className="w-[1px] h-6 bg-neutral-300 dark:bg-neutral-700" />
+                                    <span className="[writing-mode:vertical-lr] rotate-180">Height: {validHeight} mm</span>
+                                    <span className="w-[1px] h-6 bg-neutral-300 dark:bg-neutral-700" />
+                                  </div>
+
+                                  {/* Physical Label Mockup */}
+                                  <div
+                                    className="w-full max-w-[420px] bg-white text-neutral-900 border-2 border-neutral-400 rounded-lg p-3 shadow-md flex items-center gap-3 transition-all relative overflow-hidden"
+                                    style={{
+                                      minHeight: `${Math.max(90, validHeight * 2.8)}px`,
+                                    }}
+                                  >
+                                    {/* Thermal Sticker Corner Notch / Peel Marker */}
+                                    <div className="absolute top-0 right-0 w-3 h-3 bg-neutral-100 border-b border-l border-neutral-300 rounded-bl" />
+
+                                    {/* QR Code */}
+                                    <div className="shrink-0 bg-white p-1 rounded border border-neutral-200 flex items-center justify-center">
+                                      {/* eslint-disable-next-line @next/next/no-img-element */}
+                                      <img
+                                        src={label.qrDataUrl}
+                                        alt={label.payload}
+                                        className="w-[78px] h-[78px] min-w-[78px] min-h-[78px] object-contain"
+                                      />
+                                    </div>
+
+                                    {/* Label Content */}
+                                    <div className="min-w-0 flex-1 flex flex-col justify-center text-left space-y-0.5 leading-tight overflow-hidden">
+                                      {showProductName && (
+                                        <p className="font-bold text-xs truncate text-black leading-tight" title={label.productName}>
+                                          {label.productName}
+                                        </p>
+                                      )}
+
+                                      {showSku && (
+                                        <p className="text-[10px] font-semibold text-neutral-700 truncate tracking-tight">
+                                          SKU: <span className="font-mono font-bold text-black">{label.sku}</span>
+                                        </p>
+                                      )}
+
+                                      {showPayload && (
+                                        <p className="font-mono text-[9.5px] font-bold text-black truncate select-all bg-neutral-100 px-1 py-0.5 rounded border border-neutral-200">
+                                          {label.payload}
+                                        </p>
+                                      )}
+
+                                      <div className="flex items-center justify-between gap-1 text-[9px] text-neutral-600 pt-0.5">
+                                        {showSerialBadge && (
+                                          <span className="font-semibold text-emerald-800">
+                                            #{label.formattedSerial} ({label.serialNumber}/{label.totalInBatch})
+                                          </span>
+                                        )}
+                                        {showDate && (
+                                          <span className="ml-auto font-mono text-[9px] text-neutral-500">
+                                            {label.dateString}
+                                          </span>
+                                        )}
+                                      </div>
+
+                                      {showPrice && (label.mrp || label.rate) && (
+                                        <div className="text-[9px] font-semibold text-black truncate pt-0.5">
+                                          {label.mrp ? `MRP: ${formatCurrency(label.mrp)}` : `Rate: ${formatCurrency(label.rate || 0)}`}
+                                        </div>
+                                      )}
+
+                                      {showCustomNote1 && customNote1.trim() && (
+                                        <p className="text-[9px] font-semibold text-neutral-800 truncate leading-tight pt-0.5">
+                                          {customNote1.trim()}
+                                        </p>
+                                      )}
+
+                                      {showCustomNote2 && customNote2.trim() && (
+                                        <p className="text-[8.5px] text-neutral-600 truncate leading-tight">
+                                          {customNote2.trim()}
+                                        </p>
+                                      )}
+                                    </div>
+                                  </div>
+                                </div>
+
+                                <p className="text-[11px] text-muted-foreground text-center">
+                                  This is a real-scale preview of how your label will appear when printed on {selectedPrinter || 'the selected printer'} ({validWidth}×{validHeight}mm).
+                                </p>
+                              </div>
+                            )
+                          })()
+                        )}
+                      </CardContent>
+                    </Card>
+
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                      {/* CARD 1: LABEL SIZE DIMENSIONS */}
+                      <Card className="shadow-sm border-emerald-200 dark:border-emerald-900/60">
+                        <CardHeader className="pb-2 pt-4 px-4">
+                          <CardTitle className="text-sm font-semibold flex items-center gap-1.5 text-emerald-700 dark:text-emerald-400">
+                            <Maximize2 className="w-4 h-4" />
+                            Label Dimensions (mm)
+                          </CardTitle>
+                        </CardHeader>
+                        <CardContent className="p-4 pt-0 space-y-4">
+                          <div className="grid grid-cols-2 gap-3">
+                            <div className="space-y-1.5">
+                              <Label className="text-xs">Width (mm)</Label>
+                              <Input
+                                type="number"
+                                min={10}
+                                max={300}
+                                value={labelWidth}
+                                onChange={(e) => setLabelWidth(parseInt(e.target.value) || 50)}
+                                className="h-9 text-xs font-semibold"
+                                placeholder="50"
+                              />
+                            </div>
+
+                            <div className="space-y-1.5">
+                              <Label className="text-xs">Height (mm)</Label>
+                              <Input
+                                type="number"
+                                min={10}
+                                max={300}
+                                value={labelHeight}
+                                onChange={(e) => setLabelHeight(parseInt(e.target.value) || 25)}
+                                className="h-9 text-xs font-semibold"
+                                placeholder="25"
+                              />
+                            </div>
+                          </div>
+
+                          {/* Quick Size Presets */}
+                          <div className="space-y-1.5">
+                            <Label className="text-[11px] text-muted-foreground">Standard Size Presets:</Label>
+                            <div className="flex flex-wrap gap-1.5">
+                              {[
+                                { w: 50, h: 25, label: '50×25 mm (Standard)' },
+                                { w: 50, h: 30, label: '50×30 mm' },
+                                { w: 50, h: 38, label: '50×38 mm' },
+                                { w: 75, h: 50, label: '75×50 mm' },
+                                { w: 100, h: 50, label: '100×50 mm' },
+                                { w: 100, h: 150, label: '100×150 mm (4×6")' },
+                              ].map((preset) => (
+                                <button
+                                  key={preset.label}
+                                  type="button"
+                                  onClick={() => { setLabelWidth(preset.w); setLabelHeight(preset.h) }}
+                                  className={cn(
+                                    'text-[10px] px-2 py-1 rounded border font-mono transition-all',
+                                    labelWidth === preset.w && labelHeight === preset.h
+                                      ? 'bg-emerald-100 text-emerald-800 border-emerald-300 font-bold dark:bg-emerald-950 dark:text-emerald-300'
+                                      : 'hover:bg-muted text-muted-foreground'
+                                  )}
+                                >
+                                  {preset.label}
+                                </button>
+                              ))}
+                            </div>
+                          </div>
+                        </CardContent>
+                      </Card>
+
+                      {/* CARD 2: PRINTING TECHNOLOGY & TYPE */}
+                      <Card className="shadow-sm">
+                        <CardHeader className="pb-2 pt-4 px-4">
+                          <CardTitle className="text-sm font-semibold flex items-center gap-1.5 text-primary">
+                            <Gauge className="w-4 h-4" />
+                            Printing Technology & Ribbon
+                          </CardTitle>
+                        </CardHeader>
+                        <CardContent className="p-4 pt-0 space-y-3">
+                          <div className="space-y-1.5">
+                            <Label className="text-xs">Printing Method</Label>
+                            <Select
+                              value={printerType}
+                              onValueChange={(v: 'DIRECT_THERMAL' | 'THERMAL_TRANSFER') => setPrinterType(v)}
+                            >
+                              <SelectTrigger className="h-9 text-xs">
+                                <SelectValue />
+                              </SelectTrigger>
+                              <SelectContent>
+                                <SelectItem value="DIRECT_THERMAL">Direct Thermal (No Ribbon)</SelectItem>
+                                <SelectItem value="THERMAL_TRANSFER">Thermal Transfer (Ribbon Required)</SelectItem>
+                              </SelectContent>
+                            </Select>
+                          </div>
+
+                          {printerType === 'THERMAL_TRANSFER' && (
+                            <div className="space-y-1.5">
+                              <Label className="text-xs">Ribbon Formulation</Label>
+                              <Select value={ribbonType} onValueChange={setRibbonType}>
+                                <SelectTrigger className="h-8 text-xs">
+                                  <SelectValue />
+                                </SelectTrigger>
+                                <SelectContent>
+                                  <SelectItem value="wax">Wax Ribbon (Standard Paper)</SelectItem>
+                                  <SelectItem value="wax_resin">Wax-Resin (Semi-Gloss / Synthetic)</SelectItem>
+                                  <SelectItem value="resin">Full Resin (Polyester / Chemical Proof)</SelectItem>
+                                </SelectContent>
+                              </Select>
+                            </div>
+                          )}
+
+                          <div className="grid grid-cols-2 gap-3">
+                            <div className="space-y-1.5">
+                              <Label className="text-xs">Resolution (DPI)</Label>
+                              <Select value={printerDpi} onValueChange={setPrinterDpi}>
+                                <SelectTrigger className="h-8 text-xs">
+                                  <SelectValue />
+                                </SelectTrigger>
+                                <SelectContent>
+                                  <SelectItem value="203">203 DPI (8 dots/mm)</SelectItem>
+                                  <SelectItem value="300">300 DPI (12 dots/mm)</SelectItem>
+                                  <SelectItem value="600">600 DPI (High Res)</SelectItem>
+                                </SelectContent>
+                              </Select>
+                            </div>
+
+                            <div className="space-y-1.5">
+                              <Label className="text-xs">Print Darkness</Label>
+                              <Select value={printDensity} onValueChange={setPrintDensity}>
+                                <SelectTrigger className="h-8 text-xs">
+                                  <SelectValue />
+                                </SelectTrigger>
+                                <SelectContent>
+                                  <SelectItem value="normal">Normal (100%)</SelectItem>
+                                  <SelectItem value="dark">High Contrast</SelectItem>
+                                  <SelectItem value="extra_dark">Max Density</SelectItem>
+                                </SelectContent>
+                              </Select>
+                            </div>
+                          </div>
+                        </CardContent>
+                      </Card>
+
+                      {/* CARD 3: SENSOR & MEDIA ALIGNMENT */}
+                      <Card className="shadow-sm">
+                        <CardHeader className="pb-2 pt-4 px-4">
+                          <CardTitle className="text-sm font-semibold flex items-center gap-1.5 text-primary">
+                            <Sliders className="w-4 h-4" />
+                            Media Sensor & Calibration
+                          </CardTitle>
+                        </CardHeader>
+                        <CardContent className="p-4 pt-0 space-y-3">
+                          <div className="space-y-1.5">
+                            <Label className="text-xs">Sensor / Media Type</Label>
+                            <Select value={sensorType} onValueChange={setSensorType}>
+                              <SelectTrigger className="h-9 text-xs">
+                                <SelectValue />
+                              </SelectTrigger>
+                              <SelectContent>
+                                <SelectItem value="gap">Gap / Die-cut (Default)</SelectItem>
+                                <SelectItem value="continuous">Continuous Roll</SelectItem>
+                                <SelectItem value="black_mark">Black Mark / Reflective</SelectItem>
+                              </SelectContent>
+                            </Select>
+                          </div>
+
+                          <div className="grid grid-cols-2 gap-3">
+                            <div className="space-y-1.5">
+                              <Label className="text-xs">Top Offset (mm)</Label>
+                              <Input
+                                type="number"
+                                value={topOffset}
+                                onChange={(e) => setTopOffset(parseInt(e.target.value) || 0)}
+                                className="h-8 text-xs font-mono"
+                                placeholder="0"
+                              />
+                            </div>
+
+                            <div className="space-y-1.5">
+                              <Label className="text-xs">Left Offset (mm)</Label>
+                              <Input
+                                type="number"
+                                value={leftOffset}
+                                onChange={(e) => setLeftOffset(parseInt(e.target.value) || 0)}
+                                className="h-8 text-xs font-mono"
+                                placeholder="0"
+                              />
+                            </div>
+                          </div>
+
+                          <div className="p-2.5 bg-muted/40 rounded-lg border text-[11px] text-muted-foreground space-y-1">
+                            <p className="font-semibold text-foreground flex items-center gap-1">
+                              <Sparkles className="w-3.5 h-3.5 text-emerald-600" />
+                              Supported Thermal Printers:
+                            </p>
+                            <p>TSC, Zebra, TVS, Citizen, Godex, Honeywell, Xprinter, Rongta, etc.</p>
+                          </div>
+                        </CardContent>
+                      </Card>
+                    </div>
+                  </div>
+                )}
+
+                {/* SEGMENT 4: PRODUCTS & QUANTITY SELECTION */}
                 {activeTab === 'list' && (
                   <div className="space-y-3">
                     <div className="flex items-center justify-between">
