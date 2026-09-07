@@ -146,6 +146,10 @@ export function PurchaseQrCodeDialog({
   const [showSerialBadge, setShowSerialBadge] = useState(true)
   const [showDate, setShowDate] = useState(true)
   const [showPrice, setShowPrice] = useState(false)
+  const [customNote1, setCustomNote1] = useState<string>('')
+  const [showCustomNote1, setShowCustomNote1] = useState<boolean>(false)
+  const [customNote2, setCustomNote2] = useState<string>('')
+  const [showCustomNote2, setShowCustomNote2] = useState<boolean>(false)
 
   // Navigation tab state (self-contained)
   const [activeTab, setActiveTab] = useState<'preview' | 'configure' | 'list'>('preview')
@@ -595,6 +599,18 @@ export function PurchaseQrCodeDialog({
                                     {label.mrp ? `MRP: ${formatCurrency(label.mrp)}` : `Rate: ${formatCurrency(label.rate || 0)}`}
                                   </div>
                                 )}
+
+                                {showCustomNote1 && customNote1.trim() && (
+                                  <p className="text-[8.5px] font-semibold text-neutral-800 truncate leading-tight pt-0.5">
+                                    {customNote1.trim()}
+                                  </p>
+                                )}
+
+                                {showCustomNote2 && customNote2.trim() && (
+                                  <p className="text-[8px] text-neutral-600 truncate leading-tight">
+                                    {customNote2.trim()}
+                                  </p>
+                                )}
                               </div>
                             </div>
                           ))}
@@ -874,6 +890,49 @@ export function PurchaseQrCodeDialog({
                               />
                               Product Rate / MRP
                             </label>
+
+                            {/* Custom Note 1 & 2 */}
+                            <div className="border-t pt-2.5 space-y-2">
+                              <div className="space-y-1">
+                                <label className="flex items-center gap-2 text-xs font-medium cursor-pointer">
+                                  <Checkbox
+                                    checked={showCustomNote1}
+                                    onCheckedChange={(c) => {
+                                      setShowCustomNote1(Boolean(c))
+                                    }}
+                                  />
+                                  Custom Note 1
+                                </label>
+                                {showCustomNote1 && (
+                                  <Input
+                                    placeholder="e.g. Batch No: B-2026 / QC OK"
+                                    value={customNote1}
+                                    onChange={(e) => setCustomNote1(e.target.value)}
+                                    className="h-7 text-xs"
+                                  />
+                                )}
+                              </div>
+
+                              <div className="space-y-1">
+                                <label className="flex items-center gap-2 text-xs font-medium cursor-pointer">
+                                  <Checkbox
+                                    checked={showCustomNote2}
+                                    onCheckedChange={(c) => {
+                                      setShowCustomNote2(Boolean(c))
+                                    }}
+                                  />
+                                  Custom Note 2
+                                </label>
+                                {showCustomNote2 && (
+                                  <Input
+                                    placeholder="e.g. Warranty 1 Yr / Fragile"
+                                    value={customNote2}
+                                    onChange={(e) => setCustomNote2(e.target.value)}
+                                    className="h-7 text-xs"
+                                  />
+                                )}
+                              </div>
+                            </div>
                           </div>
                         </CardContent>
                       </Card>
