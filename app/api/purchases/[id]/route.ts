@@ -29,7 +29,21 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
   ) as any[]
   if (!rows[0]) return NextResponse.json({ error: 'Not found' }, { status: 404 })
 
-  const [items] = await db.execute('SELECT * FROM purchase_items WHERE purchase_id = ? ORDER BY sort_order ASC, id ASC', [id]) as any[]
+  const [items] = await db.execute(
+    `SELECT pi.*,
+       COALESCE(NULLIF(TRIM(p.name), ''), NULLIF(TRIM(pi.description), ''), 'Product') as product_name,
+       p.sku as product_sku,
+       p.barcode as product_barcode,
+       p.mrp as product_mrp,
+       p.selling_price as product_selling_price,
+       u.short_name as unit_short_name
+     FROM purchase_items pi
+     LEFT JOIN products p ON pi.product_id = p.id
+     LEFT JOIN units u ON p.unit_id = u.id
+     WHERE pi.purchase_id = ?
+     ORDER BY pi.sort_order ASC, pi.id ASC`,
+    [id]
+  ) as any[]
   return NextResponse.json({ ...rows[0], items })
 }
 

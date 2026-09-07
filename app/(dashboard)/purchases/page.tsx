@@ -17,11 +17,13 @@ import {
   Trash2,
   ShoppingCart,
   Calendar,
+  QrCode,
 } from 'lucide-react'
 import { formatCurrency, formatDate, cn } from '@/lib/utils'
 import { ListPageToolbar } from '@/components/shared/list-page-toolbar'
 import { parseJsonResponse } from '@/lib/fetch-json'
 import { useAppStore } from '@/store/app-store'
+import { PurchaseQrCodeDialog } from '@/components/purchases/purchase-qr-code-dialog'
 
 interface Purchase {
   id: string
@@ -54,11 +56,13 @@ function StatusBadge({ status }: { status: string }) {
 function PurchaseActions({
   purchaseId,
   onView,
+  onGenerateQr,
   onDelete,
   compact = false,
 }: {
   purchaseId: string
   onView: () => void
+  onGenerateQr: () => void
   onDelete: () => void
   compact?: boolean
 }) {
@@ -66,6 +70,9 @@ function PurchaseActions({
   const icon = compact ? 'h-3.5 w-3.5' : 'h-4 w-4'
   return (
     <div className="inline-flex items-center justify-center gap-0">
+      <Button variant="ghost" size="icon" title="Generate QR Codes" className={cn(size, 'text-emerald-600 hover:text-emerald-700')} onClick={onGenerateQr}>
+        <QrCode className={icon} />
+      </Button>
       <Button variant="ghost" size="icon" title="View PDF" className={size} onClick={onView}>
         <Eye className={icon} />
       </Button>
@@ -105,6 +112,9 @@ export default function PurchasesPage() {
   const [pdfViewerUrl, setPdfViewerUrl] = useState<string | null>(null)
   const [pdfViewerTitle, setPdfViewerTitle] = useState('')
   const [pdfViewerFilename, setPdfViewerFilename] = useState('purchase.pdf')
+
+  const [qrDialogOpen, setQrDialogOpen] = useState(false)
+  const [selectedPurchaseForQr, setSelectedPurchaseForQr] = useState<string | null>(null)
 
   const showTable = viewMode === 'table' && !isMobile
   const showCards = viewMode === 'card' || isMobile
@@ -152,6 +162,11 @@ export default function PurchasesPage() {
     setPdfViewerFilename(`${safeName}.pdf`)
     setPdfViewerUrl(`/api/purchases/${p.id}/pdf`)
     setPdfViewerOpen(true)
+  }
+
+  const handleGenerateQr = (p: Purchase) => {
+    setSelectedPurchaseForQr(p.id)
+    setQrDialogOpen(true)
   }
 
   const handleDelete = async (id: string, billNo: string) => {
@@ -205,6 +220,7 @@ export default function PurchasesPage() {
                 compact
                 purchaseId={p.id}
                 onView={() => handleView(p)}
+                onGenerateQr={() => handleGenerateQr(p)}
                 onDelete={() => handleDelete(p.id, p.bill_no || '-')}
               />
             </div>
@@ -332,6 +348,7 @@ export default function PurchasesPage() {
                       <PurchaseActions
                         purchaseId={p.id}
                         onView={() => handleView(p)}
+                        onGenerateQr={() => handleGenerateQr(p)}
                         onDelete={() => handleDelete(p.id, p.bill_no || '-')}
                       />
                     </TableCell>
@@ -353,6 +370,12 @@ export default function PurchasesPage() {
         pdfApiUrl={pdfViewerUrl}
         title={pdfViewerTitle}
         filename={pdfViewerFilename}
+      />
+
+      <PurchaseQrCodeDialog
+        open={qrDialogOpen}
+        onOpenChange={setQrDialogOpen}
+        purchaseId={selectedPurchaseForQr}
       />
     </div>
   )

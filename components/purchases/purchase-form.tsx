@@ -17,9 +17,10 @@ import { DocumentTermsField } from '@/components/shared/document-terms-field'
 import { purchaseSchema, type PurchaseInput } from '@/lib/validations'
 import { calculateGST, formatCurrency, GST_RATES, roundToTwo, cn } from '@/lib/utils'
 import { computePurchaseLineTotals } from '@/lib/purchase-totals'
-import { Plus, Trash2, ArrowLeft, Package } from 'lucide-react'
+import { Plus, Trash2, ArrowLeft, Package, QrCode } from 'lucide-react'
 import Link from 'next/link'
 import { ContactFieldInputs } from '@/components/shared/contact-field-inputs'
+import { PurchaseQrCodeDialog } from '@/components/purchases/purchase-qr-code-dialog'
 import {
   firstPartyValidationError,
   type PartyFieldErrors,
@@ -167,6 +168,7 @@ export function PurchaseForm({ purchaseId }: { purchaseId?: string }) {
   const isEdit = Boolean(purchaseId)
   const [saving, setSaving] = useState(false)
   const [loadingInitial, setLoadingInitial] = useState(isEdit)
+  const [qrDialogOpen, setQrDialogOpen] = useState(false)
 
   const editLoadedRef = useRef(false)
   const [products, setProducts] = useState<Product[]>([])
@@ -706,18 +708,32 @@ export function PurchaseForm({ purchaseId }: { purchaseId?: string }) {
 
   return (
     <div className="space-y-4 md:space-y-6 max-w-6xl min-w-0">
-      <div className="flex items-center gap-3 sm:gap-4 min-w-0">
-        <Link href="/purchases">
-          <Button variant="ghost" size="icon">
-            <ArrowLeft className="w-4 h-4" />
-          </Button>
-        </Link>
-        <div className="min-w-0">
-          <h1 className="text-xl sm:text-2xl font-bold truncate">
-            {isEdit ? 'Edit Purchase' : 'New Purchase'}
-          </h1>
-
+      <div className="flex items-center justify-between gap-3 sm:gap-4 min-w-0">
+        <div className="flex items-center gap-3 sm:gap-4 min-w-0">
+          <Link href="/purchases">
+            <Button variant="ghost" size="icon">
+              <ArrowLeft className="w-4 h-4" />
+            </Button>
+          </Link>
+          <div className="min-w-0">
+            <h1 className="text-xl sm:text-2xl font-bold truncate">
+              {isEdit ? 'Edit Purchase' : 'New Purchase'}
+            </h1>
+          </div>
         </div>
+
+        {isEdit && purchaseId && (
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            onClick={() => setQrDialogOpen(true)}
+            className="h-9 gap-1.5 text-xs text-emerald-600 dark:text-emerald-400 border-emerald-200 dark:border-emerald-800 hover:bg-emerald-50 dark:hover:bg-emerald-950/40"
+          >
+            <QrCode className="w-4 h-4" />
+            QR Codes
+          </Button>
+        )}
       </div>
 
       <form onSubmit={handleSubmit(onSubmit)} className="space-y-4 md:space-y-6">
@@ -1191,6 +1207,12 @@ export function PurchaseForm({ purchaseId }: { purchaseId?: string }) {
           </Button>
         </div>
       </form>
+
+      <PurchaseQrCodeDialog
+        open={qrDialogOpen}
+        onOpenChange={setQrDialogOpen}
+        purchaseId={purchaseId}
+      />
     </div>
   )
 }
