@@ -46,6 +46,8 @@ export async function GET(req: NextRequest) {
         bank_account as bankAccount,
         bank_ifsc as bankIfsc,
         bank_branch as bankBranch,
+        show_bank_details_invoice as showBankDetailsInvoice,
+        show_bank_details_proforma as showBankDetailsProforma,
         invoice_prefix as invoicePrefix,
         quotation_prefix as quotationPrefix,
         proforma_prefix as proformaPrefix,
@@ -68,7 +70,13 @@ export async function GET(req: NextRequest) {
       LIMIT 1
     `, [organizationId]) as any[]
 
-    return NextResponse.json(rows[0] || null)
+    const row = rows[0]
+    if (row) {
+      row.showBankDetailsInvoice = row.showBankDetailsInvoice === 0 ? false : true
+      row.showBankDetailsProforma = row.showBankDetailsProforma === 0 ? false : true
+    }
+
+    return NextResponse.json(row || null)
   } catch (error) {
     console.error('Error fetching business settings:', error)
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 })
@@ -132,6 +140,8 @@ export async function PUT(req: NextRequest) {
           bank_account = ?,
           bank_ifsc = ?,
           bank_branch = ?,
+          show_bank_details_invoice = ?,
+          show_bank_details_proforma = ?,
           invoice_prefix = ?,
           quotation_prefix = ?,
           proforma_prefix = ?,
@@ -166,6 +176,8 @@ export async function PUT(req: NextRequest) {
           data.bankAccount || null,
           data.bankIfsc || null,
           data.bankBranch || null,
+          data.showBankDetailsInvoice === false ? 0 : 1,
+          data.showBankDetailsProforma === false ? 0 : 1,
           data.invoicePrefix,
           data.quotationPrefix,
           data.proformaPrefix || 'PI',
@@ -192,10 +204,11 @@ export async function PUT(req: NextRequest) {
         `INSERT INTO business_settings (
           id, organization_id, company_name, gstin, pan, address, city, state, pincode,
           phone, email, website, logo, sidebar_color, bank_name, bank_account, bank_ifsc, bank_branch,
+          show_bank_details_invoice, show_bank_details_proforma,
           invoice_prefix, quotation_prefix, proforma_prefix, purchase_order_prefix, challan_prefix, document_number_separator, document_number_structure, terms_condition,
           quotation_terms, proforma_terms, sales_invoice_terms, purchase_order_terms, purchase_invoice_terms,
           delivery_challan_terms, returnable_challan_terms
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
         [
           id,
           organizationId,
@@ -215,6 +228,8 @@ export async function PUT(req: NextRequest) {
           data.bankAccount || null,
           data.bankIfsc || null,
           data.bankBranch || null,
+          data.showBankDetailsInvoice === false ? 0 : 1,
+          data.showBankDetailsProforma === false ? 0 : 1,
           data.invoicePrefix,
           data.quotationPrefix,
           data.proformaPrefix || 'PI',
@@ -254,6 +269,8 @@ export async function PUT(req: NextRequest) {
         bank_account as bankAccount,
         bank_ifsc as bankIfsc,
         bank_branch as bankBranch,
+        show_bank_details_invoice as showBankDetailsInvoice,
+        show_bank_details_proforma as showBankDetailsProforma,
         invoice_prefix as invoicePrefix,
         quotation_prefix as quotationPrefix,
         proforma_prefix as proformaPrefix,
@@ -276,7 +293,13 @@ export async function PUT(req: NextRequest) {
       LIMIT 1
     `, [organizationId]) as any[]
 
-    return NextResponse.json(rows[0])
+    const updatedRow = rows[0]
+    if (updatedRow) {
+      updatedRow.showBankDetailsInvoice = updatedRow.showBankDetailsInvoice === 0 ? false : true
+      updatedRow.showBankDetailsProforma = updatedRow.showBankDetailsProforma === 0 ? false : true
+    }
+
+    return NextResponse.json(updatedRow)
   } catch (err: any) {
     console.error('Error updating business settings:', err)
     if (err.name === 'ZodError') {

@@ -29,17 +29,12 @@ import {
   Package,
   Layers,
   FileText,
-  Maximize2,
-  Settings2,
-  Gauge,
-  Sliders,
   Sparkles,
   CheckCircle2,
-  HardDrive,
-  Laptop,
   ChevronLeft,
   ChevronRight,
-  ExternalLink,
+  Zap,
+  Loader2,
 } from 'lucide-react'
 
 export interface PurchaseItemForQR {
@@ -149,16 +144,31 @@ export function PurchaseQrCodeDialog({
   const [selectedPrinter, setSelectedPrinter] = useState<string>('')
   const [loadingPrinters, setLoadingPrinters] = useState<boolean>(false)
 
-  // Label Size & Printer Configuration
-  const [labelWidth, setLabelWidth] = useState<number>(50) // Default 50mm
-  const [labelHeight, setLabelHeight] = useState<number>(25) // Default 25mm
+  // Label Size & Roll Layout (Hardcoded 50x25 mm standard)
+  const labelWidth = 50 // Hardcoded 50mm width
+  const labelHeight = 25 // Hardcoded 25mm height
+  const labelsAcross = 1 // Hardcoded 1-Across standard
+  const [horizontalGap, setHorizontalGap] = useState<number>(2) // Gap across in mm (default 2mm)
+  const [verticalGap, setVerticalGap] = useState<number>(2) // Row pitch gap in mm (default 2mm)
+  const [printerLanguage, setPrinterLanguage] = useState<'TSPL' | 'ZPL'>('TSPL')
   const [printerType, setPrinterType] = useState<'DIRECT_THERMAL' | 'THERMAL_TRANSFER'>('DIRECT_THERMAL')
-  const [printerDpi, setPrinterDpi] = useState<string>('203') // 203 DPI standard, 300 DPI
+  const [printerDpi, setPrinterDpi] = useState<string>('300') // 300 DPI for TSC TE310, 203 DPI standard
   const [printDensity, setPrintDensity] = useState<string>('dark') // normal, dark, extra_dark
   const [sensorType, setSensorType] = useState<string>('gap') // gap, continuous, black_mark
   const [topOffset, setTopOffset] = useState<number>(0)
   const [leftOffset, setLeftOffset] = useState<number>(0)
   const [ribbonType, setRibbonType] = useState<string>('wax') // wax, wax_resin, resin
+  const [previewRowIndex, setPreviewRowIndex] = useState<number>(0)
+
+  // Direct Printing Progress State (1/10, 2/10...)
+  const [directPrinting, setDirectPrinting] = useState<boolean>(false)
+  const [printProgress, setPrintProgress] = useState<{
+    current: number
+    total: number
+    statusText: string
+    completed: boolean
+    error?: string
+  } | null>(null)
 
   // Code Combination controls
   const [dateFormat, setDateFormat] = useState<string>('DDMMYY')
@@ -167,17 +177,14 @@ export function PurchaseQrCodeDialog({
   const [startSerial, setStartSerial] = useState<number>(1)
   const [customPrefix, setCustomPrefix] = useState<string>('')
 
-  // Display Options on Label
+  // Display Options on Label - ONLY 4 Human-Readable Elements (Respectively: 1 Product, 2 Full QR, 3 & 4 Custom Fields)
   const [showProductName, setShowProductName] = useState(true)
-  const [showSku, setShowSku] = useState(true)
   const [showPayload, setShowPayload] = useState(true)
-  const [showSerialBadge, setShowSerialBadge] = useState(true)
-  const [showDate, setShowDate] = useState(true)
-  const [showPrice, setShowPrice] = useState(false)
   const [customNote1, setCustomNote1] = useState<string>('')
-  const [showCustomNote1, setShowCustomNote1] = useState<boolean>(false)
+  const [showCustomNote1, setShowCustomNote1] = useState<boolean>(true)
   const [customNote2, setCustomNote2] = useState<string>('')
-  const [showCustomNote2, setShowCustomNote2] = useState<boolean>(false)
+  const [showCustomNote2, setShowCustomNote2] = useState<boolean>(true)
+  const [prnTemplateFile, setPrnTemplateFile] = useState<string>('auto')
 
   // Navigation tab state (self-contained)
   const [activeTab, setActiveTab] = useState<'preview' | 'configure' | 'printer' | 'list'>('preview')
@@ -188,6 +195,32 @@ export function PurchaseQrCodeDialog({
   const [generatedLabels, setGeneratedLabels] = useState<GeneratedLabel[]>([])
   const [generating, setGenerating] = useState(false)
   const [copied, setCopied] = useState(false)
+
+  const applyPrinterSettings = (printerName: string, printersList: DevicePrinter[] = devicePrinters) => {
+    setSelectedPrinter(printerName)
+    const pObj = printersList.find((p) => p.name === printerName)
+    const lower = (printerName || '').toLowerCase()
+    const driverLower = (pObj?.driverName || '').toLowerCase()
+
+    const isZebra = lower.includes('zebra') || lower.includes('zdesigner') || driverLower.includes('zebra') || driverLower.includes('zdesigner')
+    const is300 = lower.includes('310') || lower.includes('300') || driverLower.includes('310') || driverLower.includes('300')
+
+    if (isZebra) {
+      setPrinterLanguage('ZPL')
+    } else {
+      setPrinterLanguage('TSPL')
+    }
+
+    if (is300) {
+      setPrinterDpi('300')
+    } else {
+      setPrinterDpi('203')
+    }
+
+    if (lower.includes('tsc') || driverLower.includes('tsc')) {
+      setPrinterType('THERMAL_TRANSFER')
+    }
+  }
 
   // Fetch connected printers on device
   const fetchConnectedPrinters = async () => {
@@ -200,10 +233,7 @@ export function PurchaseQrCodeDialog({
         if (!selectedPrinter) {
           const defaultP = data.printers.find((p: DevicePrinter) => p.isDefault) || data.printers[0]
           if (defaultP) {
-            setSelectedPrinter(defaultP.name)
-            if (defaultP.name.toLowerCase().includes('tsc') || defaultP.driverName.toLowerCase().includes('tsc')) {
-              setPrinterType('THERMAL_TRANSFER')
-            }
+            applyPrinterSettings(defaultP.name, data.printers)
           }
         }
       }
@@ -363,8 +393,94 @@ export function PurchaseQrCodeDialog({
 
   const totalQrCount = generatedLabels.length
 
-  const handlePrint = () => {
-    window.print()
+  // Direct Printing to target printer with live progress tracking (1/10, 2/10...)
+  const handleDirectPrint = async () => {
+    if (generatedLabels.length === 0) return
+    if (!selectedPrinter) {
+      toast({
+        title: 'No Printer Selected',
+        description: 'Please select a connected printer in the configuration.',
+        variant: 'destructive',
+      })
+      return
+    }
+
+    setDirectPrinting(true)
+    const total = generatedLabels.length
+    setPrintProgress({
+      current: 1,
+      total,
+      statusText: `Sending ${total} labels to ${selectedPrinter}...`,
+      completed: false,
+    })
+
+    try {
+      // Send raw ZPL payload to printer spooler API immediately
+      const res = await fetch('/api/printers/print-direct', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          printerName: selectedPrinter,
+          labels: generatedLabels,
+          config: {
+            printerName: selectedPrinter,
+            labelWidth: 50,
+            labelHeight: 25,
+            labelsAcross: 1,
+            horizontalGap: 2,
+            verticalGap: 2,
+            printerDpi,
+            printDensity,
+            printerLanguage,
+            printerType,
+            sensorType,
+            showProductName,
+            showPayload,
+            customNote1,
+            showCustomNote1,
+            customNote2,
+            showCustomNote2,
+          },
+        }),
+      })
+
+      const result = await res.json()
+      if (!res.ok || result.error) {
+        throw new Error(result.error || 'Direct print failed')
+      }
+
+      setPrintProgress({
+        current: total,
+        total,
+        statusText: `✓ Successfully sent ${total} labels to ${selectedPrinter}! Printing continuously...`,
+        completed: true,
+      })
+
+      toast({
+        title: 'Print Command Sent!',
+        description: `${total} labels sent directly to ${selectedPrinter}.`,
+      })
+
+      setTimeout(() => {
+        setPrintProgress(null)
+      }, 5000)
+    } catch (err: any) {
+      console.error('Direct print error:', err)
+      setPrintProgress({
+        current: 0,
+        total,
+        statusText: `Print Error: ${err?.message || 'Could not send raw print job'}`,
+        completed: false,
+        error: err?.message,
+      })
+      toast({
+        title: 'Direct Print Issue',
+        description: err?.message || 'Could not send raw print job to printer.',
+        variant: 'destructive',
+      })
+    } finally {
+      setDirectPrinting(false)
+    }
   }
 
   const handleCopySerials = () => {
@@ -389,15 +505,27 @@ export function PurchaseQrCodeDialog({
 
   const allSelected = itemConfigs.length > 0 && itemConfigs.every((i) => i.selected)
 
-  // Safe valid width/height
+  // Safe valid width/height & across calculations
   const validWidth = Math.max(10, Math.min(300, labelWidth || 50))
   const validHeight = Math.max(10, Math.min(300, labelHeight || 25))
+  const validAcross = Math.max(1, Math.min(6, labelsAcross || 1))
+  const validHGap = Math.max(0, Math.min(50, horizontalGap ?? 2))
+  const validVGap = Math.max(0, Math.min(50, verticalGap ?? 2))
+  const totalRollWidth = (validWidth * validAcross) + (validHGap * (validAcross - 1))
+
+  const labelRows = useMemo(() => {
+    const rows: GeneratedLabel[][] = []
+    for (let i = 0; i < generatedLabels.length; i += validAcross) {
+      rows.push(generatedLabels.slice(i, i + validAcross))
+    }
+    return rows
+  }, [generatedLabels, validAcross])
 
   const currentSelectedPrinterObj = devicePrinters.find((p) => p.name === selectedPrinter)
 
   return (
     <>
-      {/* Dynamic exact label size print styles */}
+      {/* Dynamic exact label size & multi-across print styles */}
       <style jsx global>{`
         @media print {
           html, body {
@@ -416,15 +544,28 @@ export function PurchaseQrCodeDialog({
             position: absolute;
             left: ${leftOffset}mm !important;
             top: ${topOffset}mm !important;
-            width: ${validWidth}mm !important;
+            width: ${totalRollWidth}mm !important;
             margin: 0 !important;
             padding: 0 !important;
             background: #ffffff !important;
             color: #000000 !important;
           }
           @page {
-            size: ${validWidth}mm ${validHeight}mm;
+            size: ${totalRollWidth}mm ${validHeight}mm;
             margin: 0mm;
+          }
+          .qr-print-row {
+            display: flex !important;
+            flex-direction: row !important;
+            width: ${totalRollWidth}mm !important;
+            height: ${validHeight}mm !important;
+            gap: ${validHGap}mm !important;
+            page-break-after: always !important;
+            page-break-inside: avoid !important;
+            break-inside: avoid !important;
+            margin: 0 0 ${validVGap}mm 0 !important;
+            padding: 0 !important;
+            box-sizing: border-box !important;
           }
           .custom-qr-label {
             width: ${validWidth}mm !important;
@@ -435,9 +576,6 @@ export function PurchaseQrCodeDialog({
             min-height: ${validHeight}mm !important;
             padding: 1.2mm 1.5mm !important;
             box-sizing: border-box !important;
-            page-break-after: always !important;
-            page-break-inside: avoid !important;
-            break-inside: avoid !important;
             margin: 0 !important;
             border: none !important;
             background: #ffffff !important;
@@ -502,12 +640,78 @@ export function PurchaseQrCodeDialog({
                   {copied ? <Check className="w-3.5 h-3.5 text-emerald-600" /> : <Copy className="w-3.5 h-3.5" />}
                   Copy List
                 </Button>
+
+                <Button
+                  variant="default"
+                  size="sm"
+                  onClick={handleDirectPrint}
+                  disabled={totalQrCount === 0 || generating || directPrinting}
+                  className="h-9 text-xs font-bold gap-1.5 bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-700 hover:to-teal-700 text-white shadow-sm"
+                  title={`Direct print to ${selectedPrinter || 'thermal printer'}`}
+                >
+                  {directPrinting ? (
+                    <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                  ) : (
+                    <Zap className="w-3.5 h-3.5 text-amber-300 fill-amber-300" />
+                  )}
+                  {directPrinting
+                    ? `Printing (${printProgress?.current || 1}/${totalQrCount})...`
+                    : `Direct Print (${totalQrCount})`}
+                </Button>
               </div>
             </div>
           </DialogHeader>
 
           {/* Main Body */}
           <div className="flex-1 overflow-y-auto p-4 sm:p-5 space-y-4">
+            {/* GLOBAL LIVE PRINT PROGRESS BANNER */}
+            {printProgress && (
+              <div
+                className={cn(
+                  'p-3.5 rounded-lg border text-xs space-y-2 transition-all animate-in fade-in shadow-sm',
+                  printProgress.completed
+                    ? 'bg-emerald-50 dark:bg-emerald-950/40 border-emerald-300 dark:border-emerald-800 text-emerald-900 dark:text-emerald-200'
+                    : printProgress.error
+                    ? 'bg-red-50 dark:bg-red-950/40 border-red-300 dark:border-red-800 text-red-900 dark:text-red-200'
+                    : 'bg-blue-50 dark:bg-blue-950/40 border-blue-300 dark:border-blue-800 text-blue-900 dark:text-blue-200'
+                )}
+              >
+                <div className="flex items-center justify-between font-semibold">
+                  <span className="flex items-center gap-2">
+                    {directPrinting ? (
+                      <Loader2 className="w-4 h-4 animate-spin text-blue-600 dark:text-blue-400" />
+                    ) : printProgress.completed ? (
+                      <CheckCircle2 className="w-4 h-4 text-emerald-600 dark:text-emerald-400" />
+                    ) : null}
+                    <span>{printProgress.statusText}</span>
+                  </span>
+                  <Badge
+                    variant={printProgress.completed ? 'default' : 'secondary'}
+                    className="font-mono text-[11px]"
+                  >
+                    {printProgress.current} / {printProgress.total} (
+                    {Math.round((printProgress.current / (printProgress.total || 1)) * 100)}%)
+                  </Badge>
+                </div>
+
+                {/* Animated Progress Bar */}
+                <div className="w-full bg-neutral-200 dark:bg-neutral-700 h-2.5 rounded-full overflow-hidden">
+                  <div
+                    className={cn(
+                      'h-full transition-all duration-300 rounded-full',
+                      printProgress.completed
+                        ? 'bg-emerald-600'
+                        : printProgress.error
+                        ? 'bg-red-600'
+                        : 'bg-blue-600'
+                    )}
+                    style={{
+                      width: `${Math.min(100, (printProgress.current / (printProgress.total || 1)) * 100)}%`,
+                    }}
+                  />
+                </div>
+              </div>
+            )}
             {loading ? (
               <div className="py-16 text-center text-muted-foreground flex flex-col items-center justify-center gap-2">
                 <RefreshCw className="w-6 h-6 animate-spin text-muted-foreground" />
@@ -627,51 +831,30 @@ export function PurchaseQrCodeDialog({
                                 />
                               </div>
 
-                              {/* Label Details */}
-                              <div className="min-w-0 flex-1 flex flex-col justify-center text-left space-y-0.5 leading-tight overflow-hidden">
+                              {/* Label Details - Strictly 4 Human-Readable Items on 50x25mm */}
+                              <div className="min-w-0 flex-1 flex flex-col justify-center text-left space-y-1 leading-tight overflow-hidden">
+                                {/* 1. Product Name */}
                                 {showProductName && (
                                   <p className="font-bold text-[11px] truncate text-black leading-tight" title={label.productName}>
                                     {label.productName}
                                   </p>
                                 )}
 
-                                {showSku && (
-                                  <p className="text-[9.5px] font-semibold text-neutral-700 truncate tracking-tight">
-                                    SKU: <span className="font-mono">{label.sku}</span>
-                                  </p>
-                                )}
-
+                                {/* 2. Full QR Combination Code */}
                                 {showPayload && (
-                                  <p className="font-mono text-[9px] font-bold text-black truncate select-all bg-neutral-100 px-1 py-0.5 rounded">
+                                  <p className="font-mono text-[9px] font-bold text-black truncate select-all bg-neutral-100 px-1 py-0.5 rounded border border-neutral-200">
                                     {label.payload}
                                   </p>
                                 )}
 
-                                <div className="flex items-center justify-between gap-1 text-[8.5px] text-neutral-600 pt-0.5">
-                                  {showSerialBadge && (
-                                    <span className="font-semibold text-emerald-800">
-                                      #{label.formattedSerial} ({label.serialNumber}/{label.totalInBatch})
-                                    </span>
-                                  )}
-                                  {showDate && (
-                                    <span className="ml-auto font-mono text-[8.5px] text-neutral-500">
-                                      {label.dateString}
-                                    </span>
-                                  )}
-                                </div>
-
-                                {showPrice && (label.mrp || label.rate) && (
-                                  <div className="text-[8.5px] font-semibold text-black truncate pt-0.5">
-                                    {label.mrp ? `MRP: ${formatCurrency(label.mrp)}` : `Rate: ${formatCurrency(label.rate || 0)}`}
-                                  </div>
-                                )}
-
+                                {/* 3. Custom Field 1 */}
                                 {showCustomNote1 && customNote1.trim() && (
                                   <p className="text-[8.5px] font-semibold text-neutral-800 truncate leading-tight pt-0.5">
                                     {customNote1.trim()}
                                   </p>
                                 )}
 
+                                {/* 4. Custom Field 2 */}
                                 {showCustomNote2 && customNote2.trim() && (
                                   <p className="text-[8px] text-neutral-600 truncate leading-tight">
                                     {customNote2.trim()}
@@ -689,6 +872,26 @@ export function PurchaseQrCodeDialog({
                 {/* SEGMENT 2: FORMAT SETTINGS */}
                 {activeTab === 'configure' && (
                   <div className="space-y-4">
+                    {/* Hardcoded 50x25 mm Label Size Indicator */}
+                    <div className="flex items-center justify-between p-3.5 bg-emerald-50 dark:bg-emerald-950/30 border border-emerald-200 dark:border-emerald-800/60 rounded-xl text-xs shadow-sm">
+                      <div className="flex items-center gap-2.5">
+                        <Badge variant="outline" className="font-mono font-bold text-emerald-800 dark:text-emerald-300 border-emerald-400 bg-white dark:bg-emerald-900/60 px-2.5 py-1 text-xs">
+                          50 × 25 mm
+                        </Badge>
+                        <div>
+                          <span className="font-bold text-emerald-950 dark:text-emerald-100">
+                            Hardcoded Label Size: 50mm (Width) × 25mm (Height)
+                          </span>
+                          <span className="text-[11px] text-emerald-700 dark:text-emerald-400 block mt-0.5">
+                            Standard single label size with exactly 4 human-readable text items (Product Name, Full QR Data, Custom Field 1, Custom Field 2)
+                          </span>
+                        </div>
+                      </div>
+                      <Badge variant="secondary" className="font-mono text-[10px] hidden sm:inline-flex">
+                        Fixed Dimension
+                      </Badge>
+                    </div>
+
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                       {/* CODE COMBINATION STRUCTURE */}
                       <Card className="shadow-sm">
@@ -785,104 +988,86 @@ export function PurchaseQrCodeDialog({
                         </CardContent>
                       </Card>
 
-                      {/* ELEMENTS PRINTED ON STICKER */}
+                      {/* ELEMENTS PRINTED ON STICKER - STRICTLY 4 HUMAN READABLE */}
                       <Card className="shadow-sm">
                         <CardContent className="p-4 space-y-3">
-                          <h4 className="text-sm font-semibold flex items-center gap-1.5 text-primary">
-                            <FileText className="w-4 h-4" />
-                            Elements on Sticker Label
-                          </h4>
+                          <div className="flex items-center justify-between">
+                            <h4 className="text-sm font-semibold flex items-center gap-1.5 text-primary">
+                              <FileText className="w-4 h-4" />
+                              Elements on Sticker Label
+                            </h4>
+                            <Badge variant="secondary" className="text-[10px] font-mono">
+                              4 Human Readable Only
+                            </Badge>
+                          </div>
 
-                          <div className="space-y-2.5 pt-1">
-                            <label className="flex items-center gap-2 text-xs font-medium cursor-pointer">
-                              <Checkbox
-                                checked={showProductName}
-                                onCheckedChange={(c) => setShowProductName(Boolean(c))}
-                              />
-                              Product Name
-                            </label>
+                          <div className="space-y-3 pt-1">
+                            {/* 1. Product Name */}
+                            <div className="flex items-center justify-between p-2.5 rounded-lg bg-muted/40 border">
+                              <label className="flex items-center gap-2 text-xs font-semibold cursor-pointer">
+                                <Checkbox
+                                  checked={showProductName}
+                                  onCheckedChange={(c) => setShowProductName(Boolean(c))}
+                                />
+                                <span>1. Product Name</span>
+                              </label>
+                              <Badge variant="outline" className="text-[10px] font-mono py-0 text-muted-foreground">Line 1</Badge>
+                            </div>
 
-                            <label className="flex items-center gap-2 text-xs font-medium cursor-pointer">
-                              <Checkbox
-                                checked={showSku}
-                                onCheckedChange={(c) => setShowSku(Boolean(c))}
-                              />
-                              SKU Code
-                            </label>
+                            {/* 2. Full QR Combination Code */}
+                            <div className="flex items-center justify-between p-2.5 rounded-lg bg-muted/40 border">
+                              <label className="flex items-center gap-2 text-xs font-semibold cursor-pointer">
+                                <Checkbox
+                                  checked={showPayload}
+                                  onCheckedChange={(c) => setShowPayload(Boolean(c))}
+                                />
+                                <span>2. Full QR Data</span>
+                              </label>
+                              <Badge variant="outline" className="text-[10px] font-mono py-0 text-muted-foreground">Line 2</Badge>
+                            </div>
 
-                            <label className="flex items-center gap-2 text-xs font-medium cursor-pointer">
-                              <Checkbox
-                                checked={showPayload}
-                                onCheckedChange={(c) => setShowPayload(Boolean(c))}
-                              />
-                              Full QR Combination Code
-                            </label>
-
-                            <label className="flex items-center gap-2 text-xs font-medium cursor-pointer">
-                              <Checkbox
-                                checked={showSerialBadge}
-                                onCheckedChange={(c) => setShowSerialBadge(Boolean(c))}
-                              />
-                              Serial Number Badge (#001 (1/10))
-                            </label>
-
-                            <label className="flex items-center gap-2 text-xs font-medium cursor-pointer">
-                              <Checkbox
-                                checked={showDate}
-                                onCheckedChange={(c) => setShowDate(Boolean(c))}
-                              />
-                              Formatted Date
-                            </label>
-
-                            <label className="flex items-center gap-2 text-xs font-medium cursor-pointer">
-                              <Checkbox
-                                checked={showPrice}
-                                onCheckedChange={(c) => setShowPrice(Boolean(c))}
-                              />
-                              Product Rate / MRP
-                            </label>
-
-                            {/* Custom Note 1 & 2 */}
-                            <div className="border-t pt-2.5 space-y-2">
-                              <div className="space-y-1">
-                                <label className="flex items-center gap-2 text-xs font-medium cursor-pointer">
+                            {/* 3. Custom Field 1 */}
+                            <div className="p-2.5 rounded-lg bg-muted/40 border space-y-2">
+                              <div className="flex items-center justify-between">
+                                <label className="flex items-center gap-2 text-xs font-semibold cursor-pointer">
                                   <Checkbox
                                     checked={showCustomNote1}
-                                    onCheckedChange={(c) => {
-                                      setShowCustomNote1(Boolean(c))
-                                    }}
+                                    onCheckedChange={(c) => setShowCustomNote1(Boolean(c))}
                                   />
-                                  Custom Note 1
+                                  <span>3. Custom Field 1</span>
                                 </label>
-                                {showCustomNote1 && (
-                                  <Input
-                                    placeholder="e.g. Batch No: B-2026 / QC OK"
-                                    value={customNote1}
-                                    onChange={(e) => setCustomNote1(e.target.value)}
-                                    className="h-7 text-xs"
-                                  />
-                                )}
+                                <Badge variant="outline" className="text-[10px] font-mono py-0 text-muted-foreground">Line 3</Badge>
                               </div>
+                              {showCustomNote1 && (
+                                <Input
+                                  placeholder="Enter Custom Field 1 (e.g. Batch No / QC OK)"
+                                  value={customNote1}
+                                  onChange={(e) => setCustomNote1(e.target.value)}
+                                  className="h-8 text-xs bg-background"
+                                />
+                              )}
+                            </div>
 
-                              <div className="space-y-1">
-                                <label className="flex items-center gap-2 text-xs font-medium cursor-pointer">
+                            {/* 4. Custom Field 2 */}
+                            <div className="p-2.5 rounded-lg bg-muted/40 border space-y-2">
+                              <div className="flex items-center justify-between">
+                                <label className="flex items-center gap-2 text-xs font-semibold cursor-pointer">
                                   <Checkbox
                                     checked={showCustomNote2}
-                                    onCheckedChange={(c) => {
-                                      setShowCustomNote2(Boolean(c))
-                                    }}
+                                    onCheckedChange={(c) => setShowCustomNote2(Boolean(c))}
                                   />
-                                  Custom Note 2
+                                  <span>4. Custom Field 2</span>
                                 </label>
-                                {showCustomNote2 && (
-                                  <Input
-                                    placeholder="e.g. Warranty 1 Yr / Fragile"
-                                    value={customNote2}
-                                    onChange={(e) => setCustomNote2(e.target.value)}
-                                    className="h-7 text-xs"
-                                  />
-                                )}
+                                <Badge variant="outline" className="text-[10px] font-mono py-0 text-muted-foreground">Line 4</Badge>
                               </div>
+                              {showCustomNote2 && (
+                                <Input
+                                  placeholder="Enter Custom Field 2 (e.g. Grade / Inspector / Note)"
+                                  value={customNote2}
+                                  onChange={(e) => setCustomNote2(e.target.value)}
+                                  className="h-8 text-xs bg-background"
+                                />
+                              )}
                             </div>
                           </div>
                         </CardContent>
@@ -915,125 +1100,216 @@ export function PurchaseQrCodeDialog({
                         </div>
                       </CardHeader>
                       <CardContent className="p-4 pt-1 space-y-3.5">
-                        <div className="space-y-1.5">
-                          <Label className="text-xs font-semibold">Select Target Printer for Output</Label>
-                          {devicePrinters.length > 0 ? (
-                            <Select value={selectedPrinter} onValueChange={setSelectedPrinter}>
-                              <SelectTrigger className="h-9 text-xs bg-background">
-                                <SelectValue placeholder="Choose printer..." />
-                              </SelectTrigger>
-                              <SelectContent>
-                                {devicePrinters.map((p) => (
-                                  <SelectItem key={p.name} value={p.name} className="text-xs">
-                                    <div className="flex items-center gap-2">
-                                      <span className="font-medium">{p.name}</span>
-                                      {p.isDefault && (
-                                        <Badge variant="secondary" className="text-[10px] py-0 px-1">
-                                          Default
-                                        </Badge>
-                                      )}
-                                      {p.isThermal && (
-                                        <Badge variant="outline" className="text-[10px] py-0 px-1 text-emerald-700 border-emerald-300">
-                                          Thermal
-                                        </Badge>
-                                      )}
-                                    </div>
-                                  </SelectItem>
-                                ))}
-                              </SelectContent>
-                            </Select>
-                          ) : (
-                            <p className="text-xs text-muted-foreground">
-                              {loadingPrinters ? 'Scanning connected devices...' : 'No system printers detected. Using system default.'}
-                            </p>
-                          )}
-                        </div>
+                        {/* LIVE PRINTING STATUS BANNER (1/10, 2/10...) */}
+                        {printProgress && (
+                          <div className={cn(
+                            'p-3.5 rounded-lg border text-xs space-y-2 transition-all animate-in fade-in',
+                            printProgress.completed
+                              ? 'bg-emerald-50 dark:bg-emerald-950/40 border-emerald-300 dark:border-emerald-800 text-emerald-900 dark:text-emerald-200'
+                              : printProgress.error
+                              ? 'bg-red-50 dark:bg-red-950/40 border-red-300 dark:border-red-800 text-red-900 dark:text-red-200'
+                              : 'bg-blue-50 dark:bg-blue-950/40 border-blue-300 dark:border-blue-800 text-blue-900 dark:text-blue-200'
+                          )}>
+                            <div className="flex items-center justify-between font-semibold">
+                              <span className="flex items-center gap-1.5">
+                                {directPrinting ? (
+                                  <Loader2 className="w-4 h-4 animate-spin text-blue-600 dark:text-blue-400" />
+                                ) : printProgress.completed ? (
+                                  <CheckCircle2 className="w-4 h-4 text-emerald-600 dark:text-emerald-400" />
+                                ) : null}
+                                {printProgress.statusText}
+                              </span>
+                              <Badge variant={printProgress.completed ? 'default' : 'secondary'} className="font-mono text-[11px]">
+                                {printProgress.current} / {printProgress.total} ({Math.round((printProgress.current / (printProgress.total || 1)) * 100)}%)
+                              </Badge>
+                            </div>
 
-                        {/* Selected Printer Status Details */}
-                        {currentSelectedPrinterObj && (
-                          <div className="p-3 bg-background rounded-lg border text-xs grid grid-cols-2 sm:grid-cols-4 gap-2">
-                            <div>
-                              <span className="text-[10px] text-muted-foreground block">Port</span>
-                              <span className="font-mono font-semibold">{currentSelectedPrinterObj.portName || 'USB / Network'}</span>
-                            </div>
-                            <div>
-                              <span className="text-[10px] text-muted-foreground block">Driver</span>
-                              <span className="truncate font-medium block" title={currentSelectedPrinterObj.driverName}>
-                                {currentSelectedPrinterObj.driverName || 'Generic'}
-                              </span>
-                            </div>
-                            <div>
-                              <span className="text-[10px] text-muted-foreground block">Printer Type</span>
-                              <span className="font-medium text-emerald-700 dark:text-emerald-400">
-                                {currentSelectedPrinterObj.isThermal ? 'Barcode / Thermal' : 'Standard Document'}
-                              </span>
-                            </div>
-                            <div>
-                              <span className="text-[10px] text-muted-foreground block">Connection</span>
-                              <span className="inline-flex items-center gap-1 text-emerald-600 font-semibold">
-                                <CheckCircle2 className="w-3 h-3" /> Ready
-                              </span>
+                            {/* Animated Progress Bar */}
+                            <div className="w-full bg-neutral-200 dark:bg-neutral-700 h-2 rounded-full overflow-hidden">
+                              <div
+                                className={cn(
+                                  'h-full transition-all duration-200 rounded-full',
+                                  printProgress.completed
+                                    ? 'bg-emerald-600'
+                                    : printProgress.error
+                                    ? 'bg-red-600'
+                                    : 'bg-blue-600'
+                                )}
+                                style={{
+                                  width: `${Math.min(100, (printProgress.current / (printProgress.total || 1)) * 100)}%`,
+                                }}
+                              />
                             </div>
                           </div>
                         )}
 
-                        {/* PRINT COMMAND & PREVIEW ACTION BUTTONS */}
-                        <div className="pt-1 flex flex-col sm:flex-row items-stretch sm:items-center gap-2.5">
-                          <Button
-                            variant="default"
-                            size="lg"
-                            onClick={handlePrint}
-                            disabled={totalQrCount === 0 || generating}
-                            className="flex-1 h-10 text-xs font-bold gap-2 bg-emerald-600 hover:bg-emerald-700 text-white shadow-sm"
-                          >
-                            <Printer className="w-4 h-4" />
-                            Send Printing Command ({totalQrCount} {totalQrCount === 1 ? 'Label' : 'Labels'} • {validWidth}×{validHeight}mm)
-                          </Button>
-                          <Button
-                            variant="outline"
-                            size="lg"
-                            onClick={() => setActiveTab('preview')}
-                            className="h-10 text-xs font-medium gap-1.5 border-primary/30 hover:bg-primary/5"
-                          >
-                            <Eye className="w-4 h-4 text-primary" />
-                            View Full Preview ({totalQrCount})
-                          </Button>
+                        {/* PARALLEL DESIGN: Left = Printer Selection & Details | Right = Print & Preview Buttons */}
+                        <div className="grid grid-cols-1 lg:grid-cols-12 gap-4 items-center">
+                          {/* LEFT COLUMN (Printer Selection & Details) */}
+                          <div className="lg:col-span-7 space-y-2.5">
+                            <div className="space-y-1.5">
+                              <Label className="text-xs font-semibold">Select Target Printer for Output</Label>
+                              {devicePrinters.length > 0 ? (
+                                <Select value={selectedPrinter} onValueChange={(val) => applyPrinterSettings(val)}>
+                                  <SelectTrigger className="h-9 text-xs bg-background">
+                                    <SelectValue placeholder="Choose printer..." />
+                                  </SelectTrigger>
+                                  <SelectContent>
+                                    {devicePrinters.map((p) => (
+                                      <SelectItem key={p.name} value={p.name} className="text-xs">
+                                        <div className="flex items-center gap-2">
+                                          <span className="font-medium">{p.name}</span>
+                                          {p.isDefault && (
+                                            <Badge variant="secondary" className="text-[10px] py-0 px-1">
+                                              Default
+                                            </Badge>
+                                          )}
+                                          {p.isThermal && (
+                                            <Badge variant="outline" className="text-[10px] py-0 px-1 text-emerald-700 border-emerald-300">
+                                              Thermal
+                                            </Badge>
+                                          )}
+                                        </div>
+                                      </SelectItem>
+                                    ))}
+                                  </SelectContent>
+                                </Select>
+                              ) : (
+                                <p className="text-xs text-muted-foreground">
+                                  {loadingPrinters ? 'Scanning connected devices...' : 'No system printers detected. Using system default.'}
+                                </p>
+                              )}
+                            </div>
+
+                            {/* Printer Command Language & DPI Bar */}
+                            <div className="grid grid-cols-2 gap-2 p-2 bg-muted/40 rounded-lg border text-xs">
+                              <div className="space-y-1">
+                                <span className="text-[10px] font-semibold text-muted-foreground block">Command Language</span>
+                                <Select value={printerLanguage} onValueChange={(val: 'TSPL' | 'ZPL') => setPrinterLanguage(val)}>
+                                  <SelectTrigger className="h-7 text-[11px] bg-background">
+                                    <SelectValue />
+                                  </SelectTrigger>
+                                  <SelectContent>
+                                    <SelectItem value="TSPL" className="text-xs">TSPL (TSC / TVS / Xprinter)</SelectItem>
+                                    <SelectItem value="ZPL" className="text-xs">ZPL (Zebra / ZDesigner)</SelectItem>
+                                  </SelectContent>
+                                </Select>
+                              </div>
+                              <div className="space-y-1">
+                                <span className="text-[10px] font-semibold text-muted-foreground block">Resolution (DPI)</span>
+                                <Select value={printerDpi} onValueChange={setPrinterDpi}>
+                                  <SelectTrigger className="h-7 text-[11px] bg-background">
+                                    <SelectValue />
+                                  </SelectTrigger>
+                                  <SelectContent>
+                                    <SelectItem value="300" className="text-xs">300 DPI (TSC TE310 / Hi-Res)</SelectItem>
+                                    <SelectItem value="203" className="text-xs">203 DPI (Standard 8 dots/mm)</SelectItem>
+                                  </SelectContent>
+                                </Select>
+                              </div>
+                            </div>
+
+                            {/* Selected Printer Status Details */}
+                            {currentSelectedPrinterObj && (
+                              <div className="p-2.5 bg-background rounded-lg border text-xs grid grid-cols-2 sm:grid-cols-4 gap-2">
+                                <div>
+                                  <span className="text-[10px] text-muted-foreground block">Port</span>
+                                  <span className="font-mono font-semibold text-[11px] truncate block" title={currentSelectedPrinterObj.portName}>
+                                    {currentSelectedPrinterObj.portName || 'USB / Network'}
+                                  </span>
+                                </div>
+                                <div>
+                                  <span className="text-[10px] text-muted-foreground block">Driver</span>
+                                  <span className="truncate font-medium text-[11px] block" title={currentSelectedPrinterObj.driverName}>
+                                    {currentSelectedPrinterObj.driverName || 'Generic'}
+                                  </span>
+                                </div>
+                                <div>
+                                  <span className="text-[10px] text-muted-foreground block">Printer Type</span>
+                                  <span className="font-medium text-[11px] text-emerald-700 dark:text-emerald-400 block truncate">
+                                    {currentSelectedPrinterObj.isThermal ? 'Barcode / Thermal' : 'Standard Document'}
+                                  </span>
+                                </div>
+                                <div>
+                                  <span className="text-[10px] text-muted-foreground block">Connection</span>
+                                  <span className="inline-flex items-center gap-1 text-emerald-600 font-semibold text-[11px]">
+                                    <CheckCircle2 className="w-3 h-3" /> Ready
+                                  </span>
+                                </div>
+                              </div>
+                            )}
+                          </div>
+
+                          {/* RIGHT COLUMN (Print and Preview Action Buttons) */}
+                          <div className="lg:col-span-5 flex flex-col justify-center gap-2.5">
+                            {/* Primary Direct Print Button */}
+                            <Button
+                              variant="default"
+                              size="lg"
+                              onClick={handleDirectPrint}
+                              disabled={totalQrCount === 0 || generating || directPrinting}
+                              className="w-full h-12 text-xs font-bold gap-2 bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-700 hover:to-teal-700 text-white shadow-md transition-all active:scale-[0.99]"
+                            >
+                              {directPrinting ? (
+                                <Loader2 className="w-4 h-4 animate-spin" />
+                              ) : (
+                                <Zap className="w-4 h-4 text-amber-300 fill-amber-300" />
+                              )}
+                              {directPrinting
+                                ? `Direct Printing (${printProgress?.current || 1}/${totalQrCount})...`
+                                : `Direct Print (${totalQrCount} Labels • 50×25mm)`}
+                            </Button>
+
+                            {/* Full Preview Button */}
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              onClick={() => setActiveTab('preview')}
+                              className="w-full h-9 text-xs font-medium gap-1.5 border-primary/30 hover:bg-primary/5 text-primary"
+                            >
+                              <Eye className="w-3.5 h-3.5 text-primary" />
+                              Full Preview ({totalQrCount})
+                            </Button>
+                          </div>
                         </div>
                       </CardContent>
                     </Card>
 
-                    {/* LIVE VISUAL LABEL PRINT PREVIEW (REAL SCALE MOCKUP) */}
+                    {/* LIVE VISUAL LABEL PRINT PREVIEW (REAL SCALE MULTI-ACROSS MOCKUP) */}
                     <Card className="shadow-sm border-neutral-300 dark:border-neutral-800 bg-neutral-50/50 dark:bg-neutral-900/30">
                       <CardHeader className="pb-2 pt-4 px-4">
                         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
                           <CardTitle className="text-sm font-semibold flex items-center gap-1.5">
                             <Sparkles className="w-4 h-4 text-emerald-600" />
-                            Live Label Print Preview (Real Visual Mockup)
+                            Live Label Print Preview ({validAcross} Across Real Visual Mockup)
                           </CardTitle>
                           <div className="flex items-center gap-2 flex-wrap">
                             <Badge variant="outline" className="text-[11px] font-mono font-medium text-emerald-700 border-emerald-300 bg-emerald-50 dark:bg-emerald-950/40">
-                              {validWidth}mm Width × {validHeight}mm Height
+                              Single: {validWidth}×{validHeight}mm
                             </Badge>
-                            {generatedLabels.length > 1 && (
+                            <Badge variant="secondary" className="text-[11px] font-mono font-semibold">
+                              {validAcross} Across • Total Roll: {totalRollWidth}mm
+                            </Badge>
+                            {labelRows.length > 1 && (
                               <div className="flex items-center gap-1 bg-background border rounded-md px-1.5 py-0.5">
                                 <Button
                                   variant="ghost"
                                   size="icon"
                                   className="h-6 w-6"
-                                  disabled={previewIndex <= 0}
-                                  onClick={() => setPreviewIndex((prev) => Math.max(0, prev - 1))}
+                                  disabled={previewRowIndex <= 0}
+                                  onClick={() => setPreviewRowIndex((prev) => Math.max(0, prev - 1))}
                                 >
                                   <ChevronLeft className="w-3.5 h-3.5" />
                                 </Button>
                                 <span className="text-[11px] font-mono px-1 font-medium">
-                                  {previewIndex + 1} / {generatedLabels.length}
+                                  Row {previewRowIndex + 1} / {labelRows.length}
                                 </span>
                                 <Button
                                   variant="ghost"
                                   size="icon"
                                   className="h-6 w-6"
-                                  disabled={previewIndex >= generatedLabels.length - 1}
-                                  onClick={() => setPreviewIndex((prev) => Math.min(generatedLabels.length - 1, prev + 1))}
+                                  disabled={previewRowIndex >= labelRows.length - 1}
+                                  onClick={() => setPreviewRowIndex((prev) => Math.min(labelRows.length - 1, prev + 1))}
                                 >
                                   <ChevronRight className="w-3.5 h-3.5" />
                                 </Button>
@@ -1054,101 +1330,102 @@ export function PurchaseQrCodeDialog({
                           </div>
                         ) : (
                           (() => {
-                            const label = generatedLabels[previewIndex] || generatedLabels[0]
+                            const currentRow = labelRows[previewRowIndex] || labelRows[0] || []
                             return (
                               <div className="flex flex-col items-center justify-center gap-3">
-                                {/* Dimension Caliper - Top Width */}
-                                <div className="flex items-center justify-center gap-2 text-[10px] text-muted-foreground font-mono font-medium w-full max-w-[420px]">
+                                {/* Dimension Caliper - Top Total Roll Width */}
+                                <div className="flex items-center justify-center gap-2 text-[10px] text-muted-foreground font-mono font-medium w-full max-w-[650px]">
                                   <span className="h-[1px] flex-1 bg-neutral-300 dark:bg-neutral-700" />
-                                  <span>↔ Width: {validWidth} mm</span>
+                                  <span>
+                                    ↔ Total Roll Carrier Width: {totalRollWidth} mm ({validAcross} Across: {validAcross} × {validWidth}mm {validAcross > 1 ? `+ ${validHGap}mm gap` : ''})
+                                  </span>
                                   <span className="h-[1px] flex-1 bg-neutral-300 dark:bg-neutral-700" />
                                 </div>
 
-                                {/* Visual Label Box */}
-                                <div className="flex items-center gap-3 w-full justify-center">
+                                {/* Visual Label Roll Row Mockup */}
+                                <div className="flex items-center gap-3 w-full justify-center overflow-x-auto p-2">
                                   {/* Dimension Caliper - Left Height */}
-                                  <div className="flex flex-col items-center justify-center gap-1 text-[10px] text-muted-foreground font-mono font-medium">
+                                  <div className="flex flex-col items-center justify-center gap-1 text-[10px] text-muted-foreground font-mono font-medium shrink-0">
                                     <span className="w-[1px] h-6 bg-neutral-300 dark:bg-neutral-700" />
                                     <span className="[writing-mode:vertical-lr] rotate-180">Height: {validHeight} mm</span>
                                     <span className="w-[1px] h-6 bg-neutral-300 dark:bg-neutral-700" />
                                   </div>
 
-                                  {/* Physical Label Mockup */}
+                                  {/* Carrier Roll Liner Background */}
                                   <div
-                                    className="w-full max-w-[420px] bg-white text-neutral-900 border-2 border-neutral-400 rounded-lg p-3 shadow-md flex items-center gap-3 transition-all relative overflow-hidden"
+                                    className="p-3 bg-amber-100/40 dark:bg-amber-950/20 border border-amber-300/60 dark:border-amber-800/40 rounded-xl shadow-inner flex items-center justify-center"
                                     style={{
-                                      minHeight: `${Math.max(90, validHeight * 2.8)}px`,
+                                      gap: `${Math.max(6, validHGap * 3.5)}px`,
                                     }}
                                   >
-                                    {/* Thermal Sticker Corner Notch / Peel Marker */}
-                                    <div className="absolute top-0 right-0 w-3 h-3 bg-neutral-100 border-b border-l border-neutral-300 rounded-bl" />
+                                    {currentRow.map((label, idx) => (
+                                      <div key={label.id} className="flex items-center gap-2">
+                                        {/* Physical Label Mockup Box */}
+                                        <div
+                                          className="w-[280px] sm:w-[320px] bg-white text-neutral-900 border-2 border-neutral-400 rounded-lg p-2.5 shadow-md flex items-center gap-2.5 transition-all relative overflow-hidden shrink-0"
+                                          style={{
+                                            minHeight: `${Math.max(85, validHeight * 2.7)}px`,
+                                          }}
+                                        >
+                                          {/* Thermal Sticker Corner Notch / Peel Marker */}
+                                          <div className="absolute top-0 right-0 w-3 h-3 bg-neutral-100 border-b border-l border-neutral-300 rounded-bl" />
 
-                                    {/* QR Code */}
-                                    <div className="shrink-0 bg-white p-1 rounded border border-neutral-200 flex items-center justify-center">
-                                      {/* eslint-disable-next-line @next/next/no-img-element */}
-                                      <img
-                                        src={label.qrDataUrl}
-                                        alt={label.payload}
-                                        className="w-[78px] h-[78px] min-w-[78px] min-h-[78px] object-contain"
-                                      />
-                                    </div>
+                                          {/* QR Code */}
+                                          <div className="shrink-0 bg-white p-1 rounded border border-neutral-200 flex items-center justify-center">
+                                            {/* eslint-disable-next-line @next/next/no-img-element */}
+                                            <img
+                                              src={label.qrDataUrl}
+                                              alt={label.payload}
+                                              className="w-[72px] h-[72px] min-w-[72px] min-h-[72px] object-contain"
+                                            />
+                                          </div>
 
-                                    {/* Label Content */}
-                                    <div className="min-w-0 flex-1 flex flex-col justify-center text-left space-y-0.5 leading-tight overflow-hidden">
-                                      {showProductName && (
-                                        <p className="font-bold text-xs truncate text-black leading-tight" title={label.productName}>
-                                          {label.productName}
-                                        </p>
-                                      )}
+                                          {/* Label Content - Strictly 4 Human-Readable Items */}
+                                          <div className="min-w-0 flex-1 flex flex-col justify-center text-left space-y-1 leading-tight overflow-hidden">
+                                            {/* 1. Product Name */}
+                                            {showProductName && (
+                                              <p className="font-bold text-[11px] truncate text-black leading-tight" title={label.productName}>
+                                                {label.productName}
+                                              </p>
+                                            )}
 
-                                      {showSku && (
-                                        <p className="text-[10px] font-semibold text-neutral-700 truncate tracking-tight">
-                                          SKU: <span className="font-mono font-bold text-black">{label.sku}</span>
-                                        </p>
-                                      )}
+                                            {/* 2. Full QR Combination Code */}
+                                            {showPayload && (
+                                              <p className="font-mono text-[9px] font-bold text-black truncate select-all bg-neutral-100 px-1 py-0.5 rounded border border-neutral-200">
+                                                {label.payload}
+                                              </p>
+                                            )}
 
-                                      {showPayload && (
-                                        <p className="font-mono text-[9.5px] font-bold text-black truncate select-all bg-neutral-100 px-1 py-0.5 rounded border border-neutral-200">
-                                          {label.payload}
-                                        </p>
-                                      )}
+                                            {/* 3. Custom Field 1 */}
+                                            {showCustomNote1 && customNote1.trim() && (
+                                              <p className="text-[8.5px] font-semibold text-neutral-800 truncate leading-tight pt-0.5">
+                                                {customNote1.trim()}
+                                              </p>
+                                            )}
 
-                                      <div className="flex items-center justify-between gap-1 text-[9px] text-neutral-600 pt-0.5">
-                                        {showSerialBadge && (
-                                          <span className="font-semibold text-emerald-800">
-                                            #{label.formattedSerial} ({label.serialNumber}/{label.totalInBatch})
-                                          </span>
-                                        )}
-                                        {showDate && (
-                                          <span className="ml-auto font-mono text-[9px] text-neutral-500">
-                                            {label.dateString}
-                                          </span>
+                                            {/* 4. Custom Field 2 */}
+                                            {showCustomNote2 && customNote2.trim() && (
+                                              <p className="text-[8px] text-neutral-600 truncate leading-tight">
+                                                {customNote2.trim()}
+                                              </p>
+                                            )}
+                                          </div>
+                                        </div>
+
+                                        {/* Horizontal Gap Marker between labels */}
+                                        {idx < currentRow.length - 1 && (
+                                          <div className="flex flex-col items-center justify-center text-[9px] font-mono text-amber-800 dark:text-amber-400 font-semibold px-1 py-4 border border-dashed border-amber-400 rounded bg-amber-50 dark:bg-amber-950/60 shrink-0">
+                                            <span>{validHGap}mm</span>
+                                            <span className="text-[8px]">gap</span>
+                                          </div>
                                         )}
                                       </div>
-
-                                      {showPrice && (label.mrp || label.rate) && (
-                                        <div className="text-[9px] font-semibold text-black truncate pt-0.5">
-                                          {label.mrp ? `MRP: ${formatCurrency(label.mrp)}` : `Rate: ${formatCurrency(label.rate || 0)}`}
-                                        </div>
-                                      )}
-
-                                      {showCustomNote1 && customNote1.trim() && (
-                                        <p className="text-[9px] font-semibold text-neutral-800 truncate leading-tight pt-0.5">
-                                          {customNote1.trim()}
-                                        </p>
-                                      )}
-
-                                      {showCustomNote2 && customNote2.trim() && (
-                                        <p className="text-[8.5px] text-neutral-600 truncate leading-tight">
-                                          {customNote2.trim()}
-                                        </p>
-                                      )}
-                                    </div>
+                                    ))}
                                   </div>
                                 </div>
 
                                 <p className="text-[11px] text-muted-foreground text-center">
-                                  This is a real-scale preview of how your label will appear when printed on {selectedPrinter || 'the selected printer'} ({validWidth}×{validHeight}mm).
+                                  Visual preview showing Row {previewRowIndex + 1} with {validAcross} labels across on {selectedPrinter || 'target printer'} (Total Roll Width: {totalRollWidth}mm).
                                 </p>
                               </div>
                             )
@@ -1156,206 +1433,6 @@ export function PurchaseQrCodeDialog({
                         )}
                       </CardContent>
                     </Card>
-
-                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                      {/* CARD 1: LABEL SIZE DIMENSIONS */}
-                      <Card className="shadow-sm border-emerald-200 dark:border-emerald-900/60">
-                        <CardHeader className="pb-2 pt-4 px-4">
-                          <CardTitle className="text-sm font-semibold flex items-center gap-1.5 text-emerald-700 dark:text-emerald-400">
-                            <Maximize2 className="w-4 h-4" />
-                            Label Dimensions (mm)
-                          </CardTitle>
-                        </CardHeader>
-                        <CardContent className="p-4 pt-0 space-y-4">
-                          <div className="grid grid-cols-2 gap-3">
-                            <div className="space-y-1.5">
-                              <Label className="text-xs">Width (mm)</Label>
-                              <Input
-                                type="number"
-                                min={10}
-                                max={300}
-                                value={labelWidth}
-                                onChange={(e) => setLabelWidth(parseInt(e.target.value) || 50)}
-                                className="h-9 text-xs font-semibold"
-                                placeholder="50"
-                              />
-                            </div>
-
-                            <div className="space-y-1.5">
-                              <Label className="text-xs">Height (mm)</Label>
-                              <Input
-                                type="number"
-                                min={10}
-                                max={300}
-                                value={labelHeight}
-                                onChange={(e) => setLabelHeight(parseInt(e.target.value) || 25)}
-                                className="h-9 text-xs font-semibold"
-                                placeholder="25"
-                              />
-                            </div>
-                          </div>
-
-                          {/* Quick Size Presets */}
-                          <div className="space-y-1.5">
-                            <Label className="text-[11px] text-muted-foreground">Standard Size Presets:</Label>
-                            <div className="flex flex-wrap gap-1.5">
-                              {[
-                                { w: 50, h: 25, label: '50×25 mm (Standard)' },
-                                { w: 50, h: 30, label: '50×30 mm' },
-                                { w: 50, h: 38, label: '50×38 mm' },
-                                { w: 75, h: 50, label: '75×50 mm' },
-                                { w: 100, h: 50, label: '100×50 mm' },
-                                { w: 100, h: 150, label: '100×150 mm (4×6")' },
-                              ].map((preset) => (
-                                <button
-                                  key={preset.label}
-                                  type="button"
-                                  onClick={() => { setLabelWidth(preset.w); setLabelHeight(preset.h) }}
-                                  className={cn(
-                                    'text-[10px] px-2 py-1 rounded border font-mono transition-all',
-                                    labelWidth === preset.w && labelHeight === preset.h
-                                      ? 'bg-emerald-100 text-emerald-800 border-emerald-300 font-bold dark:bg-emerald-950 dark:text-emerald-300'
-                                      : 'hover:bg-muted text-muted-foreground'
-                                  )}
-                                >
-                                  {preset.label}
-                                </button>
-                              ))}
-                            </div>
-                          </div>
-                        </CardContent>
-                      </Card>
-
-                      {/* CARD 2: PRINTING TECHNOLOGY & TYPE */}
-                      <Card className="shadow-sm">
-                        <CardHeader className="pb-2 pt-4 px-4">
-                          <CardTitle className="text-sm font-semibold flex items-center gap-1.5 text-primary">
-                            <Gauge className="w-4 h-4" />
-                            Printing Technology & Ribbon
-                          </CardTitle>
-                        </CardHeader>
-                        <CardContent className="p-4 pt-0 space-y-3">
-                          <div className="space-y-1.5">
-                            <Label className="text-xs">Printing Method</Label>
-                            <Select
-                              value={printerType}
-                              onValueChange={(v: 'DIRECT_THERMAL' | 'THERMAL_TRANSFER') => setPrinterType(v)}
-                            >
-                              <SelectTrigger className="h-9 text-xs">
-                                <SelectValue />
-                              </SelectTrigger>
-                              <SelectContent>
-                                <SelectItem value="DIRECT_THERMAL">Direct Thermal (No Ribbon)</SelectItem>
-                                <SelectItem value="THERMAL_TRANSFER">Thermal Transfer (Ribbon Required)</SelectItem>
-                              </SelectContent>
-                            </Select>
-                          </div>
-
-                          {printerType === 'THERMAL_TRANSFER' && (
-                            <div className="space-y-1.5">
-                              <Label className="text-xs">Ribbon Formulation</Label>
-                              <Select value={ribbonType} onValueChange={setRibbonType}>
-                                <SelectTrigger className="h-8 text-xs">
-                                  <SelectValue />
-                                </SelectTrigger>
-                                <SelectContent>
-                                  <SelectItem value="wax">Wax Ribbon (Standard Paper)</SelectItem>
-                                  <SelectItem value="wax_resin">Wax-Resin (Semi-Gloss / Synthetic)</SelectItem>
-                                  <SelectItem value="resin">Full Resin (Polyester / Chemical Proof)</SelectItem>
-                                </SelectContent>
-                              </Select>
-                            </div>
-                          )}
-
-                          <div className="grid grid-cols-2 gap-3">
-                            <div className="space-y-1.5">
-                              <Label className="text-xs">Resolution (DPI)</Label>
-                              <Select value={printerDpi} onValueChange={setPrinterDpi}>
-                                <SelectTrigger className="h-8 text-xs">
-                                  <SelectValue />
-                                </SelectTrigger>
-                                <SelectContent>
-                                  <SelectItem value="203">203 DPI (8 dots/mm)</SelectItem>
-                                  <SelectItem value="300">300 DPI (12 dots/mm)</SelectItem>
-                                  <SelectItem value="600">600 DPI (High Res)</SelectItem>
-                                </SelectContent>
-                              </Select>
-                            </div>
-
-                            <div className="space-y-1.5">
-                              <Label className="text-xs">Print Darkness</Label>
-                              <Select value={printDensity} onValueChange={setPrintDensity}>
-                                <SelectTrigger className="h-8 text-xs">
-                                  <SelectValue />
-                                </SelectTrigger>
-                                <SelectContent>
-                                  <SelectItem value="normal">Normal (100%)</SelectItem>
-                                  <SelectItem value="dark">High Contrast</SelectItem>
-                                  <SelectItem value="extra_dark">Max Density</SelectItem>
-                                </SelectContent>
-                              </Select>
-                            </div>
-                          </div>
-                        </CardContent>
-                      </Card>
-
-                      {/* CARD 3: SENSOR & MEDIA ALIGNMENT */}
-                      <Card className="shadow-sm">
-                        <CardHeader className="pb-2 pt-4 px-4">
-                          <CardTitle className="text-sm font-semibold flex items-center gap-1.5 text-primary">
-                            <Sliders className="w-4 h-4" />
-                            Media Sensor & Calibration
-                          </CardTitle>
-                        </CardHeader>
-                        <CardContent className="p-4 pt-0 space-y-3">
-                          <div className="space-y-1.5">
-                            <Label className="text-xs">Sensor / Media Type</Label>
-                            <Select value={sensorType} onValueChange={setSensorType}>
-                              <SelectTrigger className="h-9 text-xs">
-                                <SelectValue />
-                              </SelectTrigger>
-                              <SelectContent>
-                                <SelectItem value="gap">Gap / Die-cut (Default)</SelectItem>
-                                <SelectItem value="continuous">Continuous Roll</SelectItem>
-                                <SelectItem value="black_mark">Black Mark / Reflective</SelectItem>
-                              </SelectContent>
-                            </Select>
-                          </div>
-
-                          <div className="grid grid-cols-2 gap-3">
-                            <div className="space-y-1.5">
-                              <Label className="text-xs">Top Offset (mm)</Label>
-                              <Input
-                                type="number"
-                                value={topOffset}
-                                onChange={(e) => setTopOffset(parseInt(e.target.value) || 0)}
-                                className="h-8 text-xs font-mono"
-                                placeholder="0"
-                              />
-                            </div>
-
-                            <div className="space-y-1.5">
-                              <Label className="text-xs">Left Offset (mm)</Label>
-                              <Input
-                                type="number"
-                                value={leftOffset}
-                                onChange={(e) => setLeftOffset(parseInt(e.target.value) || 0)}
-                                className="h-8 text-xs font-mono"
-                                placeholder="0"
-                              />
-                            </div>
-                          </div>
-
-                          <div className="p-2.5 bg-muted/40 rounded-lg border text-[11px] text-muted-foreground space-y-1">
-                            <p className="font-semibold text-foreground flex items-center gap-1">
-                              <Sparkles className="w-3.5 h-3.5 text-emerald-600" />
-                              Supported Thermal Printers:
-                            </p>
-                            <p>TSC, Zebra, TVS, Citizen, Godex, Honeywell, Xprinter, Rongta, etc.</p>
-                          </div>
-                        </CardContent>
-                      </Card>
-                    </div>
                   </div>
                 )}
 

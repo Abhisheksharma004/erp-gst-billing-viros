@@ -93,6 +93,12 @@ export async function ensureBusinessSettingsBankingColumns(): Promise<void> {
   await runAlter(
     `ALTER TABLE business_settings ADD COLUMN document_number_structure VARCHAR(30) NOT NULL DEFAULT 'PREFIX_SERIAL_FY' AFTER document_number_separator`
   )
+  await runAlter(
+    `ALTER TABLE business_settings ADD COLUMN show_bank_details_invoice TINYINT(1) NOT NULL DEFAULT 1 AFTER bank_branch`
+  )
+  await runAlter(
+    `ALTER TABLE business_settings ADD COLUMN show_bank_details_proforma TINYINT(1) NOT NULL DEFAULT 1 AFTER show_bank_details_invoice`
+  )
 
   const documentTermsColumns = [
     'quotation_terms',

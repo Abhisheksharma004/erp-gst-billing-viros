@@ -75,6 +75,7 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
     const [settingsRows] = await db.execute(`
       SELECT company_name, gstin, pan, address, city, state, pincode, phone, email, website, logo,
              bank_name, bank_account, bank_ifsc, bank_branch, bank_micr, upi_id,
+             show_bank_details_invoice,
              terms_condition, sales_invoice_terms
       FROM business_settings WHERE organization_id = ? LIMIT 1
     `, [organizationId]) as any[]
@@ -124,6 +125,7 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
         bankBranch: s.bank_branch,
         bankMicr: s.bank_micr,
         upiId: s.upi_id,
+        showBankDetailsInvoice: s.show_bank_details_invoice === 0 ? false : true,
         termsCondition: s.sales_invoice_terms || s.terms_condition,
       },
       copies

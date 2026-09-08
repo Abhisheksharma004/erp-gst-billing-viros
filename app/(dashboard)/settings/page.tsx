@@ -9,6 +9,7 @@ import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
+import { Switch } from '@/components/ui/switch'
 import { useToast } from '@/hooks/use-toast'
 import { Save } from 'lucide-react'
 import { businessSettingsSchema, type BusinessSettingsInput } from '@/lib/validations'
@@ -35,6 +36,8 @@ export default function SettingsPage() {
     resolver: zodResolver(businessSettingsSchema),
     defaultValues: {
       companyName: '',
+      showBankDetailsInvoice: true,
+      showBankDetailsProforma: true,
       invoicePrefix: 'VE',
       quotationPrefix: 'QT',
       purchaseOrderPrefix: 'PO',
@@ -66,6 +69,8 @@ export default function SettingsPage() {
           bankAccount: data.bank_account || data.bankAccount || '',
           bankIfsc: data.bank_ifsc || data.bankIfsc || '',
           bankBranch: data.bank_branch || data.bankBranch || '',
+          showBankDetailsInvoice: data.showBankDetailsInvoice !== undefined ? Boolean(data.showBankDetailsInvoice) : (data.show_bank_details_invoice !== undefined ? Boolean(data.show_bank_details_invoice) : true),
+          showBankDetailsProforma: data.showBankDetailsProforma !== undefined ? Boolean(data.showBankDetailsProforma) : (data.show_bank_details_proforma !== undefined ? Boolean(data.show_bank_details_proforma) : true),
           invoicePrefix: data.invoice_prefix || data.invoicePrefix || 'VE',
           quotationPrefix: data.quotation_prefix || data.quotationPrefix || 'QT',
           purchaseOrderPrefix: data.purchase_order_prefix || data.purchaseOrderPrefix || 'PO',
@@ -339,6 +344,45 @@ export default function SettingsPage() {
               <div className="space-y-2">
                 <Label>Branch</Label>
                 <Input {...register('bankBranch')} />
+              </div>
+            </div>
+
+            <div className="pt-4 mt-2 border-t space-y-3">
+              <div className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                Document Print Display Options
+              </div>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div className="flex items-center justify-between gap-3 p-3.5 rounded-lg border bg-slate-50/70 dark:bg-slate-900/50 hover:bg-slate-50 dark:hover:bg-slate-900 transition-colors">
+                  <div className="space-y-0.5">
+                    <Label htmlFor="showBankDetailsInvoice" className="text-sm font-medium cursor-pointer">
+                      Show Bank Details on Sales Invoice
+                    </Label>
+                    <p className="text-xs text-muted-foreground">
+                      Print bank name, account number & IFSC on Tax / Sales Invoices
+                    </p>
+                  </div>
+                  <Switch
+                    id="showBankDetailsInvoice"
+                    checked={watchedValues.showBankDetailsInvoice ?? true}
+                    onCheckedChange={(checked) => setValue('showBankDetailsInvoice', checked, { shouldDirty: true })}
+                  />
+                </div>
+
+                <div className="flex items-center justify-between gap-3 p-3.5 rounded-lg border bg-slate-50/70 dark:bg-slate-900/50 hover:bg-slate-50 dark:hover:bg-slate-900 transition-colors">
+                  <div className="space-y-0.5">
+                    <Label htmlFor="showBankDetailsProforma" className="text-sm font-medium cursor-pointer">
+                      Show Bank Details on Proforma Invoice
+                    </Label>
+                    <p className="text-xs text-muted-foreground">
+                      Print bank details on Proforma Invoice documents
+                    </p>
+                  </div>
+                  <Switch
+                    id="showBankDetailsProforma"
+                    checked={watchedValues.showBankDetailsProforma ?? true}
+                    onCheckedChange={(checked) => setValue('showBankDetailsProforma', checked, { shouldDirty: true })}
+                  />
+                </div>
               </div>
             </div>
           </CardContent>

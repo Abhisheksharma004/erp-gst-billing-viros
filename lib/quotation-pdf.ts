@@ -42,6 +42,8 @@ export interface QuotationPdfSettings {
   bankMicr?: string | null
   upiId?: string | null
   termsCondition?: string | null
+  showBankDetailsInvoice?: boolean
+  showBankDetailsProforma?: boolean
 }
 
 export interface QuotationPdfCustomer {
@@ -540,12 +542,24 @@ function getDocumentMetaFields(
 
 function usesInvoiceStyleFooter(kind: SalesDocumentKind): boolean {
   return (
-    kind === 'invoice' ||
     kind === 'delivery-challan' ||
     kind === 'returnable-challan' ||
     kind === 'purchase' ||
     kind === 'purchase-order'
   )
+}
+
+function shouldShowBankDetails(kind: SalesDocumentKind, settings: QuotationPdfSettings): boolean {
+  if (kind === 'invoice') {
+    return settings.showBankDetailsInvoice !== false
+  }
+  if (kind === 'proforma') {
+    return settings.showBankDetailsProforma !== false
+  }
+  if (kind === 'quotation') {
+    return true
+  }
+  return false
 }
 
 function getDocumentTitle(kind: SalesDocumentKind): string {
@@ -652,11 +666,12 @@ function getFooterMainH(
   kind: SalesDocumentKind,
   doc: jsPDF,
   termsText: string,
-  leftW: number
+  leftW: number,
+  showBankDetails = false
 ): number {
-  const leftBodyH = usesInvoiceStyleFooter(kind)
-    ? estimateInvoiceTermsBodyH(doc, termsText, leftW)
-    : FOOTER_BANK_ONLY_H + estimateInvoiceTermsBodyH(doc, termsText, leftW)
+  const leftBodyH = showBankDetails
+    ? FOOTER_BANK_ONLY_H + estimateInvoiceTermsBodyH(doc, termsText, leftW)
+    : estimateInvoiceTermsBodyH(doc, termsText, leftW)
   const leftH = FOOTER_WORDS_H + leftBodyH
   const rightH = getSummaryTableH(isIgst) + FOOTER_SIGN_IN_RIGHT_H
   return Math.max(leftH, rightH)
@@ -678,15 +693,16 @@ function computeFooterLayout(
   contentW: number,
   terms: string | null | undefined,
   isIgst: boolean,
-  kind: SalesDocumentKind
+  kind: SalesDocumentKind,
+  showBankDetails = false
 ): FooterLayout {
   const bottom = pageH - MARGIN
   const leftW = contentW * FOOTER_LEFT_RATIO
   const termsText = terms?.trim() || ''
-  const mainFooterH = getFooterMainH(isIgst, kind, doc, termsText, leftW)
+  const mainFooterH = getFooterMainH(isIgst, kind, doc, termsText, leftW, showBankDetails)
   const termLines = formatTermLinesForPdf(termsText).slice(0, 10)
 
-  // Terms live inside the left column for all docs (quotation: below bank details).
+  // Terms live inside the left column for all docs (below bank details if shown).
   const termsBlockH = 0
   const footerBottom = bottom
   const termsTop = footerBottom
@@ -925,7 +941,9 @@ function drawQuotationFooter(
     doc.text(wordLines.slice(0, 2), bodyLeft + leftW / 2, top + 7.5, { align: 'center' })
   }
 
-  if (usesInvoiceStyleFooter(kind)) {
+  const showBank = shouldShowBankDetails(kind, settings)
+
+  if (!showBank) {
     drawInvoiceTermsBlock(doc, bodyLeft, splitX, leftW, bankTop, bankH, layout.termLines, pad)
   } else {
     // Left — Bank details, then Terms & Condition (same column width, not full page)
@@ -939,14 +957,19 @@ function drawQuotationFooter(
     doc.line(bodyLeft, bankTop + 5.5, splitX, bankTop + 5.5)
 
     let bankY = bankTop + 8
-    const bankLines = [
+    const bankLines: [string, string][] = [
       ['Name', settings.bankName || '-'],
       ['Branch', settings.bankBranch || '-'],
       ['Acc. Number', settings.bankAccount || '-'],
       ['IFSC', settings.bankIfsc || '-'],
-      ['MICR Code', settings.bankMicr || '-'],
-      ['UPI ID', settings.upiId || '-'],
     ]
+    if (settings.bankMicr) {
+      bankLines.push(['MICR Code', settings.bankMicr])
+    }
+    if (settings.upiId) {
+      bankLines.push(['UPI ID', settings.upiId])
+    }
+
     const bankMaxY = termsSectionTop - 1.5
     for (const [label, value] of bankLines) {
       if (bankY > bankMaxY) break
@@ -1229,9 +1252,10 @@ function renderSalesDocumentPage(
       ]
 
   const itemsTableStartY = y
+  const showBank = shouldShowBankDetails(kind, settings)
   const termsSource = document.terms || settings.termsCondition
-  const mainFooterH = getFooterMainH(isIgst, kind, doc, termsSource?.trim() || '', contentW * FOOTER_LEFT_RATIO)
-  const footerLayout = computeFooterLayout(doc, pageH, contentW, termsSource, isIgst, kind)
+  const mainFooterH = getFooterMainH(isIgst, kind, doc, termsSource?.trim() || '', contentW * FOOTER_LEFT_RATIO, showBank)
+  const footerLayout = computeFooterLayout(doc, pageH, contentW, termsSource, isIgst, kind, showBank)
 
   const totalRowIndex = tableBody.length
 

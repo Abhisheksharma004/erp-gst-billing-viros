@@ -467,6 +467,8 @@ export const businessSettingsSchema = z.object({
   bankAccount: z.string().optional(),
   bankIfsc: z.string().optional(),
   bankBranch: z.string().optional(),
+  showBankDetailsInvoice: z.boolean().default(true).optional(),
+  showBankDetailsProforma: z.boolean().default(true).optional(),
   invoicePrefix: z.string().default('VE'),
   quotationPrefix: z.string().default('QT'),
   proformaPrefix: z.string().default('PI'),
