@@ -109,23 +109,30 @@ export async function POST(req: NextRequest) {
     })
 
     if (!allowNegativeStock) {
+      const requiredByProduct = new Map<string, number>()
       for (const item of itemsWithTotals) {
         if (item.productId) {
-          const [[prod]] = (await conn.execute(
-            'SELECT name, current_stock FROM products WHERE id = ? AND organization_id = ? FOR UPDATE',
-            [item.productId, organizationId]
-          )) as any[][]
-          if (prod) {
-            const currentStock = Number(prod.current_stock ?? 0)
-            if (currentStock < item.quantity) {
-              await conn.rollback()
-              return NextResponse.json(
-                {
-                  error: `Product "${prod.name}" is out of stock! Available: ${currentStock}, Required: ${item.quantity}. (Enable "Allow Invoicing When Out of Stock" in Settings to permit negative stock).`,
-                },
-                { status: 400 }
-              )
-            }
+          requiredByProduct.set(
+            item.productId,
+            (requiredByProduct.get(item.productId) || 0) + (Number(item.quantity) || 0)
+          )
+        }
+      }
+      for (const [productId, requiredQty] of requiredByProduct.entries()) {
+        const [[prod]] = (await conn.execute(
+          'SELECT name, current_stock FROM products WHERE id = ? AND organization_id = ? FOR UPDATE',
+          [productId, organizationId]
+        )) as any[][]
+        if (prod) {
+          const currentStock = Number(prod.current_stock ?? 0)
+          if (currentStock < requiredQty) {
+            await conn.rollback()
+            return NextResponse.json(
+              {
+                error: `Product "${prod.name}" is out of stock! Available: ${currentStock}, Required: ${requiredQty}. (Enable "Allow Invoicing When Out of Stock" in Settings to permit negative stock).`,
+              },
+              { status: 400 }
+            )
           }
         }
       }

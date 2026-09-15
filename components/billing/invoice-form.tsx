@@ -770,11 +770,8 @@ export function InvoiceForm({ invoiceId, fromQuotationId }: { invoiceId?: string
   }
 
   const getFilteredProducts = (index: number, query: string) => {
-    const used = getUsedProductIds(index)
-    const currentId = items?.[index]?.productId
     const q = query.trim().toLowerCase()
     return products.filter((p) => {
-      if (used.has(p.id) && p.id !== currentId) return false
       if (!q) return true
       return (
         p.name.toLowerCase().includes(q) ||
@@ -793,11 +790,6 @@ export function InvoiceForm({ invoiceId, fromQuotationId }: { invoiceId?: string
   const applyProduct = (fieldId: string, index: number, productId: string) => {
     const p = products.find((x) => x.id === productId)
     if (!p) return
-    const used = getUsedProductIds(index)
-    if (used.has(productId)) {
-      toast({ title: 'Product already added on another line', variant: 'destructive' })
-      return
-    }
     setValue(`items.${index}.productId`, productId, { shouldValidate: true })
     setValue(`items.${index}.rate`, Number(p.selling_price))
     setValue(`items.${index}.gstRate`, Number(p.gst_rate))
@@ -869,19 +861,25 @@ function isPaymentModeActive(mode?: string | null): boolean {
 
   const validateBeforeSubmit = (data: InvoiceInput): string | null => {
     const ids = data.items.map((i) => i.productId).filter(Boolean)
-    if (new Set(ids).size !== ids.length) return 'Duplicate products are not allowed'
     if (ids.length !== data.items.length) return 'Please select a product for every line item'
     if (!data.customerId) return 'Please select a customer from the list'
 
     if (!allowNegativeStock) {
+      const requiredByProduct = new Map<string, number>()
       for (const item of data.items) {
         if (item.productId) {
-          const p = products.find((prod) => prod.id === item.productId)
-          if (p) {
-            const available = Number(p.current_stock ?? 0)
-            if (available < item.quantity) {
-              return `Product "${p.name}" is out of stock (Available: ${available}, Required: ${item.quantity}). To allow invoicing with out-of-stock items, enable "Allow Invoicing When Out of Stock" in Business Settings.`
-            }
+          requiredByProduct.set(
+            item.productId,
+            (requiredByProduct.get(item.productId) || 0) + (Number(item.quantity) || 0)
+          )
+        }
+      }
+      for (const [productId, requiredQty] of requiredByProduct.entries()) {
+        const p = products.find((prod) => prod.id === productId)
+        if (p) {
+          const available = Number(p.current_stock ?? 0)
+          if (available < requiredQty) {
+            return `Product "${p.name}" is out of stock (Available: ${available}, Total Required: ${requiredQty}). To allow invoicing with out-of-stock items, enable "Allow Invoicing When Out of Stock" in Business Settings.`
           }
         }
       }
