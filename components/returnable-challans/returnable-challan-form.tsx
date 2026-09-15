@@ -564,7 +564,8 @@ export function ReturnableChallanForm({ mode, challanId }: ReturnableChallanForm
                           <ul className="absolute z-50 mt-1 max-h-40 w-full overflow-auto rounded-md border bg-popover py-1 text-sm shadow-md">
                             {filteredProducts.map((p) => {
                               const lowAlert = Number(p.low_stock_alert ?? 0)
-                              const stock = Math.max(0, Number(p.current_stock ?? 0))
+                              const stock = Number(p.current_stock ?? 0)
+                              const isNegative = stock < 0
                               const isLowOrOut = stock <= lowAlert
                               return (
                                 <li key={p.id}>
@@ -578,7 +579,11 @@ export function ReturnableChallanForm({ mode, challanId }: ReturnableChallanForm
                                     <span
                                       className={cn(
                                         'shrink-0 text-xs font-semibold tabular-nums',
-                                        isLowOrOut ? 'text-yellow-600' : 'text-green-600'
+                                        isNegative
+                                          ? 'text-red-600 dark:text-red-400 bg-red-50 dark:bg-red-950/50 px-1.5 py-0.5 rounded border border-red-200 dark:border-red-900'
+                                          : isLowOrOut
+                                          ? 'text-amber-600 dark:text-amber-400'
+                                          : 'text-green-600 dark:text-green-400'
                                       )}
                                     >
                                       Stock: {stock}
@@ -635,7 +640,7 @@ export function ReturnableChallanForm({ mode, challanId }: ReturnableChallanForm
                         <Input
                           type="number"
                           min="0"
-                          step="0.01"
+                          step="0.001"
                           className="h-9 no-spinner"
                           disabled={!includePricing}
                           {...register(`items.${i}.rate`, { valueAsNumber: true })}

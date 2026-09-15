@@ -166,6 +166,13 @@ const finiteIntMin0 = z.preprocess((val) => {
   return Math.floor(n)
 }, z.number().int().min(0))
 
+const finiteInt = z.preprocess((val) => {
+  if (val === undefined || val === null || val === '') return 0
+  const n = typeof val === 'number' ? val : Number(val)
+  if (!Number.isFinite(n)) return 0
+  return Math.floor(n)
+}, z.number().int())
+
 export const productSchema = z.object({
   name: z.preprocess(
     (v) => (typeof v === 'string' ? v.trim() : v),
@@ -197,7 +204,7 @@ export const productSchema = z.object({
   ),
   gstRate: finiteNumber(0, 100),
   gstType: z.enum(['CGST_SGST', 'IGST', 'EXEMPT']).default('CGST_SGST'),
-  openingStock: finiteIntMin0,
+  openingStock: finiteInt,
   lowStockAlert: finiteIntMin0,
   discount: z
     .preprocess(
@@ -469,6 +476,7 @@ export const businessSettingsSchema = z.object({
   bankBranch: z.string().optional(),
   showBankDetailsInvoice: z.boolean().default(true).optional(),
   showBankDetailsProforma: z.boolean().default(true).optional(),
+  allowNegativeStock: z.boolean().default(false).optional(),
   invoicePrefix: z.string().default('VE'),
   quotationPrefix: z.string().default('QT'),
   proformaPrefix: z.string().default('PI'),

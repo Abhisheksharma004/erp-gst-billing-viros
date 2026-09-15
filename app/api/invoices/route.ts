@@ -4,6 +4,7 @@ import { requirePermission } from '@/lib/api-auth'
 import { appendOrgFilter } from '@/lib/tenant'
 import { invoiceSchema } from '@/lib/validations'
 import { ensureInvoiceSchema } from '@/lib/ensure-invoice-schema'
+import { ensurePricingPrecision } from '@/lib/ensure-product-schema'
 import { roundToNearestRupee, roundToTwo } from '@/lib/utils'
 import { computeSalesDocumentItemTotals } from '@/lib/sales-document-totals'
 import { randomUUID } from 'crypto'
@@ -75,7 +76,7 @@ export async function POST(req: NextRequest) {
 
   const conn = await db.getConnection()
   try {
-    await ensureInvoiceSchema()
+    await Promise.all([ensureInvoiceSchema(), ensurePricingPrecision()])
     const body = await req.json()
     const data = invoiceSchema.parse(body)
     if (!(await assertCustomerInOrg(data.customerId, organizationId!))) {
@@ -86,12 +87,13 @@ export async function POST(req: NextRequest) {
 
     // Generate invoice number
     const [settings] = await conn.execute(
-      'SELECT invoice_prefix, document_number_separator, document_number_structure FROM business_settings WHERE organization_id = ? LIMIT 1',
+      'SELECT invoice_prefix, document_number_separator, document_number_structure, allow_negative_stock FROM business_settings WHERE organization_id = ? LIMIT 1',
       [organizationId]
     ) as any[]
     const prefix = settings[0]?.invoice_prefix || 'INV'
     const separator = settings[0]?.document_number_separator ?? '/'
     const structure = settings[0]?.document_number_structure ?? 'PREFIX_SERIAL_FY'
+    const allowNegativeStock = Boolean(settings[0]?.allow_negative_stock)
     const likePattern = buildDocumentNumberLikePattern(prefix, data.date, separator, structure)
     // Compute totals (match UI)
     let subtotal = 0, totalDiscount = 0, totalCgst = 0, totalSgst = 0, totalIgst = 0, grandTotal = 0
@@ -105,6 +107,30 @@ export async function POST(req: NextRequest) {
       grandTotal += t.total
       return { ...item, ...t }
     })
+
+    if (!allowNegativeStock) {
+      for (const item of itemsWithTotals) {
+        if (item.productId) {
+          const [[prod]] = (await conn.execute(
+            'SELECT name, current_stock FROM products WHERE id = ? AND organization_id = ? FOR UPDATE',
+            [item.productId, organizationId]
+          )) as any[][]
+          if (prod) {
+            const currentStock = Number(prod.current_stock ?? 0)
+            if (currentStock < item.quantity) {
+              await conn.rollback()
+              return NextResponse.json(
+                {
+                  error: `Product "${prod.name}" is out of stock! Available: ${currentStock}, Required: ${item.quantity}. (Enable "Allow Invoicing When Out of Stock" in Settings to permit negative stock).`,
+                },
+                { status: 400 }
+              )
+            }
+          }
+        }
+      }
+    }
+
     const taxAmount = roundToTwo(totalCgst + totalSgst + totalIgst)
     const totalAmount = roundToNearestRupee(roundToTwo(grandTotal))
     const id = randomUUID()
@@ -163,7 +189,7 @@ export async function POST(req: NextRequest) {
       )
       if (item.productId) {
         await conn.execute(
-          'UPDATE products SET current_stock = GREATEST(0, current_stock - ?) WHERE id = ? AND organization_id = ?',
+          'UPDATE products SET current_stock = current_stock - ? WHERE id = ? AND organization_id = ?',
           [item.quantity, item.productId, organizationId]
         )
         const [[stockRow]] = await conn.execute(

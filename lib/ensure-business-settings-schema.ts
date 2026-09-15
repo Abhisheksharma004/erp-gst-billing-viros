@@ -99,6 +99,9 @@ export async function ensureBusinessSettingsBankingColumns(): Promise<void> {
   await runAlter(
     `ALTER TABLE business_settings ADD COLUMN show_bank_details_proforma TINYINT(1) NOT NULL DEFAULT 1 AFTER show_bank_details_invoice`
   )
+  await runAlter(
+    `ALTER TABLE business_settings ADD COLUMN allow_negative_stock TINYINT(1) NOT NULL DEFAULT 0 AFTER show_bank_details_proforma`
+  )
 
   const documentTermsColumns = [
     'quotation_terms',

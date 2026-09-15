@@ -952,7 +952,7 @@ export function PurchaseForm({ purchaseId }: { purchaseId?: string }) {
                         <Input
                           type="number"
                           min="0"
-                          step="0.01"
+                          step="0.001"
                           className="h-9 no-spinner text-xs px-2"
                           {...register(`items.${i}.rate`, { valueAsNumber: true })}
                         />

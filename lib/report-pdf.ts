@@ -30,10 +30,10 @@ export interface ReportPdfOptions {
   summary?: Record<string, any> | null
 }
 
-function formatAmount(val: unknown): string {
+function formatAmount(val: unknown, maxDigits: number = 2): string {
   const num = Number(val || 0)
   if (isNaN(num)) return '0.00'
-  return num.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
+  return num.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: maxDigits })
 }
 
 export function generateReportPdf(options: ReportPdfOptions) {
@@ -430,7 +430,7 @@ export function generateReportPdf(options: ReportPdfOptions) {
       r.productName || r.name || '-',
       r.hsn || '-',
       `${r.quantity ?? 0} ${r.unit || ''}`.trim(),
-      formatAmount(r.rate),
+      formatAmount(r.rate, 3),
       formatAmount(r.taxableAmount),
       `${formatAmount(r.gstAmount)} (${r.gstRate || 0}%)`,
       formatAmount(r.totalAmount),
@@ -447,7 +447,7 @@ export function generateReportPdf(options: ReportPdfOptions) {
       r.productName || r.name || '-',
       r.hsn || '-',
       `${r.quantity ?? 0} ${r.unit || ''}`.trim(),
-      formatAmount(r.rate),
+      formatAmount(r.rate, 3),
       formatAmount(r.taxableAmount),
       `${formatAmount(r.gstAmount)} (${r.gstRate || 0}%)`,
       formatAmount(r.totalAmount),

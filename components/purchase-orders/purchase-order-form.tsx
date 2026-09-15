@@ -670,7 +670,7 @@ export function PurchaseOrderForm({ purchaseOrderId }: { purchaseOrderId?: strin
                         <Input
                           type="number"
                           min="0"
-                          step="0.01"
+                          step="0.001"
                           className="h-9 no-spinner text-xs px-2"
                           disabled={!includePricing}
                           {...register(`items.${i}.rate`, { valueAsNumber: true })}

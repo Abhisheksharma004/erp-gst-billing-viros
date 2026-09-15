@@ -179,7 +179,7 @@ export default function InventoryPage() {
       description: product.description || '',
       sellingPrice: Number(product.selling_price),
       purchasePrice: Number(product.purchase_price),
-      openingStock: Math.max(0, product.current_stock),
+      openingStock: Number(product.current_stock ?? 0),
       gstRate: Number(product.gst_rate),
       gstType: product.gst_type as 'CGST_SGST' | 'IGST' | 'EXEMPT',
       lowStockAlert: product.low_stock_alert,
@@ -415,12 +415,14 @@ export default function InventoryPage() {
                   <TableCell className="text-right">
                     <span
                       className={
-                        Number(p.current_stock) <= Number(p.low_stock_alert ?? 0)
+                        Number(p.current_stock) < 0
+                          ? 'font-bold text-red-600 dark:text-red-400 bg-red-50 dark:bg-red-950/50 px-2 py-0.5 rounded border border-red-200 dark:border-red-900 inline-block'
+                          : Number(p.current_stock) <= Number(p.low_stock_alert ?? 0)
                           ? 'font-medium text-orange-600'
                           : ''
                       }
                     >
-                      {Math.max(0, Number(p.current_stock))}
+                      {Number(p.current_stock)}
                       {p.unit_short_name && (
                         <span className="text-xs text-muted-foreground ml-1">{p.unit_short_name}</span>
                       )}
@@ -529,12 +531,14 @@ export default function InventoryPage() {
                           <span className="text-xs text-muted-foreground">Stock</span>
                           <span
                             className={`font-medium text-sm ${
-                              Number(p.current_stock) <= Number(p.low_stock_alert ?? 0)
+                              Number(p.current_stock) < 0
+                                ? 'font-bold text-red-600 dark:text-red-400'
+                                : Number(p.current_stock) <= Number(p.low_stock_alert ?? 0)
                                 ? 'text-orange-600'
                                 : ''
                             }`}
                           >
-                            {Math.max(0, Number(p.current_stock))}
+                            {Number(p.current_stock)}
                             {p.unit_short_name ? ` ${p.unit_short_name}` : ''}
                           </span>
                         </div>
@@ -617,7 +621,9 @@ export default function InventoryPage() {
                 </div>
                 <div>
                   <p className="text-muted-foreground">Stock</p>
-                  <p>{Math.max(0, Number(viewing.current_stock ?? 0))}</p>
+                  <p className={Number(viewing.current_stock ?? 0) < 0 ? 'font-bold text-red-600 dark:text-red-400' : ''}>
+                    {Number(viewing.current_stock ?? 0)}
+                  </p>
                 </div>
                 <div>
                   <p className="text-muted-foreground">Status</p>
@@ -692,11 +698,11 @@ export default function InventoryPage() {
               </div>
               <div className="space-y-1">
                 <Label className="text-xs sm:text-sm">Selling Price (₹) *</Label>
-                <Input type="number" step="0.01" className="h-9 no-spinner" {...form.register('sellingPrice', { valueAsNumber: true })} />
+                <Input type="number" step="0.001" className="h-9 no-spinner" {...form.register('sellingPrice', { valueAsNumber: true })} />
               </div>
               <div className="space-y-1">
                 <Label className="text-xs sm:text-sm">Purchase Price (₹) *</Label>
-                <Input type="number" step="0.01" className="h-9 no-spinner" {...form.register('purchasePrice', { valueAsNumber: true })} />
+                <Input type="number" step="0.001" className="h-9 no-spinner" {...form.register('purchasePrice', { valueAsNumber: true })} />
               </div>
               <div className="space-y-1">
                 <Label className="text-xs sm:text-sm">GST Rate (%) *</Label>

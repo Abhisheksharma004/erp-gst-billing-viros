@@ -315,6 +315,16 @@ export function InvoiceForm({ invoiceId, fromQuotationId }: { invoiceId?: string
   const [pendingItemMeta, setPendingItemMeta] = useState<PendingItemMetaRow[] | null>(null)
   const customerSearchRef = useRef<HTMLDivElement | null>(null)
   const productSearchRefs = useRef<Record<string, HTMLDivElement | null>>({})
+  const [allowNegativeStock, setAllowNegativeStock] = useState<boolean>(false)
+
+  useEffect(() => {
+    fetch('/api/settings')
+      .then((r) => r.json())
+      .then((d) => {
+        if (d) setAllowNegativeStock(Boolean(d.allowNegativeStock))
+      })
+      .catch(() => {})
+  }, [])
 
   const form = useForm<InvoiceInput>({
     resolver: zodResolver(invoiceSchema),
@@ -863,6 +873,20 @@ function isPaymentModeActive(mode?: string | null): boolean {
     if (ids.length !== data.items.length) return 'Please select a product for every line item'
     if (!data.customerId) return 'Please select a customer from the list'
 
+    if (!allowNegativeStock) {
+      for (const item of data.items) {
+        if (item.productId) {
+          const p = products.find((prod) => prod.id === item.productId)
+          if (p) {
+            const available = Number(p.current_stock ?? 0)
+            if (available < item.quantity) {
+              return `Product "${p.name}" is out of stock (Available: ${available}, Required: ${item.quantity}). To allow invoicing with out-of-stock items, enable "Allow Invoicing When Out of Stock" in Business Settings.`
+            }
+          }
+        }
+      }
+    }
+
     if (isPaymentModeActive(data.paymentMode)) {
       if (!data.paymentRef || data.paymentRef.trim() === '') {
         return 'Ref# is required when Payment Mode is selected'
@@ -1098,7 +1122,8 @@ function isPaymentModeActive(mode?: string | null): boolean {
                             <ul className="absolute z-50 mt-1 max-h-40 w-full overflow-auto rounded-md border bg-popover py-1 text-sm shadow-md">
                               {filteredProducts.map((p) => {
                                 const lowAlert = Number(p.low_stock_alert ?? 0)
-                                const stock = Math.max(0, Number(p.current_stock ?? 0))
+                                const stock = Number(p.current_stock ?? 0)
+                                const isNegative = stock < 0
                                 const isLowOrOut = stock <= lowAlert
                                 return (
                                   <li key={p.id}>
@@ -1112,7 +1137,11 @@ function isPaymentModeActive(mode?: string | null): boolean {
                                       <span
                                         className={cn(
                                           'shrink-0 text-[11px] font-semibold tabular-nums',
-                                          isLowOrOut ? 'text-yellow-600' : 'text-green-600'
+                                          isNegative
+                                            ? 'text-red-600 dark:text-red-400 bg-red-50 dark:bg-red-950/50 px-1.5 py-0.5 rounded border border-red-200 dark:border-red-900'
+                                            : isLowOrOut
+                                            ? 'text-amber-600 dark:text-amber-400'
+                                            : 'text-green-600 dark:text-green-400'
                                         )}
                                       >
                                         Stock: {stock}
@@ -1165,7 +1194,7 @@ function isPaymentModeActive(mode?: string | null): boolean {
                         <Input
                           type="number"
                           min="0"
-                          step="0.01"
+                          step="0.001"
                           className="h-9 no-spinner text-xs px-2"
                           {...register(`items.${i}.rate`, { valueAsNumber: true })}
                         />

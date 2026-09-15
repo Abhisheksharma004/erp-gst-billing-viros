@@ -208,6 +208,10 @@ function formatMoney(n: number): string {
   return Number(n).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
 }
 
+function formatRateMoney(n: number): string {
+  return Number(n).toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 3 })
+}
+
 function formatRoundOffForPdf(n: number): string {
   const rounded = roundToTwo(Number(n) || 0)
   if (rounded === 0) return '+ 0.00'
@@ -218,7 +222,7 @@ function formatRoundOffForPdf(n: number): string {
 function formatPdfRateNumber(rate: number): string {
   const n = Number(rate) || 0
   if (Number.isInteger(n)) return String(n)
-  return n.toFixed(2).replace(/0+$/, '').replace(/\.$/, '')
+  return n.toFixed(3).replace(/0+$/, '').replace(/\.$/, '')
 }
 
 function itemsTableBodyTextY(cellY: number, cellHeight: number): number {
@@ -1222,7 +1226,7 @@ function renderSalesDocumentPage(
       row.push('', '', '', '', '', '', '')
     } else {
       row.push(
-        formatMoney(item.rate),
+        formatRateMoney(item.rate),
         formatMoney(taxable),
         formatPdfRateNumber(Number(item.gst_rate) || 0),
         formatMoney(gstAmount),

@@ -66,7 +66,7 @@ function mapProductRow(row: Record<string, unknown>) {
     name: row.name,
     description: row.description || '-',
     hsn: formatProductHsn(row.hsn_code, row.sac_code),
-    currentStock: Math.max(0, Number(row.current_stock ?? 0)),
+    currentStock: Number(row.current_stock ?? 0),
     lowStockAlert: Number(row.low_stock_alert ?? 10),
   }
 }

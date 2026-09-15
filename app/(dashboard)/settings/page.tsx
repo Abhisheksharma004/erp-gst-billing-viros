@@ -38,6 +38,7 @@ export default function SettingsPage() {
       companyName: '',
       showBankDetailsInvoice: true,
       showBankDetailsProforma: true,
+      allowNegativeStock: false,
       invoicePrefix: 'VE',
       quotationPrefix: 'QT',
       purchaseOrderPrefix: 'PO',
@@ -71,6 +72,7 @@ export default function SettingsPage() {
           bankBranch: data.bank_branch || data.bankBranch || '',
           showBankDetailsInvoice: data.showBankDetailsInvoice !== undefined ? Boolean(data.showBankDetailsInvoice) : (data.show_bank_details_invoice !== undefined ? Boolean(data.show_bank_details_invoice) : true),
           showBankDetailsProforma: data.showBankDetailsProforma !== undefined ? Boolean(data.showBankDetailsProforma) : (data.show_bank_details_proforma !== undefined ? Boolean(data.show_bank_details_proforma) : true),
+          allowNegativeStock: data.allowNegativeStock !== undefined ? Boolean(data.allowNegativeStock) : (data.allow_negative_stock !== undefined ? Boolean(data.allow_negative_stock) : false),
           invoicePrefix: data.invoice_prefix || data.invoicePrefix || 'VE',
           quotationPrefix: data.quotation_prefix || data.quotationPrefix || 'QT',
           purchaseOrderPrefix: data.purchase_order_prefix || data.purchaseOrderPrefix || 'PO',
@@ -384,6 +386,32 @@ export default function SettingsPage() {
                   />
                 </div>
               </div>
+            </div>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader>
+            <CardTitle>Inventory & Invoicing Preferences</CardTitle>
+            <p className="text-sm text-muted-foreground">
+              Configure stock behaviour and restrictions when creating sales invoices.
+            </p>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <div className="flex items-center justify-between gap-4 p-4 rounded-lg border bg-slate-50/70 dark:bg-slate-900/50 hover:bg-slate-50 dark:hover:bg-slate-900 transition-colors">
+              <div className="space-y-1">
+                <Label htmlFor="allowNegativeStock" className="text-sm font-semibold cursor-pointer">
+                  Allow Invoicing When Out of Stock (Negative Stock)
+                </Label>
+                <p className="text-xs text-muted-foreground leading-relaxed max-w-2xl">
+                  When enabled, you can create and issue invoices even if product stock is 0 or insufficient. Product stock will deduct into negative numbers (e.g. -1, -5) and show as negative across inventory. When disabled, invoicing out-of-stock items will be prevented.
+                </p>
+              </div>
+              <Switch
+                id="allowNegativeStock"
+                checked={watchedValues.allowNegativeStock ?? false}
+                onCheckedChange={(checked) => setValue('allowNegativeStock', checked, { shouldDirty: true })}
+              />
             </div>
           </CardContent>
         </Card>

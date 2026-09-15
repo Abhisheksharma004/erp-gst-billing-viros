@@ -43,7 +43,7 @@ async function insertInvoiceItems(
     )
     if (item.productId) {
       await conn.execute(
-        'UPDATE products SET current_stock = GREATEST(0, current_stock - ?) WHERE id = ? AND organization_id = ?',
+        'UPDATE products SET current_stock = current_stock - ? WHERE id = ? AND organization_id = ?',
         [item.quantity, item.productId, organizationId]
       )
       const [[stockRow]] = await conn.execute(
@@ -171,6 +171,35 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
       grandTotal += t.total
       return { ...item, ...t }
     })
+
+    const [settings] = (await conn.execute(
+      'SELECT allow_negative_stock FROM business_settings WHERE organization_id = ? LIMIT 1',
+      [organizationId]
+    )) as any[]
+    const allowNegativeStock = Boolean(settings[0]?.allow_negative_stock)
+
+    if (!allowNegativeStock) {
+      for (const item of itemsWithTotals) {
+        if (item.productId) {
+          const [[prod]] = (await conn.execute(
+            'SELECT name, current_stock FROM products WHERE id = ? AND organization_id = ? FOR UPDATE',
+            [item.productId, organizationId]
+          )) as any[][]
+          if (prod) {
+            const currentStock = Number(prod.current_stock ?? 0)
+            if (currentStock < item.quantity) {
+              await conn.rollback()
+              return NextResponse.json(
+                {
+                  error: `Product "${prod.name}" is out of stock! Available: ${currentStock}, Required: ${item.quantity}. (Enable "Allow Invoicing When Out of Stock" in Settings to permit negative stock).`,
+                },
+                { status: 400 }
+              )
+            }
+          }
+        }
+      }
+    }
 
     const taxAmount = roundToTwo(totalCgst + totalSgst + totalIgst)
     const totalAmount = roundToNearestRupee(roundToTwo(grandTotal))

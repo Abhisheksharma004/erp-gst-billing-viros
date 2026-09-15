@@ -48,6 +48,7 @@ export async function GET(req: NextRequest) {
         bank_branch as bankBranch,
         show_bank_details_invoice as showBankDetailsInvoice,
         show_bank_details_proforma as showBankDetailsProforma,
+        allow_negative_stock as allowNegativeStock,
         invoice_prefix as invoicePrefix,
         quotation_prefix as quotationPrefix,
         proforma_prefix as proformaPrefix,
@@ -74,6 +75,7 @@ export async function GET(req: NextRequest) {
     if (row) {
       row.showBankDetailsInvoice = row.showBankDetailsInvoice === 0 ? false : true
       row.showBankDetailsProforma = row.showBankDetailsProforma === 0 ? false : true
+      row.allowNegativeStock = Boolean(row.allowNegativeStock)
     }
 
     return NextResponse.json(row || null)
@@ -142,6 +144,7 @@ export async function PUT(req: NextRequest) {
           bank_branch = ?,
           show_bank_details_invoice = ?,
           show_bank_details_proforma = ?,
+          allow_negative_stock = ?,
           invoice_prefix = ?,
           quotation_prefix = ?,
           proforma_prefix = ?,
@@ -178,6 +181,7 @@ export async function PUT(req: NextRequest) {
           data.bankBranch || null,
           data.showBankDetailsInvoice === false ? 0 : 1,
           data.showBankDetailsProforma === false ? 0 : 1,
+          data.allowNegativeStock ? 1 : 0,
           data.invoicePrefix,
           data.quotationPrefix,
           data.proformaPrefix || 'PI',
@@ -204,11 +208,11 @@ export async function PUT(req: NextRequest) {
         `INSERT INTO business_settings (
           id, organization_id, company_name, gstin, pan, address, city, state, pincode,
           phone, email, website, logo, sidebar_color, bank_name, bank_account, bank_ifsc, bank_branch,
-          show_bank_details_invoice, show_bank_details_proforma,
+          show_bank_details_invoice, show_bank_details_proforma, allow_negative_stock,
           invoice_prefix, quotation_prefix, proforma_prefix, purchase_order_prefix, challan_prefix, document_number_separator, document_number_structure, terms_condition,
           quotation_terms, proforma_terms, sales_invoice_terms, purchase_order_terms, purchase_invoice_terms,
           delivery_challan_terms, returnable_challan_terms
-        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
         [
           id,
           organizationId,
@@ -230,6 +234,7 @@ export async function PUT(req: NextRequest) {
           data.bankBranch || null,
           data.showBankDetailsInvoice === false ? 0 : 1,
           data.showBankDetailsProforma === false ? 0 : 1,
+          data.allowNegativeStock ? 1 : 0,
           data.invoicePrefix,
           data.quotationPrefix,
           data.proformaPrefix || 'PI',
@@ -271,6 +276,7 @@ export async function PUT(req: NextRequest) {
         bank_branch as bankBranch,
         show_bank_details_invoice as showBankDetailsInvoice,
         show_bank_details_proforma as showBankDetailsProforma,
+        allow_negative_stock as allowNegativeStock,
         invoice_prefix as invoicePrefix,
         quotation_prefix as quotationPrefix,
         proforma_prefix as proformaPrefix,
@@ -297,6 +303,7 @@ export async function PUT(req: NextRequest) {
     if (updatedRow) {
       updatedRow.showBankDetailsInvoice = updatedRow.showBankDetailsInvoice === 0 ? false : true
       updatedRow.showBankDetailsProforma = updatedRow.showBankDetailsProforma === 0 ? false : true
+      updatedRow.allowNegativeStock = Boolean(updatedRow.allowNegativeStock)
     }
 
     return NextResponse.json(updatedRow)

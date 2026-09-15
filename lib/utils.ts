@@ -6,12 +6,16 @@ export function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs))
 }
 
-export function formatCurrency(amount: number | string | null | undefined): string {
+export function formatCurrency(
+  amount: number | string | null | undefined,
+  maxDecimals: number = 3
+): string {
   const num = typeof amount === 'string' ? parseFloat(amount) : (amount ?? 0)
   return new Intl.NumberFormat('en-IN', {
     style: 'currency',
     currency: 'INR',
     minimumFractionDigits: 2,
+    maximumFractionDigits: maxDecimals,
   }).format(num)
 }
 
