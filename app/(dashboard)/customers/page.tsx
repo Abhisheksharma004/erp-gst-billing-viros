@@ -13,11 +13,13 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table'
 import { useToast } from '@/hooks/use-toast'
 import { usePageCount } from '@/hooks/use-page-count'
-import { Edit, Eye, Trash2, User, MapPin } from 'lucide-react'
+import { Edit, Eye, Trash2, User, MapPin, Download, Upload } from 'lucide-react'
 import { formatCurrency } from '@/lib/utils'
 import { sanitizeGstinInput, sanitizeMobileInput } from '@/lib/field-validation'
 import { ListPageToolbar } from '@/components/shared/list-page-toolbar'
 import { parseJsonResponse } from '@/lib/fetch-json'
+import { downloadCustomerTemplate } from '@/lib/import-export-utils'
+import { BulkImportDialog } from '@/components/shared/bulk-import-dialog'
 
 interface Customer {
   id: string
@@ -132,6 +134,7 @@ export default function CustomersPage() {
   const [viewLoading, setViewLoading] = useState(false)
   const [editing, setEditing] = useState<Customer | null>(null)
   const [saving, setSaving] = useState(false)
+  const [importOpen, setImportOpen] = useState(false)
 
   const form = useForm<CustomerInput>({
     resolver: zodResolver(customerSchema),
@@ -260,6 +263,40 @@ export default function CustomersPage() {
         onAddClick={openNew}
         viewMode={viewMode}
         onViewModeChange={setViewMode}
+        extraActions={
+          <div className="flex items-center gap-1.5 sm:gap-2">
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              className="h-9 gap-1.5 text-xs sm:text-sm"
+              onClick={downloadCustomerTemplate}
+            >
+              <Download className="w-4 h-4 text-primary" />
+              Download Format
+            </Button>
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              className="h-9 gap-1.5 text-xs sm:text-sm"
+              onClick={() => setImportOpen(true)}
+            >
+              <Upload className="w-4 h-4 text-primary" />
+              Import
+            </Button>
+          </div>
+        }
+      />
+
+      <BulkImportDialog
+        open={importOpen}
+        onOpenChange={setImportOpen}
+        title="Import Customers"
+        entityType="customer"
+        importEndpoint="/api/customers/import"
+        onDownloadTemplate={downloadCustomerTemplate}
+        onSuccess={fetchCustomers}
       />
 
       {showTable && (

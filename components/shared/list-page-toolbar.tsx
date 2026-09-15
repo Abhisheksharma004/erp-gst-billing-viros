@@ -15,6 +15,7 @@ interface ListPageToolbarProps {
   viewMode?: 'table' | 'card'
   onViewModeChange?: (mode: 'table' | 'card') => void
   showViewToggle?: boolean
+  extraActions?: React.ReactNode
 }
 
 function ToolbarSearch({
@@ -51,6 +52,7 @@ export function ListPageToolbar({
   viewMode = 'table',
   onViewModeChange,
   showViewToggle = true,
+  extraActions,
 }: ListPageToolbarProps) {
   const addContent = (
     <>
@@ -102,9 +104,15 @@ export function ListPageToolbar({
           </Button>
         )}
       </div>
+      {extraActions && (
+        <div className="flex items-center justify-end gap-2 md:hidden overflow-x-auto pb-1">
+          {extraActions}
+        </div>
+      )}
 
       <div className="hidden md:flex md:flex-col md:gap-2">
-        <div className="flex justify-end">
+        <div className="flex items-center justify-end gap-2">
+          {extraActions}
           {addHref ? (
             <Button asChild className="h-9 w-fit">
               <Link href={addHref}>
