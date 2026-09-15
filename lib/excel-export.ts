@@ -1,6 +1,7 @@
 /** Client-side Excel (.xls / Spreadsheet XML) export */
 
 export interface ExcelMeta {
+  companyName?: string
   reportTitle?: string
   fromDate?: string
   toDate?: string
@@ -26,6 +27,7 @@ function sheetXml(
 
   if (meta) {
     const metaCells: string[] = []
+    if (meta.companyName) metaCells.push(`Organization: ${meta.companyName}`)
     if (meta.reportTitle) metaCells.push(`Report: ${meta.reportTitle}`)
     if (meta.fromDate && meta.toDate) metaCells.push(`Period: ${meta.fromDate} to ${meta.toDate}`)
     if (meta.partyName) metaCells.push(`Party: ${meta.partyName}`)

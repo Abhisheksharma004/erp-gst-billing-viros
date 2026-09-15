@@ -2,6 +2,20 @@ import jsPDF from 'jspdf'
 import autoTable from 'jspdf-autotable'
 import { formatDate } from '@/lib/utils'
 
+export interface ReportPdfSettings {
+  companyName?: string | null
+  gstin?: string | null
+  pan?: string | null
+  address?: string | null
+  city?: string | null
+  state?: string | null
+  pincode?: string | null
+  phone?: string | null
+  email?: string | null
+  website?: string | null
+  logo?: string | null
+}
+
 export interface ReportPdfOptions {
   reportType: string
   reportTitle: string
@@ -9,6 +23,7 @@ export interface ReportPdfOptions {
   to: string
   partyName?: string
   companyName?: string
+  settings?: ReportPdfSettings | null
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   data: any[]
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -39,22 +54,116 @@ export function generateReportPdf(options: ReportPdfOptions) {
   const margin = 12
   const contentW = pageW - margin * 2 // 273mm
 
-  // Colors matching diagram
+  // Colors
   const primaryBlue: [number, number, number] = [37, 99, 235] // Vibrant Blue
   const subBlue: [number, number, number] = [96, 165, 250] // Light Blue
 
-  // 1. Centered Header Title & Subtitle
+  const org = options.settings || {}
+  const companyName = org.companyName || options.companyName || 'VIros Entrepreneurs IT Solutions Private Limited'
+
+  // 1. Organization Header (Top-Left: Logo + Company Name + Address, Top-Right: GSTIN, PAN, Phone, Email, Website)
+  const headerTop = margin
+
+  // Logo (if available)
+  const hasLogo = Boolean(org.logo && typeof org.logo === 'string' && org.logo.startsWith('data:image'))
+  const logoSize = 18
+  if (hasLogo) {
+    try {
+      const fmt = org.logo!.includes('image/png') ? 'PNG' : 'JPEG'
+      doc.addImage(org.logo!, fmt, margin, headerTop, logoSize, logoSize)
+    } catch {
+      // skip invalid logo image
+    }
+  }
+
+  const leftTextX = hasLogo ? margin + logoSize + 4 : margin
+  let leftY = headerTop + 3.5
+
   doc.setFont('helvetica', 'bold')
-  doc.setFontSize(18)
+  doc.setFontSize(13)
+  doc.setTextColor(15, 23, 42) // Dark Slate
+  doc.text(companyName, leftTextX, leftY)
+
+  doc.setFont('helvetica', 'normal')
+  doc.setFontSize(7.5)
+  doc.setTextColor(71, 85, 105) // Slate 600
+
+  const maxAddrWidth = contentW * 0.52
+  if (org.address) {
+    const addrLines = String(org.address).split('\n').map((l) => l.trim()).filter(Boolean)
+    for (const line of addrLines) {
+      const wrapped = doc.splitTextToSize(line, maxAddrWidth)
+      leftY += 3.8
+      doc.text(wrapped, leftTextX, leftY)
+      leftY += (wrapped.length - 1) * 3.2
+    }
+  }
+
+  const locParts = [org.city, org.state].filter(Boolean).map((s) => String(s).trim())
+  let locLine = locParts.join(', ')
+  if (org.pincode) {
+    locLine = locLine ? `${locLine} - ${String(org.pincode).trim()}` : String(org.pincode).trim()
+  }
+  if (locLine) {
+    leftY += 3.8
+    doc.text(locLine, leftTextX, leftY)
+  }
+
+  // Right-aligned contacts: GSTIN, PAN, Phone, Email, Website
+  const rightX = pageW - margin
+  let rightY = headerTop + 3.5
+
+  const rawContacts = [
+    ['GSTIN', org.gstin],
+    ['PAN', org.pan],
+    ['Phone', org.phone],
+    ['Email', org.email],
+    ['Website', org.website],
+  ] as const
+
+  const contacts = rawContacts.filter(([_, val]) => Boolean(val && String(val).trim()))
+
+  doc.setFontSize(7.5)
+  contacts.forEach(([label, val]) => {
+    const labelText = `${label} : `
+    const valueText = String(val).trim()
+    doc.setFont('helvetica', 'bold')
+    doc.setTextColor(71, 85, 105)
+    const labelW = doc.getTextWidth(labelText)
+    doc.setFont('helvetica', 'normal')
+    doc.setTextColor(15, 23, 42)
+    const valueW = doc.getTextWidth(valueText)
+    const totalW = labelW + valueW
+
+    doc.setFont('helvetica', 'bold')
+    doc.setTextColor(71, 85, 105)
+    doc.text(labelText, rightX - totalW, rightY)
+    doc.setFont('helvetica', 'normal')
+    doc.setTextColor(15, 23, 42)
+    doc.text(valueText, rightX - valueW, rightY)
+    rightY += 3.8
+  })
+
+  // Horizontal divider line
+  const orgHeaderBottom = Math.max(leftY, rightY, hasLogo ? headerTop + logoSize : headerTop) + 3
+  doc.setDrawColor(203, 213, 225) // Slate 300
+  doc.setLineWidth(0.35)
+  doc.line(margin, orgHeaderBottom, margin + contentW, orgHeaderBottom)
+
+  // 2. Centered Header Title & Subtitle
+  const titleY = orgHeaderBottom + 6
+  doc.setFont('helvetica', 'bold')
+  doc.setFontSize(14)
   doc.setTextColor(...primaryBlue)
-  doc.text(reportTitle, pageW / 2, 14, { align: 'center' })
+  doc.text(reportTitle.toUpperCase(), pageW / 2, titleY, { align: 'center' })
 
+  const subtitleY = titleY + 4.2
   doc.setFont('helvetica', 'bold')
-  doc.setFontSize(8.5)
+  doc.setFontSize(7.5)
   doc.setTextColor(...subBlue)
-  doc.text('STATEMENT OF ACCOUNTS & FINANCIAL REPORT', pageW / 2, 19, { align: 'center' })
+  doc.text('STATEMENT OF ACCOUNTS & FINANCIAL REPORT', pageW / 2, subtitleY, { align: 'center' })
 
-  // 2. Left Metadata Info Section
+  // 3. Left Metadata Info Section
   let partyLabel = 'Party Name'
   if (
     reportType === 'customer-ledger' ||
@@ -74,85 +183,92 @@ export function generateReportPdf(options: ReportPdfOptions) {
     partyLabel = 'Vendor Name'
   }
 
-  const displayParty = !partyName || partyName === 'All Parties' || partyName === 'ALL' ? 'ALL' : partyName
+  let displayParty = !partyName || partyName === 'All Parties' || partyName === 'ALL' ? 'ALL' : partyName
+  if ((displayParty === 'ALL' || displayParty === 'Selected Customer' || displayParty === 'Selected Vendor') && data.length > 0) {
+    const firstParty = data[0]?.partyName || data[0]?.customerName || data[0]?.vendorName
+    if (firstParty && firstParty !== '-' && partyName && partyName !== 'ALL' && partyName !== 'All Parties') {
+      displayParty = firstParty
+    }
+  }
+
   const nowStr = `${new Date().toLocaleDateString('en-IN')} ${new Date().toLocaleTimeString('en-IN', { hour: '2-digit', minute: '2-digit' })}`
 
-  let leftY = 27
+  let leftMetaY = subtitleY + 5.5
   doc.setFont('helvetica', 'bold')
-  doc.setFontSize(9.5)
+  doc.setFontSize(8.5)
   doc.setTextColor(30, 41, 59)
 
-  doc.text(`${partyLabel}:-  ${displayParty}`, margin, leftY)
-  leftY += 6.5
-  doc.text(`Date Range:-  ${formatDate(from)} to ${formatDate(to)}`, margin, leftY)
-  leftY += 6.5
-  doc.text(`GENERATED ON:-  ${nowStr}`, margin, leftY)
+  doc.text(`${partyLabel}:-  ${displayParty}`, margin, leftMetaY)
+  leftMetaY += 5
+  doc.text(`Date Range:-  ${formatDate(from)} to ${formatDate(to)}`, margin, leftMetaY)
+  leftMetaY += 5
+  doc.text(`GENERATED ON:-  ${nowStr}`, margin, leftMetaY)
 
-  // 3. Right Summary Metrics Info Section
-  const rightX = margin + 175
-  let rightY = 27
+  // 4. Right Summary Metrics Info Section
+  const rightMetricX = margin + 175
+  let rightMetaY = subtitleY + 5.5
 
   if (summary) {
     doc.setFont('helvetica', 'bold')
-    doc.setFontSize(9.5)
+    doc.setFontSize(8.5)
     doc.setTextColor(30, 41, 59)
 
     if (reportType === 'customer-ledger') {
       const bal = Number(summary.closing_balance || 0)
       const drCr = bal >= 0 ? 'Dr' : 'Cr'
-      doc.text(`Total Debit:-  ${formatAmount(summary.total_debit)}`, rightX, rightY)
-      rightY += 6.5
-      doc.text(`Total Credit:-  ${formatAmount(summary.total_credit)}`, rightX, rightY)
-      rightY += 6.5
-      doc.text(`Closing Balance:-  ${formatAmount(Math.abs(bal))} ${drCr}`, rightX, rightY)
+      doc.text(`Total Debit:-  ${formatAmount(summary.total_debit)}`, rightMetricX, rightMetaY)
+      rightMetaY += 5
+      doc.text(`Total Credit:-  ${formatAmount(summary.total_credit)}`, rightMetricX, rightMetaY)
+      rightMetaY += 5
+      doc.text(`Closing Balance:-  ${formatAmount(Math.abs(bal))} ${drCr}`, rightMetricX, rightMetaY)
     } else if (reportType === 'vendor-ledger') {
       const bal = Number(summary.closing_balance || 0)
       const drCr = bal >= 0 ? 'Cr' : 'Dr'
-      doc.text(`Total Credit:-  ${formatAmount(summary.total_credit)}`, rightX, rightY)
-      rightY += 6.5
-      doc.text(`Total Debit:-  ${formatAmount(summary.total_debit)}`, rightX, rightY)
-      rightY += 6.5
-      doc.text(`Closing Balance:-  ${formatAmount(Math.abs(bal))} ${drCr}`, rightX, rightY)
+      doc.text(`Total Credit:-  ${formatAmount(summary.total_credit)}`, rightMetricX, rightMetaY)
+      rightMetaY += 5
+      doc.text(`Total Debit:-  ${formatAmount(summary.total_debit)}`, rightMetricX, rightMetaY)
+      rightMetaY += 5
+      doc.text(`Closing Balance:-  ${formatAmount(Math.abs(bal))} ${drCr}`, rightMetricX, rightMetaY)
     } else if (reportType === 'sales-summary' || reportType === 'gst-sales') {
-      doc.text(`Total Sales:-  ${formatAmount(summary.total_sales)}`, rightX, rightY)
-      rightY += 6.5
-      doc.text(`Taxable Value:-  ${formatAmount(summary.total_taxable)}`, rightX, rightY)
-      rightY += 6.5
-      doc.text(`Total Tax:-  ${formatAmount(summary.total_tax)}`, rightX, rightY)
+      doc.text(`Total Sales:-  ${formatAmount(summary.total_sales)}`, rightMetricX, rightMetaY)
+      rightMetaY += 5
+      doc.text(`Taxable Value:-  ${formatAmount(summary.total_taxable)}`, rightMetricX, rightMetaY)
+      rightMetaY += 5
+      doc.text(`Total Tax:-  ${formatAmount(summary.total_tax)}`, rightMetricX, rightMetaY)
     } else if (reportType === 'purchase-summary' || reportType === 'gst-purchase') {
-      doc.text(`Total Purchases:-  ${formatAmount(summary.total_purchases)}`, rightX, rightY)
-      rightY += 6.5
-      doc.text(`Taxable Value:-  ${formatAmount(summary.total_taxable)}`, rightX, rightY)
-      rightY += 6.5
-      doc.text(`Total Tax:-  ${formatAmount(summary.total_tax)}`, rightX, rightY)
+      doc.text(`Total Purchases:-  ${formatAmount(summary.total_purchases)}`, rightMetricX, rightMetaY)
+      rightMetaY += 5
+      doc.text(`Taxable Value:-  ${formatAmount(summary.total_taxable)}`, rightMetricX, rightMetaY)
+      rightMetaY += 5
+      doc.text(`Total Tax:-  ${formatAmount(summary.total_tax)}`, rightMetricX, rightMetaY)
     } else if (reportType === 'sales-product') {
-      doc.text(`Total Qty Sold:-  ${summary.total_quantity || 0}`, rightX, rightY)
-      rightY += 6.5
-      doc.text(`Taxable Value:-  ${formatAmount(summary.total_taxable)}`, rightX, rightY)
-      rightY += 6.5
-      doc.text(`Total Product Sales:-  ${formatAmount(summary.total_sales)}`, rightX, rightY)
+      doc.text(`Total Qty Sold:-  ${summary.total_quantity || 0}`, rightMetricX, rightMetaY)
+      rightMetaY += 5
+      doc.text(`Taxable Value:-  ${formatAmount(summary.total_taxable)}`, rightMetricX, rightMetaY)
+      rightMetaY += 5
+      doc.text(`Total Product Sales:-  ${formatAmount(summary.total_sales)}`, rightMetricX, rightMetaY)
     } else if (reportType === 'purchase-product') {
-      doc.text(`Total Qty Purchased:-  ${summary.total_quantity || 0}`, rightX, rightY)
-      rightY += 6.5
-      doc.text(`Taxable Value:-  ${formatAmount(summary.total_taxable)}`, rightX, rightY)
-      rightY += 6.5
-      doc.text(`Total Product Purchases:-  ${formatAmount(summary.total_purchases)}`, rightX, rightY)
+      doc.text(`Total Qty Purchased:-  ${summary.total_quantity || 0}`, rightMetricX, rightMetaY)
+      rightMetaY += 5
+      doc.text(`Taxable Value:-  ${formatAmount(summary.total_taxable)}`, rightMetricX, rightMetaY)
+      rightMetaY += 5
+      doc.text(`Total Product Purchases:-  ${formatAmount(summary.total_purchases)}`, rightMetricX, rightMetaY)
     } else if (reportType === 'pending-customer-invoices') {
-      doc.text(`Pending Invoices:-  ${summary.total_count || 0}`, rightX, rightY)
-      rightY += 6.5
-      doc.text(`Total Amount:-  ${formatAmount(summary.total_sales)}`, rightX, rightY)
-      rightY += 6.5
-      doc.text(`Pending Balance:-  ${formatAmount(summary.total_outstanding)}`, rightX, rightY)
+      doc.text(`Pending Invoices:-  ${summary.total_count || 0}`, rightMetricX, rightMetaY)
+      rightMetaY += 5
+      doc.text(`Total Amount:-  ${formatAmount(summary.total_sales)}`, rightMetricX, rightMetaY)
+      rightMetaY += 5
+      doc.text(`Pending Balance:-  ${formatAmount(summary.total_outstanding)}`, rightMetricX, rightMetaY)
     } else if (reportType === 'pending-vendor-invoices') {
-      doc.text(`Pending Bills:-  ${summary.total_count || 0}`, rightX, rightY)
-      rightY += 6.5
-      doc.text(`Total Amount:-  ${formatAmount(summary.total_purchases)}`, rightX, rightY)
-      rightY += 6.5
-      doc.text(`Pending Balance:-  ${formatAmount(summary.total_outstanding)}`, rightX, rightY)
+      doc.text(`Pending Bills:-  ${summary.total_count || 0}`, rightMetricX, rightMetaY)
+      rightMetaY += 5
+      doc.text(`Total Amount:-  ${formatAmount(summary.total_purchases)}`, rightMetricX, rightMetaY)
+      rightMetaY += 5
+      doc.text(`Pending Balance:-  ${formatAmount(summary.total_outstanding)}`, rightMetricX, rightMetaY)
     }
   }
 
-  const startY = 45
+  const startY = Math.max(leftMetaY, rightMetaY) + 5
 
   // 4. Define Table Columns & Rows based on reportType
   let head: string[][] = []
@@ -356,7 +472,7 @@ export function generateReportPdf(options: ReportPdfOptions) {
     head,
     body,
     foot,
-    margin: { left: margin, right: margin, bottom: 15 },
+    margin: { left: margin, right: margin, top: 15, bottom: 15 },
     styles: {
       font: 'helvetica',
       fontSize: 8,
@@ -383,6 +499,17 @@ export function generateReportPdf(options: ReportPdfOptions) {
       const totalPages = (doc as any).internal.getNumberOfPages()
       const currentPage = dataArg.pageNumber
 
+      // Running header on page 2+
+      if (currentPage > 1) {
+        doc.setFont('helvetica', 'normal')
+        doc.setFontSize(7.5)
+        doc.setTextColor(100, 116, 139)
+        doc.text(`${companyName} — ${reportTitle}`, margin, 10)
+        doc.setDrawColor(226, 232, 240)
+        doc.setLineWidth(0.2)
+        doc.line(margin, 12, margin + contentW, 12)
+      }
+
       // Bottom footer line
       doc.setDrawColor(226, 232, 240)
       doc.setLineWidth(0.3)
@@ -392,9 +519,9 @@ export function generateReportPdf(options: ReportPdfOptions) {
       doc.setFontSize(7.5)
       doc.setTextColor(100, 116, 139)
 
-      // Requested Footer Branding Text
+      // Footer Branding Text with Organization Name
       doc.text(
-        '© All Rights Reserved VIros Entrepreneurs IT Solutions Private Limited',
+        `© All Rights Reserved ${companyName}`,
         margin,
         pageH - 4.5,
         { align: 'left' }

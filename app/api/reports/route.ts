@@ -86,6 +86,33 @@ export async function GET(req: NextRequest) {
   const toDate = rawTo || (financialYear ? fyRange.endDate : null)
   const limit = parseInt(searchParams.get('limit') || '1000', 10)
 
+async function getOrgBusinessSettings(organizationId: string) {
+  try {
+    const [settingsRows] = (await db.execute(
+      `SELECT bs.company_name as companyName, bs.gstin, bs.pan, bs.address, bs.city, bs.state, bs.pincode,
+              bs.phone, bs.email, bs.website, bs.logo, o.name as orgName
+       FROM business_settings bs
+       LEFT JOIN organizations o ON o.id = bs.organization_id
+       WHERE bs.organization_id = ? LIMIT 1`,
+      [organizationId]
+    )) as any[]
+
+    let businessSettings = settingsRows[0] || null
+    if (!businessSettings) {
+      const [orgRows] = (await db.execute('SELECT name FROM organizations WHERE id = ? LIMIT 1', [organizationId])) as any[]
+      if (orgRows[0]) {
+        businessSettings = { companyName: orgRows[0].name }
+      }
+    } else if (!businessSettings.companyName && businessSettings.orgName) {
+      businessSettings.companyName = businessSettings.orgName
+    }
+    return businessSettings
+  } catch (err) {
+    console.error('Error fetching business settings for reports:', err)
+    return null
+  }
+}
+
   // Quick Party Options endpoint for filter dropdowns
   if (type === 'options' || type === 'party-options') {
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -98,7 +125,8 @@ export async function GET(req: NextRequest) {
       'SELECT id, name FROM vendors WHERE organization_id = ? AND is_active = 1 ORDER BY name ASC',
       [organizationId]
     )) as any[]
-    return NextResponse.json({ customers, vendors })
+    const businessSettings = await getOrgBusinessSettings(organizationId!)
+    return NextResponse.json({ customers, vendors, businessSettings })
   }
 
   const salesTypes = ['sales-summary', 'gst-sales', 'sales']

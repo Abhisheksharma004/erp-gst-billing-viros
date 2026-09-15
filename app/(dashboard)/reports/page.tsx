@@ -95,6 +95,8 @@ export default function ReportsPage() {
   const [data, setData] = useState<any[]>([])
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const [summary, setSummary] = useState<Record<string, any> | null>(null)
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const [businessSettings, setBusinessSettings] = useState<any>(null)
   const [loading, setLoading] = useState(false)
   const [hasRun, setHasRun] = useState(false)
 
@@ -112,6 +114,7 @@ export default function ReportsPage() {
       .then((resData) => {
         if (Array.isArray(resData.customers)) setCustomers(resData.customers)
         if (Array.isArray(resData.vendors)) setVendors(resData.vendors)
+        if (resData.businessSettings) setBusinessSettings(resData.businessSettings)
       })
       .catch(() => { })
   }, [])
@@ -185,6 +188,7 @@ export default function ReportsPage() {
 
     // Metadata info for header block
     const meta = {
+      companyName: businessSettings?.companyName,
       reportTitle: selectedReportLabel(),
       fromDate: showDateRange ? formatDate(from) : undefined,
       toDate: showDateRange ? formatDate(to) : undefined,
@@ -415,6 +419,18 @@ export default function ReportsPage() {
   }
 
   const exportPdf = async () => {
+    let settings = businessSettings
+    if (!settings) {
+      try {
+        const res = await fetch('/api/reports?type=options')
+        const opt = await res.json()
+        if (opt.businessSettings) {
+          settings = opt.businessSettings
+          setBusinessSettings(settings)
+        }
+      } catch { }
+    }
+
     const { generateReportPdf } = await import('@/lib/report-pdf')
     generateReportPdf({
       reportType,
@@ -424,6 +440,7 @@ export default function ReportsPage() {
       partyName: selectedPartyName(),
       data,
       summary,
+      settings,
     })
   }
 
