@@ -45,6 +45,294 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } f
 
 const APP_NAME = 'Viros GST Billing'
 
+// --- Full-Page Interactive Twinkling & Blinking Stars Background ---
+function InteractiveFullPageBackground() {
+  const canvasRef = useRef<HTMLCanvasElement>(null)
+
+  useEffect(() => {
+    const canvas = canvasRef.current
+    if (!canvas) return
+    const ctx = canvas.getContext('2d')
+    if (!ctx) return
+
+    let animationFrameId: number
+    let width = (canvas.width = window.innerWidth)
+    let height = (canvas.height = window.innerHeight)
+
+    const handleResize = () => {
+      if (!canvas) return
+      width = canvas.width = window.innerWidth
+      height = canvas.height = window.innerHeight
+    }
+
+    window.addEventListener('resize', handleResize)
+
+    // Palette of vibrant celestial & star colors
+    const colors = [
+      '#3b82f6', // Bright Blue
+      '#60a5fa', // Sky Blue
+      '#6366f1', // Indigo
+      '#818cf8', // Soft Violet
+      '#0ea5e9', // Cyan
+      '#fbbf24', // Warm Star Gold
+      '#38bdf8', // Electric Blue
+      '#a855f7', // Purple
+    ]
+
+    interface TwinkleStar {
+      x: number
+      y: number
+      vx: number
+      vy: number
+      baseSize: number
+      currentSize: number
+      rotation: number
+      vRot: number
+      color: string
+      minAlpha: number
+      maxAlpha: number
+      twinklePhase: number
+      twinkleSpeed: number
+    }
+
+    // Number of stars across the page
+    const starCount = Math.min(Math.floor((width * height) / 14000), 75)
+    const stars: TwinkleStar[] = []
+
+    for (let i = 0; i < starCount; i++) {
+      // Varied star sizes: majority small/medium, some prominent statement stars
+      const baseSize = Math.random() < 0.25
+        ? Math.random() * 5 + 12  // 12px - 17px (prominent sparkle)
+        : Math.random() * 4 + 6   // 6px - 10px (subtle twinkle)
+
+      stars.push({
+        x: Math.random() * width,
+        y: Math.random() * height,
+        vx: (Math.random() - 0.5) * 0.3,
+        vy: (Math.random() - 0.5) * 0.3,
+        baseSize,
+        currentSize: baseSize,
+        rotation: Math.random() * Math.PI * 2,
+        vRot: (Math.random() - 0.5) * 0.012,
+        color: colors[Math.floor(Math.random() * colors.length)],
+        minAlpha: Math.random() * 0.15 + 0.15, // 0.15 to 0.30
+        maxAlpha: Math.random() * 0.3 + 0.70,  // 0.70 to 1.00
+        twinklePhase: Math.random() * Math.PI * 2,
+        twinkleSpeed: Math.random() * 0.035 + 0.015, // Smooth blinking speed
+      })
+    }
+
+    const mouse = { x: -1000, y: -1000, isHovered: false }
+
+    const onMouseMove = (e: MouseEvent) => {
+      mouse.x = e.clientX
+      mouse.y = e.clientY
+      mouse.isHovered = true
+    }
+
+    const onMouseLeave = () => {
+      mouse.isHovered = false
+      mouse.x = -1000
+      mouse.y = -1000
+    }
+
+    window.addEventListener('mousemove', onMouseMove, { passive: true })
+    document.addEventListener('mouseleave', onMouseLeave)
+
+    const render = () => {
+      ctx.clearRect(0, 0, width, height)
+
+      // Ambient cursor spotlight glow across the full page
+      if (mouse.isHovered && mouse.x > 0 && mouse.y > 0) {
+        const gradient = ctx.createRadialGradient(mouse.x, mouse.y, 0, mouse.x, mouse.y, 220)
+        gradient.addColorStop(0, 'rgba(37, 99, 235, 0.15)')
+        gradient.addColorStop(0.5, 'rgba(99, 102, 241, 0.05)')
+        gradient.addColorStop(1, 'rgba(37, 99, 235, 0)')
+        ctx.fillStyle = gradient
+        ctx.beginPath()
+        ctx.arc(mouse.x, mouse.y, 220, 0, Math.PI * 2)
+        ctx.fill()
+      }
+
+      // Update and draw blinking stars
+      for (let i = 0; i < stars.length; i++) {
+        const s = stars[i]
+
+        s.x += s.vx
+        s.y += s.vy
+        s.rotation += s.vRot
+        s.twinklePhase += s.twinkleSpeed
+
+        // Wrap around or bounce softly at edges
+        if (s.x < 0 || s.x > width) s.vx *= -1
+        if (s.y < 0 || s.y > height) s.vy *= -1
+
+        // Smooth blinking / twinkling sine wave calculation
+        const blink = (Math.sin(s.twinklePhase) + 1) / 2
+        let alpha = s.minAlpha + blink * (s.maxAlpha - s.minAlpha)
+        let targetSize = s.baseSize * (0.8 + blink * 0.35)
+
+        // Mouse hover reaction within 160px
+        let isNearMouse = false
+        if (mouse.isHovered) {
+          const dx = mouse.x - s.x
+          const dy = mouse.y - s.y
+          const dist = Math.sqrt(dx * dx + dy * dy)
+          if (dist < 160 && dist > 0) {
+            isNearMouse = true
+            const force = (160 - dist) / 160
+            s.x -= (dx / dist) * force * 1.8
+            s.y -= (dy / dist) * force * 1.8
+            s.rotation += 0.035 // Spin slightly when hovered
+
+            // Full shine & size boost when cursor is nearby
+            alpha = 1.0
+            targetSize = s.baseSize * 1.5
+          }
+        }
+
+        s.currentSize += (targetSize - s.currentSize) * 0.15
+
+        // Draw 4-point sparkle star (✦)
+        ctx.save()
+        ctx.translate(s.x, s.y)
+        ctx.rotate(s.rotation)
+        ctx.globalAlpha = Math.min(1.0, alpha)
+
+        if (isNearMouse || blink > 0.7) {
+          ctx.shadowColor = s.color
+          ctx.shadowBlur = isNearMouse ? 14 : 7
+        }
+
+        const r = s.currentSize * 0.55
+        ctx.beginPath()
+        ctx.moveTo(0, -r)
+        ctx.quadraticCurveTo(0, 0, r, 0)
+        ctx.quadraticCurveTo(0, 0, 0, r)
+        ctx.quadraticCurveTo(0, 0, -r, 0)
+        ctx.quadraticCurveTo(0, 0, 0, -r)
+        ctx.closePath()
+        ctx.fillStyle = s.color
+        ctx.fill()
+
+        // Brilliant white sparkling center core for stars
+        if (s.currentSize > 6) {
+          ctx.beginPath()
+          ctx.arc(0, 0, s.currentSize * 0.16, 0, Math.PI * 2)
+          ctx.fillStyle = '#ffffff'
+          ctx.fill()
+        }
+
+        ctx.restore()
+      }
+
+      animationFrameId = requestAnimationFrame(render)
+    }
+
+    render()
+
+    return () => {
+      window.removeEventListener('resize', handleResize)
+      window.removeEventListener('mousemove', onMouseMove)
+      document.removeEventListener('mouseleave', onMouseLeave)
+      cancelAnimationFrame(animationFrameId)
+    }
+  }, [])
+
+  return (
+    <canvas
+      ref={canvasRef}
+      className="pointer-events-none fixed inset-0 h-full w-full z-0"
+    />
+  )
+}
+
+// --- Interactive Feature Card Wrapper with Forward 3D Pop Extension & Cursor Spotlight ---
+function InteractiveFeatureCard({
+  children,
+  className = '',
+}: {
+  children: React.ReactNode
+  className?: string
+}) {
+  const cardRef = useRef<HTMLDivElement>(null)
+  const [mousePos, setMousePos] = useState({ x: 0, y: 0 })
+  const [tilt, setTilt] = useState({ x: 0, y: 0 })
+  const [isHovered, setIsHovered] = useState(false)
+
+  const handleMouseMove = (e: React.MouseEvent<HTMLDivElement>) => {
+    if (!cardRef.current) return
+    const rect = cardRef.current.getBoundingClientRect()
+    const x = Math.round(e.clientX - rect.left)
+    const y = Math.round(e.clientY - rect.top)
+    setMousePos({ x, y })
+
+    // Calculate subtle, responsive 3D tilt
+    const centerX = rect.width / 2
+    const centerY = rect.height / 2
+    const tiltX = -((y - centerY) / centerY) * 4.5
+    const tiltY = ((x - centerX) / centerX) * 4.5
+    setTilt({ x: tiltX, y: tiltY })
+  }
+
+  const handleMouseEnter = () => {
+    setIsHovered(true)
+  }
+
+  const handleMouseLeave = () => {
+    setIsHovered(false)
+    setTilt({ x: 0, y: 0 })
+  }
+
+  return (
+    <div
+      ref={cardRef}
+      onMouseMove={handleMouseMove}
+      onMouseEnter={handleMouseEnter}
+      onMouseLeave={handleMouseLeave}
+      style={{
+        transform: isHovered
+          ? `perspective(1200px) rotateX(${tilt.x}deg) rotateY(${tilt.y}deg) translateY(-14px) translateZ(30px) scale3d(1.035, 1.035, 1.035)`
+          : 'perspective(1200px) rotateX(0deg) rotateY(0deg) translateY(0px) translateZ(0px) scale3d(1, 1, 1)',
+        boxShadow: isHovered
+          ? '0 35px 70px -15px rgba(15, 23, 42, 0.28), 0 20px 35px -10px rgba(37, 99, 235, 0.25), 0 0 0 2px rgba(59, 130, 246, 0.85)'
+          : '0 16px 40px -10px rgba(15, 23, 42, 0.12), 0 0 0 1px rgba(203, 213, 225, 0.8)',
+        transition: isHovered
+          ? 'transform 0.28s cubic-bezier(0.34, 1.56, 0.64, 1), box-shadow 0.28s ease-out, border-color 0.25s ease-out'
+          : 'transform 0.45s cubic-bezier(0.16, 1, 0.3, 1), box-shadow 0.45s ease-out, border-color 0.3s ease-out',
+        transformStyle: 'preserve-3d',
+      }}
+      className={`group relative z-10 hover:z-30 rounded-3xl border-2 border-slate-300 hover:border-blue-500 bg-white p-6 sm:p-8 text-left overflow-hidden will-change-transform ${className}`}
+    >
+      {/* Interactive Cursor Spotlight Beam following cursor inside card */}
+      <div
+        className="pointer-events-none absolute inset-0 z-0 transition-opacity duration-300 ease-out"
+        style={{
+          opacity: isHovered ? 1 : 0,
+          background: `radial-gradient(480px circle at ${mousePos.x}px ${mousePos.y}px, rgba(59, 130, 246, 0.2), rgba(99, 102, 241, 0.08) 45%, transparent 75%)`,
+        }}
+      />
+      {/* Light Reflection Flare following cursor */}
+      <div
+        className="pointer-events-none absolute -inset-px rounded-3xl z-0 opacity-0 group-hover:opacity-100 transition-opacity duration-300"
+        style={{
+          background: `radial-gradient(350px circle at ${mousePos.x}px ${mousePos.y}px, rgba(255, 255, 255, 0.8), transparent 70%)`,
+          mixBlendMode: 'overlay',
+        }}
+      />
+      {/* Inner Content with forward 3D parallax depth */}
+      <div
+        className="relative z-10 transition-transform duration-300 ease-out"
+        style={{
+          transform: isHovered ? 'translateZ(18px)' : 'translateZ(0px)',
+        }}
+      >
+        {children}
+      </div>
+    </div>
+  )
+}
+
 // --- Smooth Animated Number Counter Component ---
 function AnimatedCounter({
   end,
@@ -179,10 +467,27 @@ export function WelcomePage() {
   const [demoModalOpen, setDemoModalOpen] = useState(false)
   const [openFaq, setOpenFaq] = useState<number | null>(0)
 
+  // Cursor movement interactive background state
+  const [mousePos, setMousePos] = useState({ x: 0, y: 0 })
+  const [isHovered, setIsHovered] = useState(false)
+  const heroRef = useRef<HTMLElement>(null)
+
+  const handleHeroMouseMove = (e: React.MouseEvent<HTMLElement>) => {
+    if (!heroRef.current) return
+    const rect = heroRef.current.getBoundingClientRect()
+    setMousePos({
+      x: Math.round(e.clientX - rect.left),
+      y: Math.round(e.clientY - rect.top),
+    })
+  }
+
   return (
     <>
       <AuthLightMode />
-      <div className="min-h-screen flex flex-col bg-slate-50 text-slate-900 selection:bg-blue-600 selection:text-white">
+      <div className="min-h-screen flex flex-col bg-slate-50 text-slate-900 selection:bg-blue-600 selection:text-white relative">
+        {/* Full-Page Interactive Floating Particles & Constellation Background */}
+        <InteractiveFullPageBackground />
+
         {/* Navigation Bar */}
         <header className="sticky top-0 z-40 w-full border-b border-slate-200/80 bg-white/90 backdrop-blur-md shadow-xs transition-all">
           <div className="mx-auto flex max-w-7xl items-center justify-between px-4 py-3 sm:px-6 lg:px-8">
@@ -308,9 +613,51 @@ export function WelcomePage() {
           )}
         </header>
 
-        {/* HERO SECTION */}
-        <section className="relative overflow-hidden bg-gradient-to-b from-blue-50/70 via-indigo-50/40 to-slate-50 pt-12 pb-20 lg:pt-16 lg:pb-28">
+        {/* HERO SECTION WITH DYNAMIC CURSOR HOVER ANIMATION */}
+        <section
+          ref={heroRef}
+          onMouseMove={handleHeroMouseMove}
+          onMouseEnter={() => setIsHovered(true)}
+          onMouseLeave={() => setIsHovered(false)}
+          className="relative overflow-hidden bg-gradient-to-b from-blue-50/60 via-indigo-50/30 to-slate-50/50 pt-12 pb-20 lg:pt-16 lg:pb-28"
+        >
+          {/* Base Dot Grid */}
           <div className="absolute inset-0 bg-[radial-gradient(#3b82f6_1px,transparent_1px)] [background-size:24px_24px] opacity-[0.15] pointer-events-none" />
+
+          {/* Dynamic Interactive Cursor Hover Spotlight Glow */}
+          <div
+            className="pointer-events-none absolute inset-0 transition-opacity duration-300 ease-out"
+            style={{
+              opacity: isHovered ? 1 : 0,
+              background: `radial-gradient(650px circle at ${mousePos.x}px ${mousePos.y}px, rgba(37, 99, 235, 0.16), rgba(99, 102, 241, 0.08) 35%, transparent 75%)`,
+            }}
+          />
+
+          {/* Interactive Spotlight Dot Grid Illumination (Glows under cursor) */}
+          <div
+            className="pointer-events-none absolute inset-0 transition-opacity duration-300 ease-out"
+            style={{
+              opacity: isHovered ? 0.4 : 0,
+              maskImage: `radial-gradient(450px circle at ${mousePos.x}px ${mousePos.y}px, black 25%, transparent 80%)`,
+              WebkitMaskImage: `radial-gradient(450px circle at ${mousePos.x}px ${mousePos.y}px, black 25%, transparent 80%)`,
+              backgroundImage: 'radial-gradient(#2563eb 1.5px, transparent 1.5px)',
+              backgroundSize: '24px 24px',
+            }}
+          />
+
+          {/* Soft Floating Parallax Ambient Lights */}
+          <div
+            className="pointer-events-none absolute -top-24 -left-24 h-96 w-96 rounded-full bg-blue-400/20 blur-3xl transition-transform duration-500 ease-out"
+            style={{
+              transform: `translate(${mousePos.x * 0.02}px, ${mousePos.y * 0.02}px)`,
+            }}
+          />
+          <div
+            className="pointer-events-none absolute top-1/3 -right-24 h-96 w-96 rounded-full bg-indigo-400/20 blur-3xl transition-transform duration-500 ease-out"
+            style={{
+              transform: `translate(${-mousePos.x * 0.02}px, ${-mousePos.y * 0.02}px)`,
+            }}
+          />
 
           <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 relative">
             <div className="grid grid-cols-1 lg:grid-cols-12 gap-12 items-center">
@@ -591,10 +938,13 @@ export function WelcomePage() {
         {/* ========================================================================= */}
         {/* ALTERNATING LEFT / RIGHT SOFTWARE FEATURES SECTION */}
         {/* ========================================================================= */}
-        <section id="features" className="py-24 bg-white border-t border-slate-200/80 scroll-mt-20">
-          <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 space-y-28">
+        <section id="features" className="py-24 bg-slate-100/70 border-y border-slate-300/80 scroll-mt-20 relative overflow-hidden backdrop-blur-xs">
+          {/* Subtle Dot Matrix Pattern */}
+          <div className="absolute inset-0 bg-[radial-gradient(#3b82f6_1.5px,transparent_1.5px)] [background-size:28px_28px] opacity-[0.08] pointer-events-none" />
+
+          <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8 space-y-28 relative">
             <div className="text-center max-w-3xl mx-auto">
-              <span className="text-xs font-bold uppercase tracking-wider text-blue-600 bg-blue-50 px-3.5 py-1.5 rounded-full border border-blue-100">
+              <span className="text-xs font-bold uppercase tracking-wider text-blue-600 bg-blue-50 px-3.5 py-1.5 rounded-full border border-blue-200 shadow-2xs">
                 Powerful Modules Built for Growth
               </span>
               <h2 className="mt-3 text-3xl sm:text-4xl lg:text-5xl font-extrabold text-slate-900 tracking-tight">
@@ -610,7 +960,7 @@ export function WelcomePage() {
             {/* ------------------------------------------------------------- */}
             <div className="grid grid-cols-1 lg:grid-cols-12 gap-12 items-center">
               <div className="lg:col-span-6 space-y-5 text-left">
-                <div className="inline-flex items-center gap-2 rounded-lg bg-blue-50 px-3 py-1 text-xs font-bold text-blue-700 border border-blue-200/70">
+                <div className="inline-flex items-center gap-2 rounded-lg bg-blue-50 px-3 py-1 text-xs font-bold text-blue-700 border border-blue-200/80 shadow-2xs">
                   <FileText className="h-4 w-4 text-blue-600" />
                   Fast & Compliant Billing
                 </div>
@@ -638,19 +988,34 @@ export function WelcomePage() {
 
               {/* Visual Card 1 */}
               <div className="lg:col-span-6">
-                <div className="rounded-3xl border border-slate-200/90 bg-gradient-to-br from-slate-50 via-white to-blue-50/40 p-6 sm:p-8 shadow-xl shadow-slate-900/5 text-left relative overflow-hidden">
-                  <div className="flex items-center justify-between border-b border-slate-200 pb-4 mb-4">
-                    <div>
-                      <span className="text-[11px] font-bold text-slate-500 uppercase tracking-wider">TAX INVOICE PREVIEW</span>
-                      <h4 className="text-lg font-black text-slate-900">#INV-2026-0042</h4>
+                <InteractiveFeatureCard>
+                  {/* Window Bar Header */}
+                  <div className="flex items-center justify-between border-b border-slate-200 pb-3 mb-4">
+                    <div className="flex items-center gap-2">
+                      <div className="h-2.5 w-2.5 rounded-full bg-red-400" />
+                      <div className="h-2.5 w-2.5 rounded-full bg-amber-400" />
+                      <div className="h-2.5 w-2.5 rounded-full bg-emerald-400" />
+                      <span className="ml-2 text-[11px] font-bold text-slate-500 uppercase tracking-wider">
+                        TAX INVOICE PREVIEW
+                      </span>
                     </div>
-                    <span className="rounded-full bg-emerald-100 px-3 py-1 text-xs font-extrabold text-emerald-700 border border-emerald-300">
+                    <span className="rounded-full bg-emerald-100 px-3 py-0.5 text-xs font-extrabold text-emerald-700 border border-emerald-300">
                       PAID IN FULL
                     </span>
                   </div>
 
-                  <div className="bg-white rounded-2xl border border-slate-200 p-4 space-y-3 mb-4 shadow-2xs text-xs">
-                    <div className="flex justify-between pb-2 border-b border-slate-100">
+                  <div className="flex items-center justify-between mb-4">
+                    <div>
+                      <h4 className="text-xl font-black text-slate-900">#INV-2026-0042</h4>
+                      <p className="text-xs text-slate-500">Auto CGST & SGST Split &bull; QR Code Ready</p>
+                    </div>
+                    <span className="text-xs font-bold text-blue-600 bg-blue-50 px-2.5 py-1 rounded-lg border border-blue-100">
+                      Original Copy
+                    </span>
+                  </div>
+
+                  <div className="bg-slate-50/80 rounded-2xl border-2 border-slate-200/80 p-4 space-y-3 mb-4 shadow-xs text-xs">
+                    <div className="flex justify-between pb-2 border-b border-slate-200">
                       <div>
                         <p className="text-[10px] text-slate-500 font-bold uppercase">Billed To (Customer)</p>
                         <p className="font-extrabold text-slate-900 text-sm">ABC Tech Enterprises</p>
@@ -659,14 +1024,14 @@ export function WelcomePage() {
                       <div className="text-right">
                         <p className="text-[10px] text-slate-500 font-bold uppercase">Place of Supply</p>
                         <p className="font-bold text-slate-800">Karnataka (29)</p>
-                        <span className="inline-block bg-blue-50 text-blue-700 px-2 py-0.5 rounded text-[10px] font-bold mt-1">
+                        <span className="inline-block bg-blue-100 text-blue-800 px-2 py-0.5 rounded text-[10px] font-bold mt-1">
                           Intra-State (CGST + SGST)
                         </span>
                       </div>
                     </div>
 
                     <div className="space-y-2">
-                      <div className="flex justify-between items-center text-slate-700 font-semibold bg-slate-50 p-2 rounded-lg">
+                      <div className="flex justify-between items-center text-slate-700 font-semibold bg-white p-2.5 rounded-xl border border-slate-200/80 shadow-2xs">
                         <div>
                           <p className="font-bold text-slate-900">1. Helical Gear Box (Batch #A1)</p>
                           <p className="text-[10px] text-slate-500">Qty: 2 &bull; Rate: ₹ 9,250 &bull; GST: 18%</p>
@@ -674,7 +1039,7 @@ export function WelcomePage() {
                         <span className="font-bold text-slate-900">₹ 18,500</span>
                       </div>
 
-                      <div className="flex justify-between items-center text-slate-700 font-semibold bg-slate-50 p-2 rounded-lg">
+                      <div className="flex justify-between items-center text-slate-700 font-semibold bg-white p-2.5 rounded-xl border border-slate-200/80 shadow-2xs">
                         <div>
                           <p className="font-bold text-slate-900">2. Helical Gear Box (Custom Mount)</p>
                           <p className="text-[10px] text-slate-500">Qty: 1 &bull; Rate: ₹ 6,000 &bull; GST: 18%</p>
@@ -683,7 +1048,7 @@ export function WelcomePage() {
                       </div>
                     </div>
 
-                    <div className="pt-2 border-t border-slate-100 space-y-1 text-slate-600 font-medium">
+                    <div className="pt-2 border-t border-slate-200 space-y-1 text-slate-600 font-medium">
                       <div className="flex justify-between">
                         <span>Taxable Value:</span>
                         <span className="font-bold text-slate-900">₹ 24,500.00</span>
@@ -706,18 +1071,18 @@ export function WelcomePage() {
                   <div className="flex items-center gap-2">
                     <button
                       onClick={() => setRegisterOpen(true)}
-                      className="flex-1 rounded-xl bg-blue-600 py-2.5 text-xs font-bold text-white hover:bg-blue-700 transition-colors flex items-center justify-center gap-2 shadow-xs"
+                      className="flex-1 rounded-xl bg-blue-600 py-2.5 text-xs font-bold text-white hover:bg-blue-700 transition-all hover:scale-[1.01] flex items-center justify-center gap-2 shadow-md shadow-blue-500/20"
                     >
                       <Download className="h-3.5 w-3.5" /> Download Tax Invoice PDF
                     </button>
                     <button
                       onClick={() => setRegisterOpen(true)}
-                      className="rounded-xl bg-emerald-600 text-white px-3.5 py-2.5 text-xs font-bold hover:bg-emerald-700 transition-colors flex items-center gap-1.5"
+                      className="rounded-xl bg-emerald-600 text-white px-4 py-2.5 text-xs font-bold hover:bg-emerald-700 transition-all hover:scale-[1.01] flex items-center gap-1.5 shadow-md shadow-emerald-500/20"
                     >
                       <Share2 className="h-3.5 w-3.5" /> WhatsApp
                     </button>
                   </div>
-                </div>
+                </InteractiveFeatureCard>
               </div>
             </div>
 
@@ -727,25 +1092,35 @@ export function WelcomePage() {
             <div className="grid grid-cols-1 lg:grid-cols-12 gap-12 items-center">
               {/* Visual Card 2 (Left on Desktop) */}
               <div className="lg:col-span-6 order-2 lg:order-1">
-                <div className="rounded-3xl border border-slate-200/90 bg-gradient-to-bl from-slate-50 via-white to-indigo-50/40 p-6 sm:p-8 shadow-xl shadow-slate-900/5 text-left">
-                  <div className="flex items-center justify-between border-b border-slate-200 pb-4 mb-4">
-                    <div className="flex items-center gap-2.5">
-                      <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-indigo-600 text-white shadow-xs">
-                        <Package className="h-5 w-5" />
-                      </div>
-                      <div>
-                        <h4 className="text-base font-extrabold text-slate-900">Inventory Health Monitor</h4>
-                        <p className="text-xs text-slate-500">Live warehouse stock updates</p>
-                      </div>
+                <InteractiveFeatureCard>
+                  {/* Window Bar Header */}
+                  <div className="flex items-center justify-between border-b border-slate-200 pb-3 mb-4">
+                    <div className="flex items-center gap-2">
+                      <div className="h-2.5 w-2.5 rounded-full bg-red-400" />
+                      <div className="h-2.5 w-2.5 rounded-full bg-amber-400" />
+                      <div className="h-2.5 w-2.5 rounded-full bg-emerald-400" />
+                      <span className="ml-2 text-[11px] font-bold text-slate-500 uppercase tracking-wider">
+                        LIVE STOCK MONITOR
+                      </span>
                     </div>
-                    <span className="text-xs font-bold text-emerald-700 bg-emerald-50 px-2.5 py-1 rounded-md border border-emerald-200">
+                    <span className="text-xs font-bold text-emerald-700 bg-emerald-50 px-2.5 py-0.5 rounded-md border border-emerald-200">
                       Real-Time Sync
                     </span>
                   </div>
 
+                  <div className="flex items-center gap-2.5 mb-4">
+                    <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-indigo-600 text-white shadow-md shadow-indigo-500/30">
+                      <Package className="h-5 w-5" />
+                    </div>
+                    <div>
+                      <h4 className="text-lg sm:text-xl font-black text-slate-900">Inventory Health Monitor</h4>
+                      <p className="text-xs text-slate-500">Live multi-warehouse tracking & reorder alerts</p>
+                    </div>
+                  </div>
+
                   <div className="space-y-3">
                     {/* Item 1: High Stock */}
-                    <div className="rounded-2xl border border-slate-200 bg-white p-3.5 flex items-center justify-between shadow-2xs">
+                    <div className="rounded-2xl border-2 border-slate-200 bg-slate-50/60 p-3.5 flex items-center justify-between shadow-2xs hover:bg-white transition-colors">
                       <div>
                         <p className="text-sm font-bold text-slate-900">Motor Mount Flange 50mm</p>
                         <p className="text-xs text-slate-500">SKU: MM-50 &bull; HSN: 8483</p>
@@ -759,13 +1134,13 @@ export function WelcomePage() {
                     </div>
 
                     {/* Item 2: Low Stock Warning */}
-                    <div className="rounded-2xl border border-amber-200 bg-amber-50/40 p-3.5 flex items-center justify-between shadow-2xs">
+                    <div className="rounded-2xl border-2 border-amber-300 bg-amber-50/60 p-3.5 flex items-center justify-between shadow-2xs hover:bg-amber-50 transition-colors">
                       <div>
                         <p className="text-sm font-bold text-slate-900">Helical Gear Box Series 4</p>
                         <p className="text-xs text-slate-500">SKU: HGB-4 &bull; HSN: 8483</p>
                       </div>
                       <div className="text-right">
-                        <span className="text-sm font-black text-amber-700">3 Units</span>
+                        <span className="text-sm font-black text-amber-800">3 Units</span>
                         <p className="text-[10px] font-bold text-amber-700 flex items-center gap-1 justify-end">
                           <AlertTriangle className="h-3 w-3" /> Low Stock Alert (&le; 5)
                         </p>
@@ -773,7 +1148,7 @@ export function WelcomePage() {
                     </div>
 
                     {/* Item 3: Out of stock */}
-                    <div className="rounded-2xl border border-rose-200 bg-rose-50/40 p-3.5 flex items-center justify-between shadow-2xs">
+                    <div className="rounded-2xl border-2 border-rose-300 bg-rose-50/60 p-3.5 flex items-center justify-between shadow-2xs hover:bg-rose-50 transition-colors">
                       <div>
                         <p className="text-sm font-bold text-slate-900">RFID Scanner Smart Tags</p>
                         <p className="text-xs text-slate-500">SKU: RFID-TG &bull; HSN: 8523</p>
@@ -785,16 +1160,16 @@ export function WelcomePage() {
                     </div>
                   </div>
 
-                  <div className="mt-4 rounded-xl bg-slate-100 p-3 text-xs text-slate-600 font-medium flex items-center justify-between">
+                  <div className="mt-4 rounded-xl bg-slate-100/80 p-3 border border-slate-200 text-xs text-slate-600 font-medium flex items-center justify-between">
                     <span>Audit Trail: Stock decrements on Billing, increments on Purchase</span>
                     <span className="font-bold text-blue-600">Auto Movement Log</span>
                   </div>
-                </div>
+                </InteractiveFeatureCard>
               </div>
 
               {/* Copy (Right on Desktop) */}
               <div className="lg:col-span-6 space-y-5 text-left order-1 lg:order-2">
-                <div className="inline-flex items-center gap-2 rounded-lg bg-indigo-50 px-3 py-1 text-xs font-bold text-indigo-700 border border-indigo-200/70">
+                <div className="inline-flex items-center gap-2 rounded-lg bg-indigo-50 px-3 py-1 text-xs font-bold text-indigo-700 border border-indigo-200/80 shadow-2xs">
                   <Package className="h-4 w-4 text-indigo-600" />
                   Real-Time Inventory Control
                 </div>
@@ -827,7 +1202,7 @@ export function WelcomePage() {
             <div className="grid grid-cols-1 lg:grid-cols-12 gap-12 items-center">
               {/* Copy */}
               <div className="lg:col-span-6 space-y-5 text-left">
-                <div className="inline-flex items-center gap-2 rounded-lg bg-emerald-50 px-3 py-1 text-xs font-bold text-emerald-700 border border-emerald-200/70">
+                <div className="inline-flex items-center gap-2 rounded-lg bg-emerald-50 px-3 py-1 text-xs font-bold text-emerald-700 border border-emerald-200/80 shadow-2xs">
                   <Receipt className="h-4 w-4 text-emerald-600" />
                   Purchases & Vendor Ledgers
                 </div>
@@ -855,22 +1230,32 @@ export function WelcomePage() {
 
               {/* Visual Card 3 */}
               <div className="lg:col-span-6">
-                <div className="rounded-3xl border border-slate-200/90 bg-gradient-to-br from-slate-50 via-white to-emerald-50/40 p-6 sm:p-8 shadow-xl shadow-slate-900/5 text-left">
-                  <div className="flex items-center justify-between border-b border-slate-200 pb-4 mb-5">
-                    <div>
-                      <span className="text-[11px] font-bold text-slate-500 uppercase tracking-wider">VENDOR BILL TRACKER</span>
-                      <h4 className="text-lg font-black text-slate-900">Kalyan Steel & Metal Traders</h4>
+                <InteractiveFeatureCard>
+                  {/* Window Bar Header */}
+                  <div className="flex items-center justify-between border-b border-slate-200 pb-3 mb-4">
+                    <div className="flex items-center gap-2">
+                      <div className="h-2.5 w-2.5 rounded-full bg-red-400" />
+                      <div className="h-2.5 w-2.5 rounded-full bg-amber-400" />
+                      <div className="h-2.5 w-2.5 rounded-full bg-emerald-400" />
+                      <span className="ml-2 text-[11px] font-bold text-slate-500 uppercase tracking-wider">
+                        VENDOR BILL TRACKER
+                      </span>
                     </div>
-                    <span className="rounded-full bg-blue-100 px-3 py-1 text-xs font-bold text-blue-800">
+                    <span className="rounded-full bg-blue-100 px-3 py-0.5 text-xs font-bold text-blue-800 border border-blue-200">
                       Bill #PB-8841
                     </span>
                   </div>
 
-                  <div className="rounded-2xl border border-slate-200 bg-white p-4 space-y-4 shadow-2xs text-xs">
-                    <div className="grid grid-cols-2 gap-4 pb-3 border-b border-slate-100">
+                  <div className="mb-4">
+                    <h4 className="text-lg sm:text-xl font-black text-slate-900">Kalyan Steel & Metal Traders</h4>
+                    <p className="text-xs text-slate-500">Auto-reconciliation & payment progress tracking</p>
+                  </div>
+
+                  <div className="rounded-2xl border-2 border-slate-200 bg-slate-50/80 p-4 space-y-4 shadow-xs text-xs">
+                    <div className="grid grid-cols-2 gap-4 pb-3 border-b border-slate-200">
                       <div>
                         <p className="text-[10px] text-slate-500 font-bold uppercase">Payment Mode</p>
-                        <p className="font-bold text-slate-800">NEFT / NetBanking</p>
+                        <p className="font-bold text-slate-800 text-sm">NEFT / NetBanking</p>
                         <p className="text-[10px] text-slate-500 font-mono">Ref# TXN99482103</p>
                       </div>
                       <div className="text-right">
@@ -881,10 +1266,10 @@ export function WelcomePage() {
 
                     <div className="space-y-2">
                       <div className="flex justify-between text-xs font-semibold">
-                        <span className="text-emerald-700">Paid Amount: ₹ 1,00,000 (69%)</span>
+                        <span className="text-emerald-700 font-bold">Paid Amount: ₹ 1,00,000 (69%)</span>
                         <span className="text-rose-700 font-bold">Balance Due: ₹ 45,200</span>
                       </div>
-                      <div className="h-3 w-full rounded-full bg-slate-100 overflow-hidden">
+                      <div className="h-3 w-full rounded-full bg-slate-200 overflow-hidden">
                         <div className="h-full bg-gradient-to-r from-emerald-500 to-emerald-600 rounded-full" style={{ width: '69%' }} />
                       </div>
                     </div>
@@ -902,12 +1287,12 @@ export function WelcomePage() {
                     <Button
                       onClick={() => setRegisterOpen(true)}
                       variant="outline"
-                      className="text-xs font-bold border-slate-300"
+                      className="text-xs font-bold border-slate-300 hover:bg-slate-50"
                     >
                       Explore Purchase & Vendor Management &rarr;
                     </Button>
                   </div>
-                </div>
+                </InteractiveFeatureCard>
               </div>
             </div>
 
@@ -917,19 +1302,29 @@ export function WelcomePage() {
             <div className="grid grid-cols-1 lg:grid-cols-12 gap-12 items-center">
               {/* Visual Card 4 (Left on Desktop) */}
               <div className="lg:col-span-6 order-2 lg:order-1">
-                <div className="rounded-3xl border border-slate-200/90 bg-gradient-to-bl from-slate-50 via-white to-amber-50/40 p-6 sm:p-8 shadow-xl shadow-slate-900/5 text-left">
-                  <div className="flex items-center justify-between border-b border-slate-200 pb-4 mb-5">
-                    <div>
-                      <span className="text-[11px] font-bold text-slate-500 uppercase tracking-wider">TAX REPORT EXPORT</span>
-                      <h4 className="text-lg font-black text-slate-900">GSTR-1 & 3B Monthly Return</h4>
+                <InteractiveFeatureCard>
+                  {/* Window Bar Header */}
+                  <div className="flex items-center justify-between border-b border-slate-200 pb-3 mb-4">
+                    <div className="flex items-center gap-2">
+                      <div className="h-2.5 w-2.5 rounded-full bg-red-400" />
+                      <div className="h-2.5 w-2.5 rounded-full bg-amber-400" />
+                      <div className="h-2.5 w-2.5 rounded-full bg-emerald-400" />
+                      <span className="ml-2 text-[11px] font-bold text-slate-500 uppercase tracking-wider">
+                        TAX REPORT EXPORT
+                      </span>
                     </div>
-                    <span className="rounded-full bg-emerald-100 px-3 py-1 text-xs font-bold text-emerald-800">
+                    <span className="rounded-full bg-emerald-100 px-3 py-0.5 text-xs font-bold text-emerald-800 border border-emerald-200">
                       Audit-Ready
                     </span>
                   </div>
 
-                  <div className="rounded-2xl border border-slate-200 bg-white p-4 space-y-3 shadow-2xs text-xs">
-                    <div className="flex justify-between items-center pb-2 border-b border-slate-100">
+                  <div className="mb-4">
+                    <h4 className="text-lg sm:text-xl font-black text-slate-900">GSTR-1 & 3B Monthly Return</h4>
+                    <p className="text-xs text-slate-500">Auto reconciliation of outward sales and purchase ITC</p>
+                  </div>
+
+                  <div className="rounded-2xl border-2 border-slate-200 bg-slate-50/80 p-4 space-y-3 shadow-xs text-xs">
+                    <div className="flex justify-between items-center pb-2 border-b border-slate-200">
                       <span className="text-slate-600 font-medium">Return Period:</span>
                       <span className="font-bold text-slate-900">September 2026</span>
                     </div>
@@ -941,7 +1336,7 @@ export function WelcomePage() {
                       <span className="text-slate-600 font-medium">Total Inward Supplies (Purchases):</span>
                       <span className="font-bold text-slate-900">₹ 11,20,000</span>
                     </div>
-                    <div className="flex justify-between items-center text-blue-700 font-bold pt-2 border-t border-slate-100">
+                    <div className="flex justify-between items-center text-blue-700 font-bold pt-2 border-t border-slate-200">
                       <span>Eligible Input Tax Credit (ITC):</span>
                       <span>₹ 2,01,600</span>
                     </div>
@@ -951,26 +1346,26 @@ export function WelcomePage() {
                     </div>
                   </div>
 
-                  <div className="mt-4 grid grid-cols-2 gap-2">
+                  <div className="mt-4 grid grid-cols-2 gap-2.5">
                     <button
                       onClick={() => setRegisterOpen(true)}
-                      className="rounded-xl border border-slate-300 bg-white py-2 px-3 text-xs font-bold text-slate-800 hover:bg-slate-50 flex items-center justify-center gap-1.5 shadow-2xs"
+                      className="rounded-xl border-2 border-slate-200 bg-white py-2 px-3 text-xs font-bold text-slate-800 hover:bg-slate-50 hover:border-blue-300 transition-all flex items-center justify-center gap-1.5 shadow-2xs"
                     >
                       <Download className="h-3.5 w-3.5 text-blue-600" /> Export GSTR-1 (Excel)
                     </button>
                     <button
                       onClick={() => setRegisterOpen(true)}
-                      className="rounded-xl border border-slate-300 bg-white py-2 px-3 text-xs font-bold text-slate-800 hover:bg-slate-50 flex items-center justify-center gap-1.5 shadow-2xs"
+                      className="rounded-xl border-2 border-slate-200 bg-white py-2 px-3 text-xs font-bold text-slate-800 hover:bg-slate-50 hover:border-blue-300 transition-all flex items-center justify-center gap-1.5 shadow-2xs"
                     >
                       <Download className="h-3.5 w-3.5 text-blue-600" /> Export GSTR-3B (PDF)
                     </button>
                   </div>
-                </div>
+                </InteractiveFeatureCard>
               </div>
 
               {/* Copy (Right on Desktop) */}
               <div className="lg:col-span-6 space-y-5 text-left order-1 lg:order-2">
-                <div className="inline-flex items-center gap-2 rounded-lg bg-amber-50 px-3 py-1 text-xs font-bold text-amber-700 border border-amber-200/70">
+                <div className="inline-flex items-center gap-2 rounded-lg bg-amber-50 px-3 py-1 text-xs font-bold text-amber-700 border border-amber-200/80 shadow-2xs">
                   <BarChart3 className="h-4 w-4 text-amber-600" />
                   1-Click CA-Ready Reports
                 </div>
@@ -1003,7 +1398,7 @@ export function WelcomePage() {
             <div className="grid grid-cols-1 lg:grid-cols-12 gap-12 items-center">
               {/* Copy */}
               <div className="lg:col-span-6 space-y-5 text-left">
-                <div className="inline-flex items-center gap-2 rounded-lg bg-purple-50 px-3 py-1 text-xs font-bold text-purple-700 border border-purple-200/70">
+                <div className="inline-flex items-center gap-2 rounded-lg bg-purple-50 px-3 py-1 text-xs font-bold text-purple-700 border border-purple-200/80 shadow-2xs">
                   <Users className="h-4 w-4 text-purple-600" />
                   Multi-User & Role Security
                 </div>
@@ -1031,24 +1426,34 @@ export function WelcomePage() {
 
               {/* Visual Card 5 */}
               <div className="lg:col-span-6">
-                <div className="rounded-3xl border border-slate-200/90 bg-gradient-to-br from-slate-50 via-white to-purple-50/40 p-6 sm:p-8 shadow-xl shadow-slate-900/5 text-left">
-                  <div className="flex items-center justify-between border-b border-slate-200 pb-4 mb-5">
-                    <div className="flex items-center gap-2.5">
-                      <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-purple-600 text-white shadow-xs">
-                        <Lock className="h-5 w-5" />
-                      </div>
-                      <div>
-                        <h4 className="text-base font-extrabold text-slate-900">Team Roles & Permissions</h4>
-                        <p className="text-xs text-slate-500">4 Active users in this organization</p>
-                      </div>
+                <InteractiveFeatureCard>
+                  {/* Window Bar Header */}
+                  <div className="flex items-center justify-between border-b border-slate-200 pb-3 mb-4">
+                    <div className="flex items-center gap-2">
+                      <div className="h-2.5 w-2.5 rounded-full bg-red-400" />
+                      <div className="h-2.5 w-2.5 rounded-full bg-amber-400" />
+                      <div className="h-2.5 w-2.5 rounded-full bg-emerald-400" />
+                      <span className="ml-2 text-[11px] font-bold text-slate-500 uppercase tracking-wider">
+                        SECURITY & ROLES
+                      </span>
                     </div>
-                    <span className="rounded-full bg-purple-100 px-3 py-1 text-xs font-bold text-purple-800">
+                    <span className="rounded-full bg-purple-100 px-3 py-0.5 text-xs font-bold text-purple-800 border border-purple-200">
                       Enterprise Tier
                     </span>
                   </div>
 
+                  <div className="flex items-center gap-2.5 mb-4">
+                    <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-purple-600 text-white shadow-md shadow-purple-500/30">
+                      <Lock className="h-5 w-5" />
+                    </div>
+                    <div>
+                      <h4 className="text-lg sm:text-xl font-black text-slate-900">Team Roles & Permissions</h4>
+                      <p className="text-xs text-slate-500">4 Active staff accounts in this organization</p>
+                    </div>
+                  </div>
+
                   <div className="space-y-2.5 text-xs">
-                    <div className="rounded-xl border border-slate-200 bg-white p-3 flex items-center justify-between shadow-2xs">
+                    <div className="rounded-xl border-2 border-slate-200 bg-slate-50/70 p-3 flex items-center justify-between shadow-2xs hover:bg-white transition-colors">
                       <div className="flex items-center gap-2.5">
                         <div className="h-8 w-8 rounded-full bg-blue-600 text-white font-bold flex items-center justify-center text-xs">
                           VK
@@ -1058,12 +1463,12 @@ export function WelcomePage() {
                           <p className="text-[11px] text-slate-500">Billing Counter 1 &bull; Staff</p>
                         </div>
                       </div>
-                      <span className="rounded-md bg-blue-50 px-2 py-1 font-bold text-blue-700 text-[11px]">
+                      <span className="rounded-md bg-blue-50 px-2 py-1 font-bold text-blue-700 text-[11px] border border-blue-200">
                         Invoices & POS Only
                       </span>
                     </div>
 
-                    <div className="rounded-xl border border-slate-200 bg-white p-3 flex items-center justify-between shadow-2xs">
+                    <div className="rounded-xl border-2 border-slate-200 bg-slate-50/70 p-3 flex items-center justify-between shadow-2xs hover:bg-white transition-colors">
                       <div className="flex items-center gap-2.5">
                         <div className="h-8 w-8 rounded-full bg-indigo-600 text-white font-bold flex items-center justify-center text-xs">
                           SP
@@ -1073,23 +1478,38 @@ export function WelcomePage() {
                           <p className="text-[11px] text-slate-500">Warehouse Manager</p>
                         </div>
                       </div>
-                      <span className="rounded-md bg-indigo-50 px-2 py-1 font-bold text-indigo-700 text-[11px]">
+                      <span className="rounded-md bg-indigo-50 px-2 py-1 font-bold text-indigo-700 text-[11px] border border-indigo-200">
                         Inventory & Stock Movement
                       </span>
                     </div>
 
-                    <div className="rounded-xl border border-slate-200 bg-white p-3 flex items-center justify-between shadow-2xs">
+                    <div className="rounded-xl border-2 border-slate-200 bg-slate-50/70 p-3 flex items-center justify-between shadow-2xs hover:bg-white transition-colors">
                       <div className="flex items-center gap-2.5">
                         <div className="h-8 w-8 rounded-full bg-emerald-600 text-white font-bold flex items-center justify-center text-xs">
                           AM
                         </div>
                         <div>
-                          <p className="font-bold text-slate-900">Anita Mahajan</p>
-                          <p className="text-[11px] text-slate-500">Chief Accountant</p>
+                          <p className="font-bold text-slate-900">Ananya Mishra</p>
+                          <p className="text-[11px] text-slate-500">Chartered Accountant</p>
                         </div>
                       </div>
-                      <span className="rounded-md bg-emerald-50 px-2 py-1 font-bold text-emerald-700 text-[11px]">
-                        GST Reports & Ledgers
+                      <span className="rounded-md bg-emerald-50 px-2 py-1 font-bold text-emerald-700 text-[11px] border border-emerald-200">
+                        Full GST Reports & Audit
+                      </span>
+                    </div>
+
+                    <div className="rounded-xl border-2 border-slate-200 bg-slate-50/70 p-3 flex items-center justify-between shadow-2xs hover:bg-white transition-colors">
+                      <div className="flex items-center gap-2.5">
+                        <div className="h-8 w-8 rounded-full bg-purple-600 text-white font-bold flex items-center justify-center text-xs">
+                          RS
+                        </div>
+                        <div>
+                          <p className="font-bold text-slate-900">Rajesh Sharma</p>
+                          <p className="text-[11px] text-slate-500">Business Owner</p>
+                        </div>
+                      </div>
+                      <span className="rounded-md bg-purple-50 px-2 py-1 font-bold text-purple-700 text-[11px] border border-purple-200">
+                        Master SuperAdmin
                       </span>
                     </div>
                   </div>
@@ -1105,7 +1525,7 @@ export function WelcomePage() {
                       Invite Team Members &rarr;
                     </button>
                   </div>
-                </div>
+                </InteractiveFeatureCard>
               </div>
             </div>
           </div>
@@ -1114,7 +1534,7 @@ export function WelcomePage() {
         {/* ========================================================================= */}
         {/* CUSTOMER FEEDBACK & REVIEWS SECTION */}
         {/* ========================================================================= */}
-        <section id="testimonials" className="py-24 bg-slate-50 border-t border-slate-200/80 scroll-mt-20">
+        <section id="testimonials" className="py-24 bg-slate-50/70 border-t border-slate-200/80 scroll-mt-20 backdrop-blur-xs">
           <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
             <div className="text-center max-w-2xl mx-auto mb-16">
               <div className="inline-flex items-center gap-1.5 text-amber-500 mb-2">
