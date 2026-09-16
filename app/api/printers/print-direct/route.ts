@@ -130,6 +130,7 @@ export async function POST(req: NextRequest) {
           printedCount: labels.length,
           printerName,
           templateFile: templateName,
+          rawCommand: fullCommand,
         })
       } catch (execErr: any) {
         try {
@@ -148,8 +149,10 @@ export async function POST(req: NextRequest) {
       success: true,
       printedCount: labels.length,
       simulated: true,
+      clientPrintRequired: true,
       printerName,
       templateFile: templateName,
+      rawCommand: fullCommand,
     })
   } catch (err: any) {
     console.error('Direct print error:', err)
