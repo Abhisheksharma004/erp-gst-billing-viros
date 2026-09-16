@@ -9,6 +9,7 @@ import { loginSchema, LoginInput } from '@/lib/validations'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
+import { Checkbox } from '@/components/ui/checkbox'
 import { CardContent, CardFooter } from '@/components/ui/card'
 import { AuthCard } from '@/components/auth/auth-card'
 import { ConsoleMessage } from '@/components/shared/console-message'
@@ -32,6 +33,11 @@ function LoginForm() {
   const [loading, setLoading] = useState(false)
   const { message, showSuccess, showError, clearMessage } = useConsoleMessage()
 
+  const form = useForm<LoginInput>({
+    resolver: zodResolver(loginSchema),
+    defaultValues: { email: '', password: '', rememberMe: false },
+  })
+
   useEffect(() => {
     // Never keep credentials in the address bar (e.g. after a native GET form submit)
     if (typeof window === 'undefined') return
@@ -48,10 +54,17 @@ function LoginForm() {
     }
   }, [searchParams, showSuccess])
 
-  const form = useForm<LoginInput>({
-    resolver: zodResolver(loginSchema),
-    defaultValues: { email: '', password: '' },
-  })
+  useEffect(() => {
+    try {
+      const rememberedEmail = localStorage.getItem('viros_remember_email')
+      if (rememberedEmail) {
+        form.setValue('email', rememberedEmail)
+        form.setValue('rememberMe', true)
+      }
+    } catch {
+      // ignore storage error
+    }
+  }, [form])
 
   const onSubmit = async (data: LoginInput) => {
     setLoading(true)
@@ -76,6 +89,15 @@ function LoginForm() {
             : 'Invalid email or password. Please check your credentials and try again.'
         )
       } else {
+        try {
+          if (data.rememberMe) {
+            localStorage.setItem('viros_remember_email', data.email)
+          } else {
+            localStorage.removeItem('viros_remember_email')
+          }
+        } catch {
+          // ignore storage error
+        }
         const session = await getSession()
         showSuccess('Login successful! Redirecting...')
         const destination = session?.user?.isSuperAdmin ? '/superadmin' : '/dashboard'
@@ -146,7 +168,21 @@ function LoginForm() {
             {form.formState.errors.password && (
               <p className="text-destructive text-xs font-medium">{form.formState.errors.password.message}</p>
             )}
-            <div className="flex justify-end pt-1">
+            <div className="flex items-center justify-between pt-1.5">
+              <div className="flex items-center space-x-2">
+                <Checkbox
+                  id="rememberMe"
+                  checked={Boolean(form.watch('rememberMe'))}
+                  onCheckedChange={(checked) => form.setValue('rememberMe', Boolean(checked))}
+                />
+                <Label
+                  htmlFor="rememberMe"
+                  className="text-xs font-medium text-slate-600 cursor-pointer select-none hover:text-slate-900 transition-colors"
+                >
+                  Remember me
+                </Label>
+              </div>
+
               <Link
                 href="/forgot-password"
                 className="text-xs font-semibold text-blue-600 hover:text-blue-700 hover:underline"

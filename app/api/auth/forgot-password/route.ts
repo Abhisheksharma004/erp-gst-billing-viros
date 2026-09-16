@@ -34,19 +34,30 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Please enter a valid email address' }, { status: 400 })
     }
 
-    const emailLimit = rateLimit(`forgot-email:${email}`, 3, 15 * 60 * 1000)
-    if (!emailLimit.allowed) {
-      // Same generic message — do not reveal rate-limit vs missing user
-      return NextResponse.json({ message: OTP_GENERIC_SENT_MESSAGE })
+    const [users] = (await db.execute('SELECT id, status FROM users WHERE email = ? LIMIT 1', [
+      email,
+    ])) as [{ id: string; status?: string }[], unknown]
+
+    if (!users[0]) {
+      return NextResponse.json(
+        { error: 'This email is not registered. Please enter a valid registered email address.' },
+        { status: 404 }
+      )
     }
 
-    const [users] = (await db.execute('SELECT id FROM users WHERE email = ? LIMIT 1', [
-      email,
-    ])) as [{ id: string }[], unknown]
+    if (users[0].status === 'INACTIVE') {
+      return NextResponse.json(
+        { error: 'Your account is inactive. Please contact your administrator.' },
+        { status: 403 }
+      )
+    }
 
-    // Always return generic success to prevent account enumeration
-    if (!users[0]) {
-      return NextResponse.json({ message: OTP_GENERIC_SENT_MESSAGE })
+    const emailLimit = rateLimit(`forgot-email:${email}`, 3, 15 * 60 * 1000)
+    if (!emailLimit.allowed) {
+      return NextResponse.json(
+        { error: 'Too many requests for this email. Please try again after 15 minutes.' },
+        { status: 429, headers: { 'Retry-After': String(emailLimit.retryAfterSec) } }
+      )
     }
 
     const otp = generateOtp()
@@ -121,7 +132,7 @@ export async function POST(request: NextRequest) {
       )
     }
 
-    return NextResponse.json({ message: OTP_GENERIC_SENT_MESSAGE })
+    return NextResponse.json({ message: 'OTP sent to your email successfully. Please check your inbox.' })
   } catch (error) {
     console.error('Forgot password error:', error)
     return NextResponse.json({ error: 'Internal server error' }, { status: 500 })

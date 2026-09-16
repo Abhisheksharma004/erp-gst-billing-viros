@@ -14,12 +14,14 @@ import { setPasswordResetEmail } from '@/lib/password-reset-session'
 
 export default function ForgotPasswordPage() {
   const [email, setEmail] = useState('')
+  const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)
   const router = useRouter()
   const { toast } = useToast()
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
+    setError('')
     setLoading(true)
 
     try {
@@ -35,22 +37,26 @@ export default function ForgotPasswordPage() {
         setPasswordResetEmail(email)
         toast({
           title: 'OTP Sent',
-          description: 'OTP sent to your email. Please check your inbox.',
+          description: data.message || 'OTP sent to your email. Please check your inbox.',
         })
         setTimeout(() => {
           router.push('/verify-otp')
-        }, 2000)
+        }, 1500)
       } else {
+        const errorMsg = data.error || 'Something went wrong'
+        setError(errorMsg)
         toast({
           title: 'Error',
-          description: data.error || 'Something went wrong',
+          description: errorMsg,
           variant: 'destructive',
         })
       }
     } catch {
+      const errorMsg = 'Network error. Please try again.'
+      setError(errorMsg)
       toast({
         title: 'Error',
-        description: 'Network error. Please try again.',
+        description: errorMsg,
         variant: 'destructive',
       })
     } finally {
@@ -71,9 +77,14 @@ export default function ForgotPasswordPage() {
               autoComplete="username"
               placeholder="Enter your email"
               value={email}
-              onChange={(e) => setEmail(e.target.value)}
+              onChange={(e) => {
+                setEmail(e.target.value)
+                if (error) setError('')
+              }}
               required
+              className={error ? 'border-destructive focus-visible:ring-destructive' : ''}
             />
+            {error && <p className="text-xs text-destructive font-medium">{error}</p>}
           </div>
         </CardContent>
 

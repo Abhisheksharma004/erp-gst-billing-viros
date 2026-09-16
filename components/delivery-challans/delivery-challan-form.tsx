@@ -280,29 +280,15 @@ export function DeliveryChallanForm({ mode, challanId }: DeliveryChallanFormProp
     })
   }, [fields])
 
-  const getUsedProductIds = useCallback(
-    (excludeIndex: number) => {
-      const ids = new Set<string>()
-      items?.forEach((item, idx) => {
-        if (idx !== excludeIndex && item?.productId) ids.add(item.productId)
-      })
-      return ids
-    },
-    [items]
-  )
-
   const getFilteredProducts = useCallback(
-    (index: number, query: string) => {
-      const used = getUsedProductIds(index)
-      const currentId = items?.[index]?.productId
+    (_index: number, query: string) => {
       const q = query.trim().toLowerCase()
       return products.filter((p) => {
-        if (used.has(p.id) && p.id !== currentId) return false
         if (!q) return true
         return p.name.toLowerCase().includes(q)
       })
     },
-    [products, items, getUsedProductIds]
+    [products]
   )
 
   const updateItemMeta = (fieldId: string, patch: Partial<ItemMeta>) => {
@@ -315,11 +301,6 @@ export function DeliveryChallanForm({ mode, challanId }: DeliveryChallanFormProp
   const applyProduct = (fieldId: string, index: number, productId: string, withPricing = includePricing) => {
     const p = products.find((x) => x.id === productId)
     if (!p) return
-    const used = getUsedProductIds(index)
-    if (used.has(productId)) {
-      toast({ title: 'Product already added on another line', variant: 'destructive' })
-      return
-    }
     setValue(`items.${index}.productId`, productId, { shouldValidate: true })
     setValue(`items.${index}.description`, p.description || p.name)
     setValue(`items.${index}.unit`, p.unit_short_name || 'Nos')
@@ -380,7 +361,6 @@ export function DeliveryChallanForm({ mode, challanId }: DeliveryChallanFormProp
 
   const validateBeforeSubmit = (data: ChallanInput): string | null => {
     const ids = data.items.map((i) => i.productId).filter(Boolean)
-    if (new Set(ids).size !== ids.length) return 'Duplicate products are not allowed'
     if (ids.length !== data.items.length) return 'Please select a product for every line item'
     return party.validateParties(data.customerId)
   }

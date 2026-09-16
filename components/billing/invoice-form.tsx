@@ -761,15 +761,7 @@ export function InvoiceForm({ invoiceId, fromQuotationId }: { invoiceId?: string
     }
   })()
 
-  const getUsedProductIds = (excludeIndex: number) => {
-    const ids = new Set<string>()
-    items?.forEach((item, idx) => {
-      if (idx !== excludeIndex && item?.productId) ids.add(item.productId)
-    })
-    return ids
-  }
-
-  const getFilteredProducts = (index: number, query: string) => {
+  const getFilteredProducts = (_index: number, query: string) => {
     const q = query.trim().toLowerCase()
     return products.filter((p) => {
       if (!q) return true

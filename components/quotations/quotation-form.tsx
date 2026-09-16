@@ -524,20 +524,9 @@ export function QuotationForm({ mode, quotationId }: QuotationFormProps) {
     if (checked) setConsigneeFields(buyerFields)
   }
 
-  const getUsedProductIds = (excludeIndex: number) => {
-    const ids = new Set<string>()
-    watchedItems?.forEach((item, idx) => {
-      if (idx !== excludeIndex && item?.productId) ids.add(item.productId)
-    })
-    return ids
-  }
-
-  const getFilteredProducts = (index: number, query: string) => {
-    const used = getUsedProductIds(index)
-    const currentId = watchedItems?.[index]?.productId
+  const getFilteredProducts = (_index: number, query: string) => {
     const q = query.trim().toLowerCase()
     return products.filter((p) => {
-      if (used.has(p.id) && p.id !== currentId) return false
       if (!q) return true
       return (
         p.name.toLowerCase().includes(q) ||
@@ -549,11 +538,6 @@ export function QuotationForm({ mode, quotationId }: QuotationFormProps) {
   const applyProduct = (fieldId: string, index: number, productId: string) => {
     const p = products.find((x) => x.id === productId)
     if (!p) return
-    const used = getUsedProductIds(index)
-    if (used.has(productId)) {
-      toast({ title: 'Product already added on another line', variant: 'destructive' })
-      return
-    }
     setValue(`items.${index}.productId`, productId, { shouldValidate: true })
     setValue(`items.${index}.rate`, Number(p.selling_price))
     setValue(`items.${index}.gstRate`, Number(p.gst_rate))
@@ -648,7 +632,6 @@ export function QuotationForm({ mode, quotationId }: QuotationFormProps) {
     }
 
     const ids = data.items.map((i) => i.productId).filter(Boolean)
-    if (new Set(ids).size !== ids.length) return 'Duplicate products are not allowed'
     if (ids.length !== data.items.length) return 'Please enter and select a product for every line item'
 
     const buyerErrors = validatePartyContactFields(buyerFields)
