@@ -190,7 +190,7 @@ export function SuperAdminShell({ children }: { children: React.ReactNode }) {
             variant="ghost"
             size="sm"
             className="w-full justify-start text-xs font-semibold text-rose-600 hover:text-rose-700 hover:bg-rose-50 h-8"
-            onClick={() => signOut({ callbackUrl: '/login' })}
+            onClick={() => signOut({ callbackUrl: '/' })}
           >
             <LogOut className="h-3.5 w-3.5 mr-2 text-rose-500" />
             Sign Out Platform
