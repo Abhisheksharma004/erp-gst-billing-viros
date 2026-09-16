@@ -6,6 +6,7 @@ import { ensureDocumentTermsColumns } from '@/lib/ensure-purchase-schema'
 import { normalizePurchaseDocumentItem } from '@/lib/purchase-include-pricing'
 import { randomUUID } from 'crypto'
 import { assertVendorInOrg } from '@/lib/org-entity'
+import { roundToTwo, roundToNearestRupee, computeRoundOff } from '@/lib/utils'
 
 function computeItemTotals(item: { quantity: number; rate: number; discount?: number; gstRate: number }, gstType = 'CGST_SGST') {
   const taxable = item.quantity * item.rate * (1 - (item.discount || 0) / 100)
@@ -110,6 +111,9 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
       return { ...normalized, ...t }
     })
 
+    const preRound = roundToTwo(grandTotal)
+    const roundedTotal = includePricing ? roundToNearestRupee(preRound) : 0
+
     await conn.execute(
       `UPDATE purchase_orders SET vendor_id=?, date=?, expected_date=?, subtotal=?,
         discount_amount=?, tax_amount=?, total_amount=?, notes=?, terms=?, include_pricing=? WHERE id=? AND organization_id = ?`,
@@ -120,7 +124,7 @@ export async function PUT(req: NextRequest, { params }: { params: Promise<{ id: 
         subtotal,
         totalDiscount,
         totalCgst + totalSgst + totalIgst,
-        grandTotal,
+        roundedTotal,
         data.notes || null,
         data.terms || null,
         includePricing ? 1 : 0,

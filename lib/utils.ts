@@ -8,14 +8,14 @@ export function cn(...inputs: ClassValue[]) {
 
 export function formatCurrency(
   amount: number | string | null | undefined,
-  maxDecimals: number = 3
+  maxDecimals: number = 2
 ): string {
   const num = typeof amount === 'string' ? parseFloat(amount) : (amount ?? 0)
   return new Intl.NumberFormat('en-IN', {
     style: 'currency',
     currency: 'INR',
     minimumFractionDigits: 2,
-    maximumFractionDigits: maxDecimals,
+    maximumFractionDigits: Math.max(2, maxDecimals),
   }).format(num)
 }
 
@@ -50,13 +50,30 @@ export function calculateGST(
   return { cgst, sgst, igst: 0, total: totalGst }
 }
 
-/** Round to nearest rupee: .49 and below down, .50 and above up */
+/**
+ * Custom amount rounding logic:
+ * - If decimal/fractional part <= 0.50 -> round down to nearest whole number
+ * - If decimal/fractional part > 0.50  -> round up to next whole number
+ * Note: Never use standard Math.round() as Math.round(x.50) rounds UP to x+1.
+ */
 export function roundToNearestRupee(amount: number): number {
-  return Math.round(amount)
+  if (!Number.isFinite(amount)) return 0
+  const sign = amount < 0 ? -1 : 1
+  const absVal = Math.abs(amount)
+  const whole = Math.floor(absVal)
+  const decimal = Math.round((absVal - whole + Number.EPSILON) * 100) / 100
+  const rounded = decimal <= 0.50 ? whole : whole + 1
+  return sign * rounded
 }
 
 export function computeRoundOff(amount: number): number {
-  return roundToTwo(roundToNearestRupee(amount) - roundToTwo(amount))
+  const preRound = roundToTwo(amount)
+  const rounded = roundToNearestRupee(preRound)
+  return roundToTwo(rounded - preRound)
+}
+
+export function formatRoundedAmount(amount: number): string {
+  return roundToNearestRupee(amount).toFixed(2)
 }
 
 export function calculateItemAmount(

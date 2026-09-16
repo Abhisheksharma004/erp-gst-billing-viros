@@ -6,7 +6,7 @@ import { appendFyFilter } from '@/lib/financial-year'
 import { purchaseSchema } from '@/lib/validations'
 import { ensurePurchaseSchema, ensureDocumentTermsColumns } from '@/lib/ensure-purchase-schema'
 import { computePurchaseItemTotals } from '@/lib/purchase-totals'
-import { roundToTwo } from '@/lib/utils'
+import { roundToTwo, computeRoundOff, roundToNearestRupee } from '@/lib/utils'
 import { randomUUID } from 'crypto'
 import { apiErrorResponse } from '@/lib/api-error'
 import { assertVendorInOrg } from '@/lib/org-entity'
@@ -90,8 +90,9 @@ export async function POST(req: NextRequest) {
       return { ...item, ...t }
     })
 
-    const roundOff = roundToTwo(totalRoundOff)
-    const finalTotal = roundToTwo(grandTotal)
+    const preRound = roundToTwo(grandTotal)
+    const roundOff = computeRoundOff(preRound)
+    const finalTotal = roundToNearestRupee(preRound)
 
     const hasPaymentMode = Boolean(data.paymentMode && data.paymentMode.trim() !== '')
     const advanceAmount = Number(data.advanceAmount || 0)

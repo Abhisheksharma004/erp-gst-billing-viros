@@ -5,7 +5,7 @@ import { drawDocumentHeader } from '@/lib/document-header-pdf'
 import { computePurchaseItemTotals, computePurchaseOrderItemTotals } from '@/lib/purchase-totals'
 import { computeQuotationItemTotals } from '@/lib/quotation-totals'
 import type { GstType } from '@/lib/purchase-totals'
-import { INDIAN_STATES, roundToTwo } from '@/lib/utils'
+import { INDIAN_STATES, roundToTwo, computeRoundOff, roundToNearestRupee } from '@/lib/utils'
 import {
   INVOICE_COPY_LABELS,
   INVOICE_COPY_TYPES,
@@ -216,7 +216,7 @@ function formatRoundOffForPdf(n: number): string {
   const rounded = roundToTwo(Number(n) || 0)
   if (rounded === 0) return '+ 0.00'
   if (rounded > 0) return `+ ${formatMoney(rounded)}`
-  return formatMoney(rounded)
+  return `- ${formatMoney(Math.abs(rounded))}`
 }
 
 function formatPdfRateNumber(rate: number): string {
@@ -913,8 +913,18 @@ function drawQuotationFooter(
   kind: SalesDocumentKind,
   hidePricingTotals = false
 ): void {
-  const words = hidePricingTotals ? '' : amountInWords(Number(document.total_amount)).toUpperCase()
-  const roundOff = Number(document.round_off) || 0
+  const preRound = roundToTwo(totalTaxable + taxAmt - (Number(document.discount_amount) || 0))
+  const roundedTotal = roundToNearestRupee(preRound)
+  const computedRoundOff = computeRoundOff(preRound)
+  const roundOff =
+    document.round_off !== undefined && document.round_off !== null && Number(document.round_off) !== 0
+      ? Number(document.round_off)
+      : computedRoundOff
+  const finalTotalAmount =
+    Number(document.total_amount) > 0
+      ? roundToNearestRupee(Number(document.total_amount))
+      : roundedTotal
+  const words = hidePricingTotals ? '' : amountInWords(finalTotalAmount).toUpperCase()
   const pad = 2
   const top = layout.mainFooterTop
   const mainH = layout.mainFooterH
@@ -1005,7 +1015,7 @@ function drawQuotationFooter(
     totalTaxable,
     taxAmt,
     roundOff,
-    Number(document.total_amount),
+    finalTotalAmount,
     hidePricingTotals,
     Number(document.discount_amount) || 0
   )
@@ -1108,10 +1118,10 @@ function renderSalesDocumentPage(
   const metaFields = getDocumentMetaFields(
     kind,
     document as QuotationPdfData &
-      InvoicePdfData &
-      DeliveryChallanPdfData &
-      PurchasePdfData &
-      PurchaseOrderPdfData
+    InvoicePdfData &
+    DeliveryChallanPdfData &
+    PurchasePdfData &
+    PurchaseOrderPdfData
   )
   const detailsRowHeight = Math.max(
     estimateLabeledBlockHeight(doc, buyerFields, textW),
@@ -1242,18 +1252,18 @@ function renderSalesDocumentPage(
   const totalRow = hideItemPricing
     ? ['', 'Total', '', String(roundToTwo(totalQty)), '', '', '', '', '', '', '']
     : [
-        '',
-        'Total',
-        '',
-        String(roundToTwo(totalQty)),
-        '',
-        formatMoney(totalTaxable),
-        '',
-        formatMoney(totalTaxAmt),
-        '',
-        formatMoney(totalDiscount),
-        formatMoney(totalAmount),
-      ]
+      '',
+      'Total',
+      '',
+      String(roundToTwo(totalQty)),
+      '',
+      formatMoney(totalTaxable),
+      '',
+      formatMoney(totalTaxAmt),
+      '',
+      formatMoney(totalDiscount),
+      formatMoney(totalAmount),
+    ]
 
   const itemsTableStartY = y
   const showBank = shouldShowBankDetails(kind, settings)

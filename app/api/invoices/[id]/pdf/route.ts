@@ -6,7 +6,7 @@ import { ensureInvoiceSchema } from '@/lib/ensure-invoice-schema'
 import { generateInvoicePdfBuffer } from '@/lib/quotation-pdf'
 import { parseInvoiceCopiesParam } from '@/lib/invoice-copy'
 import { buildPdfParties, parseQuotationPartyDetails } from '@/lib/quotation-party'
-import { roundToTwo } from '@/lib/utils'
+import { roundToTwo, computeRoundOff, roundToNearestRupee } from '@/lib/utils'
 
 export async function GET(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params
@@ -84,7 +84,8 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
     const preRound = roundToTwo(
       Number(invoice.subtotal) - Number(invoice.discount_amount) + Number(invoice.tax_amount)
     )
-    const roundOff = roundToTwo(Number(invoice.total_amount) - preRound)
+    const roundedTotal = roundToNearestRupee(preRound)
+    const roundOff = computeRoundOff(preRound)
 
     const copies = parseInvoiceCopiesParam(req.nextUrl.searchParams.get('copies'))
 
@@ -97,7 +98,7 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
         discount_amount: Number(invoice.discount_amount),
         tax_amount: Number(invoice.tax_amount),
         round_off: roundOff,
-        total_amount: Number(invoice.total_amount),
+        total_amount: roundedTotal,
         paid_amount: Number(invoice.paid_amount) || 0,
         balance_amount: Number(invoice.balance_amount) || 0,
         gst_type: invoice.gst_type,

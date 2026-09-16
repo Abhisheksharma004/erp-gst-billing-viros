@@ -5,6 +5,7 @@ import { ensureBusinessSettingsBankingColumns } from '@/lib/ensure-business-sett
 import { ensureProformaSchema } from '@/lib/ensure-proforma-schema'
 import { generateProformaPdfBuffer } from '@/lib/quotation-pdf'
 import { buildPdfParties, parseQuotationPartyDetails } from '@/lib/quotation-party'
+import { roundToTwo, computeRoundOff, roundToNearestRupee } from '@/lib/utils'
 
 export async function GET(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params
@@ -73,6 +74,11 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
     `, [organizationId]) as any[]
 
     const s = settingsRows[0] || {}
+    const preRound = roundToTwo(
+      Number(proforma.subtotal) - Number(proforma.discount_amount) + Number(proforma.tax_amount)
+    )
+    const roundedTotal = roundToNearestRupee(preRound)
+    const roundOff = computeRoundOff(preRound)
 
     const pdfBuffer = generateProformaPdfBuffer(
       {
@@ -83,8 +89,8 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
         subtotal: Number(proforma.subtotal),
         discount_amount: Number(proforma.discount_amount),
         tax_amount: Number(proforma.tax_amount),
-        round_off: Number(proforma.round_off) || 0,
-        total_amount: Number(proforma.total_amount),
+        round_off: roundOff,
+        total_amount: roundedTotal,
         terms: proforma.terms,
         notes: proforma.notes,
         customer: parties.buyer,

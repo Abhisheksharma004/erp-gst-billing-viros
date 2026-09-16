@@ -15,7 +15,7 @@ import { useToast, toastSuccessNavigate } from '@/hooks/use-toast'
 import { useDefaultDocumentTerms } from '@/hooks/use-default-document-terms'
 import { DocumentTermsField } from '@/components/shared/document-terms-field'
 import { purchaseSchema, type PurchaseInput } from '@/lib/validations'
-import { calculateGST, formatCurrency, GST_RATES, roundToTwo, cn } from '@/lib/utils'
+import { calculateGST, formatCurrency, GST_RATES, roundToTwo, computeRoundOff, roundToNearestRupee, cn } from '@/lib/utils'
 import { computePurchaseLineTotals } from '@/lib/purchase-totals'
 import { Plus, Trash2, ArrowLeft, Package, QrCode } from 'lucide-react'
 import Link from 'next/link'
@@ -550,7 +550,6 @@ export function PurchaseForm({ purchaseId }: { purchaseId?: string }) {
     let sgst = 0
     let igst = 0
     let totalDiscount = 0
-    let totalRoundOff = 0
     let total = 0
     fields.forEach((field, i) => {
       const eff = getEffectiveLine(field.id, i)
@@ -559,17 +558,19 @@ export function PurchaseForm({ purchaseId }: { purchaseId?: string }) {
       sgst += eff.gst.sgst
       igst += eff.gst.igst
       totalDiscount += eff.discountAmount
-      totalRoundOff += eff.lineRoundOff
       total += eff.amount
     })
+    const preRound = roundToTwo(total)
+    const roundOff = computeRoundOff(preRound)
+    const grandTotal = roundToNearestRupee(preRound)
     return {
       taxable: roundToTwo(taxable),
-      cgst,
-      sgst,
-      igst,
+      cgst: roundToTwo(cgst),
+      sgst: roundToTwo(sgst),
+      igst: roundToTwo(igst),
       totalDiscount: roundToTwo(totalDiscount),
-      totalRoundOff: roundToTwo(totalRoundOff),
-      grandTotal: roundToTwo(total),
+      totalRoundOff: roundOff,
+      grandTotal,
     }
   }, [watchedItems, gstType, fields, itemMeta])
 

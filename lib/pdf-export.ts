@@ -94,7 +94,10 @@ export function generateInvoicePDF(invoice: any, settings?: BusinessSettings) {
   if (invoice.cgstAmount > 0) totalsData.push(['CGST', formatCurrency(invoice.cgstAmount)])
   if (invoice.sgstAmount > 0) totalsData.push(['SGST', formatCurrency(invoice.sgstAmount)])
   if (invoice.igstAmount > 0) totalsData.push(['IGST', formatCurrency(invoice.igstAmount)])
-  if (invoice.roundOff) totalsData.push(['Round Off', formatCurrency(invoice.roundOff)])
+  if (invoice.roundOff !== undefined && invoice.roundOff !== null && Number(invoice.roundOff) !== 0) {
+    const ro = Number(invoice.roundOff) || 0
+    totalsData.push(['Round Off', `${ro >= 0 ? '+' : ''}${formatCurrency(ro)}`])
+  }
   totalsData.push(['Total Amount', formatCurrency(invoice.totalAmount)])
   totalsData.push(['Paid Amount', formatCurrency(invoice.paidAmount)])
   totalsData.push(['Balance Due', formatCurrency(invoice.balanceAmount)])

@@ -6,7 +6,7 @@ import { ensurePurchaseSchema } from '@/lib/ensure-purchase-schema'
 import { generatePurchasePdfBuffer } from '@/lib/quotation-pdf'
 import { parseInvoiceCopiesParam } from '@/lib/invoice-copy'
 import { vendorToPdfParty } from '@/lib/vendor-pdf-party'
-import { roundToTwo } from '@/lib/utils'
+import { roundToTwo, computeRoundOff, roundToNearestRupee } from '@/lib/utils'
 
 export async function GET(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params
@@ -69,13 +69,11 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
     ) as any[]
 
     const s = settingsRows[0] || {}
-    const roundOff =
-      purchase.round_off != null
-        ? Number(purchase.round_off)
-        : roundToTwo(
-            Number(purchase.total_amount) -
-              (Number(purchase.subtotal) - Number(purchase.discount_amount) + Number(purchase.tax_amount))
-          )
+    const preRound = roundToTwo(
+      Number(purchase.subtotal) - Number(purchase.discount_amount) + Number(purchase.tax_amount)
+    )
+    const roundedTotal = roundToNearestRupee(preRound)
+    const roundOff = computeRoundOff(preRound)
 
     const copies = parseInvoiceCopiesParam(req.nextUrl.searchParams.get('copies'))
 
@@ -89,7 +87,7 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
         discount_amount: Number(purchase.discount_amount),
         tax_amount: Number(purchase.tax_amount),
         round_off: roundOff,
-        total_amount: Number(purchase.total_amount),
+        total_amount: roundedTotal,
         paid_amount: Number(purchase.paid_amount) || 0,
         balance_amount: Number(purchase.balance_amount) || 0,
         gst_type: purchase.gst_type,

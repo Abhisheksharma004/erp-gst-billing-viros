@@ -9,6 +9,7 @@ import { normalizePurchaseDocumentItem } from '@/lib/purchase-include-pricing'
 import { buildDocumentNumber, buildDocumentNumberLikePattern, fetchMaxDocumentSerial } from '@/lib/document-number'
 import { randomUUID } from 'crypto'
 import { assertVendorInOrg } from '@/lib/org-entity'
+import { roundToTwo, roundToNearestRupee, computeRoundOff } from '@/lib/utils'
 
 function computeItemTotals(item: any, gstType = 'CGST_SGST') {
   const taxable = item.quantity * item.rate * (1 - (item.discount || 0) / 100)
@@ -94,6 +95,8 @@ export async function POST(req: NextRequest) {
       grandTotal += t.total
       return { ...normalized, ...t }
     })
+    const preRound = roundToTwo(grandTotal)
+    const roundedTotal = includePricing ? roundToNearestRupee(preRound) : 0
     const id = randomUUID()
 
     // Retry loop: MAX() serial + retry on duplicate to avoid ordering bugs & race conditions
@@ -109,7 +112,7 @@ export async function POST(req: NextRequest) {
             discount_amount, tax_amount, total_amount, notes, terms, include_pricing, status)
            VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)`,
           [id, organizationId, poNo, data.vendorId, data.date, data.expectedDate || null,
-           subtotal, totalDiscount, totalCgst + totalSgst + totalIgst, grandTotal,
+           subtotal, totalDiscount, totalCgst + totalSgst + totalIgst, roundedTotal,
            data.notes || null, data.terms || null, includePricing ? 1 : 0, 'PENDING']
         )
         inserted = true

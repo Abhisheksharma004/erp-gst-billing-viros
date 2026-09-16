@@ -8,7 +8,7 @@ import { parseInvoiceCopiesParam } from '@/lib/invoice-copy'
 import { vendorToPdfParty } from '@/lib/vendor-pdf-party'
 import { resolveStoredIncludePricing } from '@/lib/purchase-include-pricing'
 import { computePurchaseOrderItemTotals } from '@/lib/purchase-totals'
-import { roundToTwo } from '@/lib/utils'
+import { roundToTwo, computeRoundOff, roundToNearestRupee } from '@/lib/utils'
 
 export async function GET(req: NextRequest, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params
@@ -121,7 +121,8 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
     const preRound = roundToTwo(
       includePricing ? grandTotal : 0
     )
-    const roundOff = includePricing ? roundToTwo(Number(po.total_amount) - preRound) : 0
+    const roundedTotal = includePricing ? roundToNearestRupee(preRound) : 0
+    const roundOff = includePricing ? computeRoundOff(preRound) : 0
 
     const copies = parseInvoiceCopiesParam(req.nextUrl.searchParams.get('copies'))
 
@@ -134,7 +135,7 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ id: 
         discount_amount: includePricing ? roundToTwo(totalDiscount) : 0,
         tax_amount: includePricing ? roundToTwo(totalTax) : 0,
         round_off: roundOff,
-        total_amount: includePricing ? Number(po.total_amount) || roundToTwo(grandTotal + roundOff) : 0,
+        total_amount: roundedTotal,
         gst_type: gstType,
         terms: po.terms,
         include_pricing: includePricing,

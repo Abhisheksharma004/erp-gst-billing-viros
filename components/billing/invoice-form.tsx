@@ -323,7 +323,7 @@ export function InvoiceForm({ invoiceId, fromQuotationId }: { invoiceId?: string
       .then((d) => {
         if (d) setAllowNegativeStock(Boolean(d.allowNegativeStock))
       })
-      .catch(() => {})
+      .catch(() => { })
   }, [])
 
   const form = useForm<InvoiceInput>({
@@ -537,20 +537,20 @@ export function InvoiceForm({ invoiceId, fromQuotationId }: { invoiceId?: string
 
         const formItems = (data.items || []).length > 0
           ? data.items.map((item: {
-              product_id: string
-              description?: string | null
-              quantity: number
-              rate: number
-              discount?: number
-              gst_rate: number
-            }) => ({
-              productId: item.product_id,
-              description: item.description || '',
-              quantity: Number(item.quantity),
-              rate: Number(item.rate),
-              discount: Number(item.discount) || 0,
-              gstRate: Number(item.gst_rate),
-            }))
+            product_id: string
+            description?: string | null
+            quantity: number
+            rate: number
+            discount?: number
+            gst_rate: number
+          }) => ({
+            productId: item.product_id,
+            description: item.description || '',
+            quantity: Number(item.quantity),
+            rate: Number(item.rate),
+            discount: Number(item.discount) || 0,
+            gstRate: Number(item.gst_rate),
+          }))
           : [{ productId: '', quantity: 1, rate: 0, discount: 0, gstRate: 18 }]
 
         const metaRows: PendingItemMetaRow[] = formItems.map((item: InvoiceInput['items'][number]) => {
@@ -809,9 +809,9 @@ export function InvoiceForm({ invoiceId, fromQuotationId }: { invoiceId?: string
     append({ productId: '', quantity: 1, rate: 0, discount: 0, gstRate: 18 })
   }
 
-function isPaymentModeActive(mode?: string | null): boolean {
-  return Boolean(mode && mode !== 'NONE' && mode !== '')
-}
+  function isPaymentModeActive(mode?: string | null): boolean {
+    return Boolean(mode && mode !== 'NONE' && mode !== '')
+  }
 
   const [customerAdvance, setCustomerAdvance] = useState(0)
   const [advanceAmount, setAdvanceAmount] = useState(0)
@@ -890,7 +890,7 @@ function isPaymentModeActive(mode?: string | null): boolean {
 
     return firstPartyValidationError([
       { fields: buyerFields, label: 'Buyer' },
-      { fields: consigneeFields, label: 'Consignee'},
+      { fields: consigneeFields, label: 'Consignee' },
     ])
   }
 
@@ -1130,8 +1130,8 @@ function isPaymentModeActive(mode?: string | null): boolean {
                                           isNegative
                                             ? 'text-red-600 dark:text-red-400 bg-red-50 dark:bg-red-950/50 px-1.5 py-0.5 rounded border border-red-200 dark:border-red-900'
                                             : isLowOrOut
-                                            ? 'text-amber-600 dark:text-amber-400'
-                                            : 'text-green-600 dark:text-green-400'
+                                              ? 'text-amber-600 dark:text-amber-400'
+                                              : 'text-green-600 dark:text-green-400'
                                         )}
                                       >
                                         Stock: {stock}

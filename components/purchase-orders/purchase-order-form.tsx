@@ -14,7 +14,7 @@ import { useToast, toastSuccessNavigate } from '@/hooks/use-toast'
 import { useDefaultDocumentTerms } from '@/hooks/use-default-document-terms'
 import { DocumentTermsField } from '@/components/shared/document-terms-field'
 import { purchaseOrderSchema, type PurchaseOrderInput } from '@/lib/validations'
-import { calculateGST, calculateItemAmount, formatCurrency, GST_RATES, cn } from '@/lib/utils'
+import { calculateGST, calculateItemAmount, formatCurrency, GST_RATES, roundToTwo, computeRoundOff, roundToNearestRupee, cn } from '@/lib/utils'
 import { resolveStoredIncludePricing } from '@/lib/purchase-include-pricing'
 import { Plus, Trash2, ArrowLeft, Package } from 'lucide-react'
 import Link from 'next/link'
@@ -355,7 +355,17 @@ export function PurchaseOrderForm({ purchaseOrderId }: { purchaseOrderId?: strin
       sgst += tax.sgst || 0
       igst += tax.igst || 0
     }
-    return { taxable, cgst, sgst, igst, total: taxable + cgst + sgst + igst }
+    const preRound = roundToTwo(taxable + cgst + sgst + igst)
+    const roundOff = computeRoundOff(preRound)
+    const total = roundToNearestRupee(preRound)
+    return {
+      taxable: roundToTwo(taxable),
+      cgst: roundToTwo(cgst),
+      sgst: roundToTwo(sgst),
+      igst: roundToTwo(igst),
+      roundOff,
+      total,
+    }
   }, [watchedItems, gstType])
 
   const totals = computeTotals()
@@ -760,6 +770,13 @@ export function PurchaseOrderForm({ purchaseOrderId }: { purchaseOrderId?: strin
                       <span>{formatCurrency(totals.igst)}</span>
                     </div>
                   )}
+                  <div className="flex justify-between text-sm">
+                    <span className="text-muted-foreground">Round Off</span>
+                    <span className="font-medium">
+                      {totals.roundOff >= 0 ? '+' : ''}
+                      {formatCurrency(totals.roundOff)}
+                    </span>
+                  </div>
                   <div className="flex justify-between font-bold text-base border-t pt-3">
                     <span>Grand Total</span>
                     <span className="text-primary">{formatCurrency(totals.total)}</span>
