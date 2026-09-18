@@ -319,9 +319,12 @@ export function InvoiceForm({ invoiceId, fromQuotationId }: { invoiceId?: string
 
   useEffect(() => {
     fetch('/api/settings')
-      .then((r) => r.json())
+      .then((r) => {
+        if (!r.ok) return null
+        return r.json()
+      })
       .then((d) => {
-        if (d) setAllowNegativeStock(Boolean(d.allowNegativeStock))
+        if (d && !d.error) setAllowNegativeStock(Boolean(d.allowNegativeStock))
       })
       .catch(() => { })
   }, [])

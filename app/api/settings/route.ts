@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
 import db from '@/lib/db'
-import { requirePermission } from '@/lib/api-auth'
+import { requireOrganization, requirePermission } from '@/lib/api-auth'
 import { appendOrgFilter } from '@/lib/tenant'
 import { businessSettingsSchema } from '@/lib/validations'
 import { ensureBusinessSettingsBankingColumns } from '@/lib/ensure-business-settings-schema'
@@ -22,7 +22,7 @@ async function fileToDataUrl(file: File) {
 }
 
 export async function GET(req: NextRequest) {
-  const { error, organizationId } = await requirePermission('settings', 'view')
+  const { error, organizationId } = await requireOrganization()
   if (error) return error
 
   try {
